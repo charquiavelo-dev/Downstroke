@@ -164,6 +164,16 @@ FR70: Each stack recommendation explains fit, tradeoffs, operational implication
 
 FR71: When a project requires an unsupported language ecosystem, Downstroke states the limitation and does not invent a preset; additional language support remains deferred.
 
+FR72: Before a documentation site exists, the repository README explains installation, quick start, supported workflows, CLI commands, configuration, safety behavior and troubleshooting well enough to use the framework.
+
+FR73: Once the framework passes its functional and release gates, Downstroke can be packed and distributed as an npm package with a working CLI binary and only required runtime files.
+
+FR74: Package readiness validates metadata, license, exports, Node compatibility, tarball contents, clean-install behavior and package provenance before publication.
+
+FR75: npm publication is an explicit high-risk operation requiring authenticated maintainer confirmation, version selection and post-publish installation verification.
+
+FR76: After README and npm distribution are ready, Downstroke can provide a React documentation and showcase site containing only working, verifiable framework capabilities.
+
 ### Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -242,6 +252,12 @@ NFR37: Remote modules require signed or integrity-verified artifacts, explicit p
 
 NFR38: Stack recommendations are based on product capabilities, team constraints, deployment, data, realtime, offline and platform needs rather than popularity alone.
 
+NFR39: npm package contents exclude source archives, secrets, local state, test fixtures and unrelated documentation unless explicitly required at runtime.
+
+NFR40: Release artifacts are reproducible from a tagged commit and the published package version matches repository metadata and changelog state.
+
+NFR41: The documentation site is accessible, responsive, internationalizable and never presents unfinished capabilities as available.
+
 ### Additional Requirements
 
 - Keep `core`, `spec`, `agents`, `gates`, `presets` and CLI as existing boundaries; do not create parallel Git, hosting, map or agent frameworks.
@@ -267,6 +283,7 @@ NFR38: Stack recommendations are based on product capabilities, team constraints
 - Separate observed token usage from projection and always declare estimation assumptions.
 - Treat native Breakdown Stack capabilities as evidence-gated successors: integrate external tools first, measure real use, implement the smallest proven native scope, and preserve rollback.
 - Keep greenfield recommendations inside supported stack boundaries and make every recommendation explainable and overridable.
+- Treat the README as the first complete user documentation; prepare and verify the npm tarball before publication; build the React documentation site only after package workflows are stable.
 - Preserve Epic 1 and its Sprint 1 review state before Epic 2 implementation starts.
 
 ### UX Design Requirements
@@ -284,6 +301,7 @@ FR32-FR34: Epic 6 - Safe managed-rule evolution.
 FR36-FR40: Epic 7 - Three-pass 2D and 3D interactive delivery.
 FR41-FR50: Epic 8 - Design system, brand and internationalization.
 FR60-FR68: Epic 9 - Evidence-gated native platform evolution.
+FR72-FR76: Epic 10 - Package distribution and public documentation.
 
 ## Epic List
 
@@ -322,6 +340,10 @@ Developers can create a consistent identity, install typography, generate neutra
 ### Epic 9: Evidence-Gated Native Platform Evolution
 Maintainers can graduate proven external workflows into native capabilities, an agent runtime, a remote registry and automatic managed migrations without losing interoperability or rollback.
 **FRs covered:** FR60-FR68.
+
+### Epic 10: Package Distribution and Public Documentation
+Developers can understand Downstroke from the README, install a verified npm package and later use an accurate React documentation and showcase site.
+**FRs covered:** FR72-FR76.
 
 ## Epic 1: Installable and Verifiable MVP
 
