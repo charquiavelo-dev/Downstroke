@@ -1,34 +1,105 @@
-# Pulse Boilerplate Claude Guide
+# <Project Name> Claude Guide
 
-Use `AGENTS.md` as the canonical operating guide. This file exists so Claude-based sessions start with the same rules.
+## Purpose
 
-## Startup
+This file is the Claude entrypoint for projects started from the Pulse boilerplate. Keep it aligned with `AGENTS.md`; if a rule differs, `AGENTS.md` wins unless this file is intentionally customized for Claude.
 
-1. Read `AGENTS.md`.
-2. Read `SPEC.template.md` or the project `docs/SPEC.md`.
-3. Check git status before edits.
-4. Use CodeGraph for structural questions.
-5. Use BMAD before meaningful feature, data, auth, permission, billing or production work.
-6. Keep Ponytail active: simplest working solution, no speculative framework code.
+Treat this project as production software: real users, real data, real money, real mistakes and real growth.
 
-## Commit Rules
+## First Read Order
 
-- Local commits are allowed.
-- Push requires explicit approval.
-- Use Conventional Commits.
-- No `Co-Authored-By`.
-- No AI/model/agent mention in commit messages.
+1. `AGENTS.md`
+2. `docs/SPEC.md`
+3. `docs/development-standard.md`
+4. `docs/process/bmad-method.md`
+5. Relevant BMAD artifact in `_bmad-output/`
 
-## Working Standard
+## Source Of Truth
 
-- Typed code, validated inputs, clear async states.
-- React/Next/React Native projects use the existing local patterns first.
-- .NET/Blazor projects follow `docs/dotnet-bridge.md`.
-- Docs update when behavior, architecture, QA, routes, permissions or data contracts change.
+- `docs/SPEC.md`: product and technical contract.
+- `docs/production-readiness.md`: release gate.
+- `docs/development-standard.md`: engineering, frontend, backend and QA rules.
+- `docs/process/bmad-method.md`: BMAD workflow.
+- `docs/project-start-guides.md`: startup guidance for React, Next.js, React Native, backend and .NET.
+- `docs/dotnet-bridge.md`: Blazor/.NET bridge when the project is C#/.NET.
 
-## Quick Checks
+If docs and code disagree, inspect code, document the conflict and avoid behavior changes until the product decision is clear.
 
-JS/TS:
+## Required Agent Bootstrap
+
+Every new project must start with:
+
+- Local git initialized.
+- CodeGraph initialized and healthy.
+- BMAD installed for Codex with Spanish communication and output.
+- Caveman installed as a project-local skill.
+- Ponytail installed from the canonical project command.
+
+Run:
+
+```powershell
+$env:PONYTAIL_INSTALL_COMMAND = '<canonical Ponytail install command>'
+.\scripts\bootstrap-agents.ps1
+```
+
+Do not guess a Ponytail package. If the canonical command is missing, ask.
+
+## How Claude Should Work Here
+
+- Use CodeGraph or the codebase index before structural edits.
+- Use BMAD before meaningful feature, auth, data, permission, billing, deployment or production work.
+- Keep responses concise unless the user asks for detail.
+- Prefer small, verified changes.
+- Preserve user changes.
+- Do not push without explicit approval.
+- Do not mention AI in commits.
+
+## CodeGraph
+
+Use CodeGraph for definitions, callers, impact and unfamiliar areas. Use native search only for literal text, docs and config values.
+
+Initialize if missing:
+
+```bash
+npx @colbymchenry/codegraph init -i
+```
+
+## BMAD
+
+Use BMAD for:
+
+- New pages, modules, routes or workflows.
+- Database, API, auth, permissions, billing or destructive actions.
+- Cross-module behavior.
+- Production readiness and deployment decisions.
+
+Artifacts go in `_bmad-output/`.
+
+## Stack Defaults
+
+- Web: React or Next.js, TypeScript strict, Tailwind.
+- Mobile: React Native + Expo, TypeScript strict, NativeWind when appropriate.
+- Backend: NestJS for new production APIs; Express for small existing services.
+- Database: PostgreSQL.
+- Validation: Zod, validation pipes, DataAnnotations or FluentValidation.
+- .NET: follow `docs/dotnet-bridge.md`.
+
+## Non-Negotiables
+
+- No `any` in TypeScript.
+- No secrets in code or docs.
+- No fake operational data in production workflows.
+- No destructive migrations without explicit approval and rollback plan.
+- No public route/API/schema rename without impact audit.
+- No styling-only task may change behavior.
+- No unfinished route in primary navigation.
+- No push without explicit approval.
+- Commits use Conventional Commits and do not mention AI.
+- No `Co-Authored-By` trailers.
+
+## QA Gate
+
+Run the smallest meaningful checks:
 
 ```bash
 npm run type-check
@@ -37,11 +108,11 @@ npm test
 npm run build
 ```
 
-.NET:
+For .NET:
 
 ```bash
 dotnet test
 dotnet build
 ```
 
-Run the smallest meaningful set. Do not pretend skipped checks passed.
+Use commands that actually exist. If checks cannot run, document why and what should run next.
