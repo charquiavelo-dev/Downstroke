@@ -274,6 +274,8 @@ NFR43: The private maintenance repository must be readable and contain the expec
 
 NFR44: Public-history rewriting is never automatic, never runs during normal development and has a documented recovery path.
 
+NFR45: npm recovery keys and equivalent account-recovery material are never tracked, read, logged, packaged or copied; `.npm.keys` is ignored explicitly.
+
 ### Additional Requirements
 
 - Keep `core`, `spec`, `agents`, `gates`, `presets` and CLI as existing boundaries; do not create parallel Git, hosting, map or agent frameworks.
@@ -577,3 +579,64 @@ So that I can evaluate backlog and sprint cost before execution.
 **Given** unknown provider pricing or accounting rules
 **When** monetary cost cannot be verified
 **Then** Downstroke reports tokens without inventing a currency estimate.
+
+## Epic 3: Safe Git and Multi-Repository Delivery
+
+Developers can use GitFlow, semantic commits, scoped authorization and correct credentials across isolated repositories.
+
+### Story 3.1: Configure Project GitFlow and Authorization
+
+As a developer,
+I want GitFlow and Git mutation permissions configured per project,
+So that agents can create useful local commits without gaining unintended push authority.
+
+**Acceptance Criteria:**
+
+**Given** a new or existing repository
+**When** Git policy setup begins
+**Then** the CLI recommends `main`, `develop`, `feature/*`, `release/*` and `hotfix/*`
+**And** previews any branches it would create.
+
+**Given** project authorization setup
+**When** the user selects allowed operations
+**Then** local branch, commit and push permissions are stored separately with scope and lifetime.
+
+**Given** local commits are authorized but push is not
+**When** a work block completes
+**Then** Downstroke may create an approved local commit but cannot authenticate or push.
+
+**Given** an existing policy
+**When** the user runs the policy command
+**Then** it can be inspected, changed or disabled without modifying accepted commits.
+
+**Given** a push operation
+**When** no current explicit authorization exists
+**Then** Downstroke shows repository, remote, branch and commits and waits for confirmation.
+
+### Story 3.2: Commit Important Work Blocks Safely
+
+As a developer,
+I want Downstroke to create focused local commits after important work blocks,
+So that repository history remains reviewable and recoverable.
+
+**Acceptance Criteria:**
+
+**Given** a completed work block
+**When** commit preparation begins
+**Then** Downstroke shows the exact changed and staged files and excludes unrelated user changes.
+
+**Given** the selected changes
+**When** a commit message is proposed
+**Then** it follows Conventional Commits and describes the delivered outcome.
+
+**Given** generated commit metadata
+**When** the commit is created
+**Then** it contains no AI mention and no `Co-Authored-By` trailer.
+
+**Given** mixed or ambiguous changes
+**When** a coherent commit cannot be isolated safely
+**Then** Downstroke stops and requests scope selection instead of using `git add .`.
+
+**Given** a successful local commit
+**When** push is not authorized
+**Then** the commit remains local and Downstroke reports the branch and commit hash.

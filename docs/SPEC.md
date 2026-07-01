@@ -10,6 +10,7 @@ This is the canonical product and engineering contract. Replace every `<...>` va
 - Last reviewed: `2026-07-01`
 - Product/domain in focus: `modular AI-assisted software delivery`
 - Project artifact language: `English`; user communication may be Spanish.
+- Intended npm publisher account: `charquiavelo`; package name and scope remain release decisions.
 
 ## Product
 
