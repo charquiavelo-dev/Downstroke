@@ -8,4 +8,4 @@ planning_artifacts: "{project-root}/{output_folder}/planning-artifacts"
 implementation_artifacts: "{project-root}/{output_folder}/implementation-artifacts"
 project_knowledge: docs
 communication_language: Spanish
-document_output_language: Spanish
+document_output_language: English

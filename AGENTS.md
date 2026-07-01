@@ -26,7 +26,7 @@ Every new project must start with:
 
 - Local git initialized.
 - CodeGraph initialized and healthy.
-- BMAD installed for Codex with Spanish communication and output.
+- BMAD installed for Codex with Spanish communication and English output artifacts.
 - Caveman installed as a project-local skill.
 - Ponytail installed from the canonical project command.
 
@@ -44,11 +44,11 @@ Do not begin meaningful implementation while bootstrap validation fails. Do not 
 Before generating multiple BMAD stories or tasks, read `docs/SPEC.md` and ask:
 
 ```txt
-Como queres revisar este trabajo?
-1. Una historia/task a la vez
-2. En bloques de X historias/tasks
-3. Por sprint completo
-4. Solo al final como borrador
+How do you want to review this work?
+1. One story/task at a time
+2. In blocks of X stories/tasks
+3. By complete sprint
+4. Only at the end as a draft
 ```
 
 If the answer is blocks, ask for `X`. If it is sprint-based, ask for sprint length, real capacity and WIP limit. Record the choice in `docs/SPEC.md`; once Downstroke planning state exists, also persist it in `.downstroke/planning.json`. Never generate a large backlog before this decision. Review high-risk auth, money, permission, destructive data, migration and production tasks individually regardless of cadence.
@@ -204,6 +204,7 @@ If the answer is weak, improve the spec before shipping the visible change.
 
 ## Non-Negotiables
 
+- All active project Markdown, code, comments, identifiers and configuration must be written in English. Conversation with the user may be in Spanish. Preserved historical source material may retain its original language.
 - No `any` in TypeScript.
 - No secrets in code or docs.
 - No fake operational data in production workflows.

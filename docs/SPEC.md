@@ -9,6 +9,7 @@ This is the canonical product and engineering contract. Replace every `<...>` va
 - Status: `active`
 - Last reviewed: `2026-07-01`
 - Product/domain in focus: `modular AI-assisted software delivery`
+- Project artifact language: `English`; user communication may be Spanish.
 
 ## Product
 
@@ -29,8 +30,9 @@ A developer can safely initialize or inspect an existing project, install only t
 
 ### Scope
 
-- In: `lite preset initialization, project inspection, health diagnosis and safe copy-if-missing operations`
-- Out for now: `managed-block migration, remote registry, advanced production adapters and native replacements for Breakdown Stack tools`
+- In: `lite preset initialization, project inspection, health diagnosis, safe copy-if-missing operations and guided greenfield stack selection within supported ecosystems`
+- Deferred but planned after the external Breakdown Stack is working and measurable: `native Breakdown Stack capabilities, agent runtime, remote module registry and conflict-aware managed-block migrations` (Epic 9).
+- Deferred: `additional language ecosystems beyond the supported web, mobile, backend and .NET paths`.
 - Success signal: `init and doctor pass against empty and existing fixtures while preserving user files`
 
 ## Business Rules And Invariants
@@ -146,11 +148,11 @@ Profile before memoizing or virtualizing. Parallelize independent I/O. Lazy-load
 Before generating multiple stories or tasks, ask exactly:
 
 ```txt
-Como queres revisar este trabajo?
-1. Una historia/task a la vez
-2. En bloques de X historias/tasks
-3. Por sprint completo
-4. Solo al final como borrador
+How do you want to review this work?
+1. One story/task at a time
+2. In blocks of X stories/tasks
+3. By complete sprint
+4. Only at the end as a draft
 ```
 
 Record the answer here:
