@@ -174,6 +174,16 @@ FR75: npm publication is an explicit high-risk operation requiring authenticated
 
 FR76: After README and npm distribution are ready, Downstroke can provide a React documentation and showcase site containing only working, verifiable framework capabilities.
 
+FR77: After functional readiness, Downstroke can produce a sanitized public repository tree that contains the framework and required distributable assets but excludes internal planning, temporary configuration and development-process artifacts.
+
+FR78: Before sanitizing public history, the complete development history is pushed to and verified in a separate private maintenance repository.
+
+FR79: The sanitized public repository can start from one clean initial commit so its history does not expose internal project-construction steps.
+
+FR80: The final public `.gitignore` excludes local agent state, BMAD development output, caches, credentials, build artifacts and maintenance-only files while retaining assets required by installed framework features.
+
+FR81: Replacing public history or force-pushing the single-commit release requires a final preview, secret scan, package/build verification and explicit maintainer confirmation.
+
 ### Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -258,6 +268,12 @@ NFR40: Release artifacts are reproducible from a tagged commit and the published
 
 NFR41: The documentation site is accessible, responsive, internationalizable and never presents unfinished capabilities as available.
 
+NFR42: Sanitization uses an explicit allowlist or release manifest; broad denylist deletion is not sufficient evidence that the public tree is safe.
+
+NFR43: The private maintenance repository must be readable and contain the expected full-history tip before any public history rewrite begins.
+
+NFR44: Public-history rewriting is never automatic, never runs during normal development and has a documented recovery path.
+
 ### Additional Requirements
 
 - Keep `core`, `spec`, `agents`, `gates`, `presets` and CLI as existing boundaries; do not create parallel Git, hosting, map or agent frameworks.
@@ -284,6 +300,7 @@ NFR41: The documentation site is accessible, responsive, internationalizable and
 - Treat native Breakdown Stack capabilities as evidence-gated successors: integrate external tools first, measure real use, implement the smallest proven native scope, and preserve rollback.
 - Keep greenfield recommendations inside supported stack boundaries and make every recommendation explainable and overridable.
 - Treat the README as the first complete user documentation; prepare and verify the npm tarball before publication; build the React documentation site only after package workflows are stable.
+- Preserve full history privately before creating a one-commit public release; generate the public tree from a reviewed release manifest and apply the final public `.gitignore` only at release cut.
 - Preserve Epic 1 and its Sprint 1 review state before Epic 2 implementation starts.
 
 ### UX Design Requirements
@@ -301,7 +318,7 @@ FR32-FR34: Epic 6 - Safe managed-rule evolution.
 FR36-FR40: Epic 7 - Three-pass 2D and 3D interactive delivery.
 FR41-FR50: Epic 8 - Design system, brand and internationalization.
 FR60-FR68: Epic 9 - Evidence-gated native platform evolution.
-FR72-FR76: Epic 10 - Package distribution and public documentation.
+FR72-FR81: Epic 10 - Package distribution, sanitized public release and documentation.
 
 ## Epic List
 
@@ -342,8 +359,8 @@ Maintainers can graduate proven external workflows into native capabilities, an 
 **FRs covered:** FR60-FR68.
 
 ### Epic 10: Package Distribution and Public Documentation
-Developers can understand Downstroke from the README, install a verified npm package and later use an accurate React documentation and showcase site.
-**FRs covered:** FR72-FR76.
+Developers can understand Downstroke from the README, install a verified npm package, inspect a sanitized one-commit public repository and later use an accurate React documentation and showcase site.
+**FRs covered:** FR72-FR81.
 
 ## Epic 1: Installable and Verifiable MVP
 

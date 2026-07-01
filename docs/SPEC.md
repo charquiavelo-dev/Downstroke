@@ -34,6 +34,7 @@ A developer can safely initialize or inspect an existing project, install only t
 - Deferred but planned after the external Breakdown Stack is working and measurable: `native Breakdown Stack capabilities, agent runtime, remote module registry and conflict-aware managed-block migrations` (Epic 9).
 - Deferred: `additional language ecosystems beyond the supported web, mobile, backend and .NET paths`.
 - Planned after the framework is functionally validated: `npm distribution followed by a React documentation and showcase site` (Epic 10).
+- The public release is cut from a sanitized allowlisted tree with one initial commit only after the complete development history is verified in a private maintenance repository.
 - Success signal: `init and doctor pass against empty and existing fixtures while preserving user files`
 
 ## Business Rules And Invariants
