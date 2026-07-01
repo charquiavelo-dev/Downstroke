@@ -1,0 +1,38 @@
+# generated: 2026-07-01
+# last_updated: 2026-07-01
+# project: Downstroke
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+generated: 2026-07-01
+last_updated: 2026-07-01
+project: Downstroke
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-preservar-baseline-e-importar-fuentes: review
+  1-2-crear-fundacion-del-monorepo: review
+  1-3-inicializar-y-diagnosticar-preset-lite: review
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-diagnosticar-breakdown-stack: backlog
+  2-2-persistir-cadencia-bmad: backlog
+  2-3-integrar-codegraph-caveman-ponytail-y-bmad: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-preset-react-frontend: backlog
+  3-2-preset-react-native: backlog
+  3-3-preset-net-y-blazor: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-bloques-gestionados-sin-sobrescritura: backlog
+  4-2-diff-y-migracion-segura: backlog
+  4-3-promocion-de-reglas-probadas: backlog
+  epic-4-retrospective: optional

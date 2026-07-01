@@ -1,4 +1,4 @@
-# Downstroke Claude Guide
+# <Project Name> Claude Guide
 
 ## Purpose
 

@@ -1,4 +1,4 @@
-# Downstroke Agents Guide
+# <Project Name> Agents Guide
 
 ## Purpose
 

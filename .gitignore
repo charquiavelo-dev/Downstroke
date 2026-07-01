@@ -1,1 +1,3 @@
 _bmad/config.user.toml
+node_modules/
+dist/

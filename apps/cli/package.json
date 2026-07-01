@@ -1,0 +1,12 @@
+{
+  "name": "downstroke-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {"downstroke":"dist/index.js"},
+  "files": ["dist"],
+  "dependencies": {
+    "@downstroke/core": "0.1.0",
+    "@downstroke/presets": "0.1.0"
+  },
+  "scripts": {"build":"tsc -p tsconfig.json","typecheck":"tsc -p tsconfig.json --noEmit"}
+}

@@ -4,34 +4,33 @@ This is the canonical product and engineering contract. Replace every `<...>` va
 
 ## Metadata
 
-- Project: `Downstroke`
-- Owner: `Framework maintainer`
-- Status: `active`
-- Last reviewed: `2026-07-01`
-- Product/domain in focus: `modular AI-assisted software delivery`
+- Project: `<name>`
+- Owner: `<owner>`
+- Status: `<discovery | active | maintenance>`
+- Last reviewed: `<YYYY-MM-DD>`
+- Product/domain in focus: `<domain>`
 
 ## Product
 
 ### Problem
 
-Developers using AI-assisted workflows repeatedly rebuild agent rules, planning, context, QA and stack setup. This wastes tokens and creates inconsistent delivery risk across projects.
+`<Who has what problem, in what context, and why it matters now?>`
 
 ### Outcome
 
-A developer can safely initialize or inspect an existing project, install only the required discipline modules and receive actionable health results without silent file replacement.
+`<Observable user or business result.>`
 
 ### Users And Roles
 
 | Role | Goal | Allowed actions | Forbidden actions |
 | --- | --- | --- | --- |
-| Framework maintainer | Evolve proven rules into modules | Author modules, presets, migrations and releases | Cannot promote unproven project-specific behavior |
-| Project developer | Start or strengthen a project | Initialize, inspect, diagnose and add modules | Cannot silently overwrite user-owned files |
+| `<role>` | `<goal>` | `<actions>` | `<restrictions>` |
 
 ### Scope
 
-- In: `lite preset initialization, project inspection, health diagnosis and safe copy-if-missing operations`
-- Out for now: `managed-block migration, remote registry, advanced production adapters and native replacements for Breakdown Stack tools`
-- Success signal: `init and doctor pass against empty and existing fixtures while preserving user files`
+- In: `<smallest useful workflow>`
+- Out for now: `<explicit deferrals>`
+- Success signal: `<metric or observable evidence>`
 
 ## Business Rules And Invariants
 
@@ -55,11 +54,11 @@ For every primary flow define:
 
 ## Architecture
 
-- Stack: `TypeScript strict, Node.js ESM, npm workspaces`
-- Runtime/deployment: `Node.js >=22, local CLI first`
-- Package manager: `npm`
-- System boundaries: `CLI, core file operations, content modules and presets`
-- Source of truth: `module manifests and versioned templates in this repository`
+- Stack: `<frameworks and versions>`
+- Runtime/deployment: `<targets>`
+- Package manager: `<npm | pnpm | yarn | bun | NuGet>`
+- System boundaries: `<web, mobile, API, worker, database, external services>`
+- Source of truth: `<authoritative store per data class>`
 - Heavy or irreversible decisions: `<links to ADRs>`
 
 ```txt
