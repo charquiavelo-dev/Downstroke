@@ -640,3 +640,60 @@ So that repository history remains reviewable and recoverable.
 **Given** a successful local commit
 **When** push is not authorized
 **Then** the commit remains local and Downstroke reports the branch and commit hash.
+
+### Story 3.3: Resolve Repository Roots and Workspace Topology
+
+As a developer,
+I want Downstroke to identify the exact repository topology before mutations,
+So that commands never affect the wrong repository.
+
+**Acceptance Criteria:**
+
+**Given** any working directory
+**When** a Git mutation is planned
+**Then** Downstroke resolves the actual top-level root and executes with the correct `cwd`.
+
+**Given** multiple child repositories
+**When** the parent workspace is scanned
+**Then** each repository, remote, branch and dirty state is isolated.
+
+**Given** a parent `.git` plus nested repositories
+**When** they are not declared worktrees or submodules
+**Then** Downstroke reports a risk and requires target selection.
+
+**Given** workspace markers such as npm workspaces, Nx or Turbo
+**When** only one Git root exists
+**Then** Downstroke treats it as a monorepo rather than unrelated repositories.
+
+**Given** a workspace-level command
+**When** it could affect multiple repositories
+**Then** Downstroke previews every target and requires a filter or explicit confirmation.
+
+### Story 3.4: Recover Git Authentication Safely
+
+As a developer,
+I want Downstroke to recover from incorrect Git credentials without disturbing unrelated accounts,
+So that each repository can authenticate against its intended remote safely.
+
+**Acceptance Criteria:**
+
+**Given** an HTTPS `401` or `403`
+**When** Downstroke diagnoses the failure
+**Then** it reports the remote and credential target without exposing tokens.
+
+**Given** a cached credential conflict
+**When** recovery is proposed
+**Then** Downstroke shows the exact credential entry to remove and waits for confirmation.
+
+**Given** approved credential removal
+**When** the operation runs
+**Then** only that host/account credential is removed
+**And** global `user.name`, `user.email`, Azure, Bitbucket and unrelated GitHub credentials remain unchanged.
+
+**Given** a cleared credential
+**When** authentication is retried
+**Then** the user signs in interactively with the intended account before any push.
+
+**Given** repositories using different accounts
+**When** each repository is configured
+**Then** credential context remains repository-specific and no token is stored in project files.
