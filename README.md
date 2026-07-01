@@ -1,6 +1,6 @@
-# Pulse Project Boilerplate
+# Project Engineering Baseline
 
-Boilerplate para iniciar proyectos serios de Pulse con React, Next.js, React Native, backend, PostgreSQL, BMAD, CodeGraph, Caveman, Ponytail y puente .NET/Blazor.
+Baseline para iniciar proyectos serios con React, Next.js, React Native, backend, PostgreSQL, BMAD, CodeGraph, Caveman, Ponytail y puente .NET/Blazor.
 
 La idea es simple: esto todavia no es un framework instalado por npm. Es el punto de partida de un framework custom. Primero se consolidan reglas, docs, gates, bootstrap y patrones repetidos. Cuando dos o tres proyectos demuestren que algo se repite de verdad, se convierte en script, paquete o CLI.
 
@@ -8,14 +8,13 @@ La idea es simple: esto todavia no es un framework instalado por npm. Es el punt
 
 - `AGENTS.md`: guia operativa lista para copiar en el proyecto nuevo.
 - `CLAUDE.md`: guia equivalente para sesiones Claude.
-- `AGENTS.template.md`: plantilla editable para generar variantes por proyecto.
-- `SPEC.template.md`: contrato de producto, arquitectura, datos, API, UI y acceptance gate.
+- `docs/SPEC.md`: contrato canónico de producto, arquitectura, datos, API, UI, cadencia BMAD y acceptance gate.
 - `docs/development-standard.md`: reglas de ingenieria, React, backend, PostgreSQL y QA.
 - `docs/production-readiness.md`: checklist de produccion.
 - `docs/process/bmad-method.md`: flujo BMAD simple: brief, spec, architecture, story, QA.
 - `docs/project-start-guides.md`: arranque para React, Next.js, React Native, backend y .NET.
 - `docs/dotnet-bridge.md`: puente para Blazor/.NET sin forzar patrones JS.
-- `docs/pulse-lessons.md`: reglas extraidas de proyectos Pulse reales.
+- `docs/proven-project-rules.md`: reglas detalladas validadas en proyectos reales.
 - `scripts/bootstrap-agents.ps1`: instalacion progresiva de herramientas de agente.
 - `skills/caveman/SKILL.md`: skill local para comunicacion ultra comprimida.
 
@@ -28,18 +27,16 @@ Use this boilerplate for:
 - React Native + Expo apps.
 - Node/NestJS/Express APIs.
 - PostgreSQL-backed products.
-- Blazor/.NET projects that should follow Pulse discipline.
+- Blazor/.NET projects that need the same engineering discipline.
 - AI-assisted projects where agent token use, context quality and safety matter.
 
 Do not use this as an excuse to install every tool on tiny experiments. Copy the docs, pick the minimum stack and keep the gates proportional to risk.
 
 ## Quick Start
 
-From a new project root:
+Place this baseline in the new project root, then run:
 
 ```powershell
-Copy-Item -Recurse C:\Users\carlo\Documents\pulse\boilerplate\* .
-Copy-Item SPEC.template.md docs\SPEC.md
 git init
 git add .
 git commit -m "chore: initialize project boilerplate"
@@ -124,12 +121,13 @@ Ponytail is the default engineering posture:
 ## Recommended First Hour
 
 1. Copy the boilerplate.
-2. Create `docs/SPEC.md` from `SPEC.template.md`.
+2. Complete the canonical `docs/SPEC.md`.
 3. Fill the product paragraph, user roles, architecture and acceptance gate.
 4. Run the agent bootstrap.
-5. Commit the clean baseline.
-6. Create the first BMAD brief/quick spec for the smallest useful slice.
-7. Build one verified workflow before adding secondary screens.
+5. Choose BMAD review cadence: one-by-one, blocks of `X`, by sprint or final draft review.
+6. Commit the clean baseline.
+7. Create the first BMAD brief/quick spec for the smallest useful slice.
+8. Build one verified workflow before adding secondary screens.
 
 ## Recommended Folder Shapes
 
@@ -170,7 +168,7 @@ project/
   docs/
 ```
 
-Pulse projects taught that mobile apps should not become the only source of truth. Trust, auth, room state, social state, counters, moderation and permissions need backend services and tests.
+Mobile apps should not become the only source of truth. Trust, auth, room state, social state, counters, moderation and permissions need backend services and tests.
 
 ### Backend
 
@@ -201,7 +199,7 @@ project/
 
 Small apps can start with one ASP.NET Core project plus tests. Split only when boundaries are real.
 
-## Development Rules Brought From Pulse
+## Proven Development Rules
 
 ### Source Of Truth
 
@@ -241,7 +239,7 @@ If docs and code disagree, inspect code, document the conflict and avoid behavio
 
 ### AI / RAG / MCP
 
-Pulse projects have shown a useful rule: normal functions first, agent framework later.
+A repeatedly validated rule is: normal functions first, agent framework later.
 
 - Keep AI output behind schemas and safety validation.
 - Keep database truth separate from vector retrieval.
@@ -294,9 +292,9 @@ Copy this into the new project root. Replace `<Project Name>` and customize only
 
 Copy this into projects where Claude will operate. It is shorter than `AGENTS.md` but points to the same rules.
 
-### `SPEC.template.md`
+### `docs/SPEC.md`
 
-Turn it into `docs/SPEC.md` and fill it before the first meaningful feature. The sections force useful decisions:
+Fill it before the first meaningful feature. The sections force useful decisions:
 
 - users and roles
 - architecture
@@ -305,6 +303,7 @@ Turn it into `docs/SPEC.md` and fill it before the first meaningful feature. The
 - API rules
 - database rules
 - UI rules
+- BMAD review cadence
 - acceptance gate
 
 ### `docs/project-start-guides.md`
@@ -313,15 +312,15 @@ Use it to choose the first stack shape. It contains separate starts for React/Ne
 
 ### `docs/dotnet-bridge.md`
 
-Use it when starting Blazor or ASP.NET Core. It keeps the Pulse discipline without forcing JavaScript folder names.
+Use it when starting Blazor or ASP.NET Core. It keeps the same engineering discipline without forcing JavaScript folder names.
 
-### `docs/pulse-lessons.md`
+### `docs/proven-project-rules.md`
 
-Use it when you want the deeper "why" from previous Pulse projects: monorepo lessons, UI quality, realtime rooms, production reset, MCP, AI/RAG and deployment gates.
+Use it for the deeper rules behind monorepos, UI quality, realtime rooms, production reset, MCP, AI/RAG and deployment gates.
 
 ## Framework Direction
 
-This boilerplate becomes a framework progressively:
+This baseline is preserved first, then extracted into Downstroke progressively:
 
 1. Shared docs and agent rules.
 2. Shared bootstrap scripts.
@@ -334,4 +333,4 @@ Do not build framework machinery before repeated projects prove the same need. T
 
 ## Current Git Baseline
 
-This boilerplate is intended to live in local git first. Add a remote only when you are ready to publish or share it.
+Keep Git history from the first change. Add a remote only when you are ready to publish or share it.

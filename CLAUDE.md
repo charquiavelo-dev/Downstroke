@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This file is the Claude entrypoint for projects started from the Pulse boilerplate. Keep it aligned with `AGENTS.md`; if a rule differs, `AGENTS.md` wins unless this file is intentionally customized for Claude.
+This file is the Claude entrypoint. Keep it aligned with `AGENTS.md`; if a rule differs, `AGENTS.md` wins unless this file is intentionally customized for Claude.
 
 Treat this project as production software: real users, real data, real money, real mistakes and real growth.
 
@@ -13,6 +13,7 @@ Treat this project as production software: real users, real data, real money, re
 3. `docs/development-standard.md`
 4. `docs/process/bmad-method.md`
 5. Relevant BMAD artifact in `_bmad-output/`
+6. `docs/proven-project-rules.md` when the task crosses architecture, data, UI, operations or tooling boundaries.
 
 ## Source Of Truth
 
@@ -43,6 +44,10 @@ $env:PONYTAIL_INSTALL_COMMAND = '<canonical Ponytail install command>'
 ```
 
 Do not guess a Ponytail package. If the canonical command is missing, ask.
+
+## Mandatory BMAD Cadence
+
+Before creating multiple stories or tasks, use the exact review question and rules in `docs/SPEC.md`. Ask whether review is `una-a-una`, in blocks of `X`, by sprint, or only at the end as a draft. Record the choice before generating a large backlog. High-risk tasks are always reviewed individually.
 
 ## How Claude Should Work Here
 

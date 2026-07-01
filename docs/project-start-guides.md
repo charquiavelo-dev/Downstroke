@@ -2,12 +2,13 @@
 
 ## Universal First Hour
 
-1. Create local git and commit the initial copied boilerplate.
-2. Fill `docs/SPEC.md` from `SPEC.template.md`.
+1. Create git and commit the initial baseline.
+2. Fill the canonical `docs/SPEC.md`.
 3. Run agent bootstrap: CodeGraph, BMAD, Caveman and Ponytail.
-4. Decide the smallest shippable slice.
-5. Write the BMAD brief/quick spec only as deep as the slice needs.
-6. Build one verified path before adding secondary screens.
+4. Choose BMAD review cadence: one-by-one, blocks of `X`, by sprint or final draft review.
+5. Decide the smallest shippable slice.
+6. Write the BMAD brief/quick spec only as deep as the slice needs.
+7. Build one verified path before adding secondary screens.
 
 ## React / Next.js Start
 
@@ -107,7 +108,7 @@ Advice:
 
 Progressively install in this order:
 
-1. Git local.
+1. Git.
 2. CodeGraph.
 3. BMAD for Codex with Spanish output.
 4. Caveman project skill.
@@ -117,7 +118,7 @@ The bootstrap script handles this for JS/TS projects. For .NET, run the same age
 
 ## Framework Direction
 
-This repo is intentionally still a boilerplate. The future framework should emerge only from repeated real projects:
+This baseline is the source material for Downstroke. Framework modules should emerge only from repeated real projects:
 
 - Shared docs and gates first.
 - Repeated scripts second.

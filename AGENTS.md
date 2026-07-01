@@ -4,7 +4,7 @@
 
 This file is the operating guide for Codex, Claude and human developers. Treat this project as production software: real users, real data, real money, real mistakes and real growth.
 
-This project was started from the Pulse boilerplate. The goal is not to use a generic framework blindly; the goal is to grow a Pulse-style custom framework from repeated, proven project rules.
+This project uses a reusable, specification-driven engineering baseline. Repeated rules may later become Downstroke modules, but project-specific behavior stays local to the project.
 
 ## Source Of Truth
 
@@ -14,6 +14,7 @@ This project was started from the Pulse boilerplate. The goal is not to use a ge
 - `docs/process/bmad-method.md`: BMAD workflow.
 - `docs/project-start-guides.md`: startup guidance for React, Next.js, React Native, backend and .NET.
 - `docs/dotnet-bridge.md`: Blazor/.NET bridge when the project is C#/.NET.
+- `docs/proven-project-rules.md`: detailed cross-project engineering rules and failure patterns.
 - `_bmad-output/`: BMAD planning and implementation artifacts.
 - `docs/legacy/`: old context only, not current truth.
 
@@ -37,6 +38,20 @@ $env:PONYTAIL_INSTALL_COMMAND = '<canonical Ponytail install command>'
 ```
 
 Do not begin meaningful implementation while bootstrap validation fails. Do not guess an unrelated package named `ponytail`; if the canonical command is missing, ask.
+
+## Mandatory First Planning Question
+
+Before generating multiple BMAD stories or tasks, read `docs/SPEC.md` and ask:
+
+```txt
+Como queres revisar este trabajo?
+1. Una historia/task a la vez
+2. En bloques de X historias/tasks
+3. Por sprint completo
+4. Solo al final como borrador
+```
+
+If the answer is blocks, ask for `X`. If it is sprint-based, ask for sprint length, real capacity and WIP limit. Record the choice in `docs/SPEC.md`; once Downstroke planning state exists, also persist it in `.downstroke/planning.json`. Never generate a large backlog before this decision. Review high-risk auth, money, permission, destructive data, migration and production tasks individually regardless of cadence.
 
 ## CodeGraph
 
@@ -85,6 +100,7 @@ Ponytail is the default development posture:
 - Avoid speculative abstractions.
 - Prefer deletion over addition.
 - Add one focused check for non-trivial logic.
+- Do not add a shared package, global store, abstraction or framework dependency before two real consumers or measured need exist.
 
 Mark deliberate simplifications only when there is a real ceiling:
 
@@ -158,6 +174,9 @@ If the answer is weak, improve the spec before shipping the visible change.
 - Forms need validation, field-level errors, pending state, success state and safe retry behavior.
 - Tables become cards or focused lists on mobile; mobile is not a squeezed desktop table.
 - Empty states should tell the next valid action, not filler copy.
+- Every visible control needs a real action; unfinished features stay out of primary navigation.
+- Keep server state in query/framework data layers and local UI state close to the component.
+- Memoize, virtualize and globalize state only after measured need.
 
 ## Backend And Data Rules
 
@@ -171,6 +190,8 @@ If the answer is weak, improve the spec before shipping the visible change.
 - Logs must help incident diagnosis without leaking secrets.
 - Retry-prone mutations should be idempotent.
 - Do not use frontend filtering as a security boundary.
+- Do not log secrets, complete private payloads or combinations that can re-identify a user.
+- External integrations define timeout, retry, rate-limit and fallback behavior.
 
 ## AI, RAG And MCP Rules
 

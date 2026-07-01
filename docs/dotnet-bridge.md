@@ -1,6 +1,6 @@
 # .NET And Blazor Bridge
 
-This boilerplate is JS/TS-first, but the same Pulse rules apply to Blazor and .NET projects.
+This baseline is JS/TS-first, but the same engineering rules apply to Blazor and .NET projects.
 
 ## When To Choose .NET
 
@@ -50,7 +50,7 @@ Keep this shape only if the project is large enough. Small apps can start with o
 - Auth: ASP.NET Core Identity, OpenID Connect or a proven hosted provider.
 - Tests: xUnit/NUnit plus integration tests for API/database boundaries.
 
-## Rules Carried From Pulse
+## Cross-Stack Rules
 
 - Source of truth lives in `docs/`.
 - BMAD before meaningful feature/data/auth/permission work.
@@ -59,7 +59,7 @@ Keep this shape only if the project is large enough. Small apps can start with o
 - Additive migrations by default.
 - Database constraints enforce important invariants.
 - UI has loading, empty, error, success, disabled and permission states.
-- Local commit is fine; push needs approval.
+- Commits are allowed; push needs approval.
 
 ## Blazor Guidance
 
@@ -90,4 +90,4 @@ Every endpoint defines:
 
 ## Bridge Rule
 
-Do not force a .NET project to look like a Next.js project. Reuse the Pulse discipline, not the folder names.
+Do not force a .NET project to look like a Next.js project. Reuse the engineering discipline, not the folder names.
