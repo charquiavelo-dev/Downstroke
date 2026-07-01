@@ -3,6 +3,7 @@ stepsCompleted:
   - step-01-validate-prerequisites
   - step-02-design-epics
   - step-03-create-stories
+  - step-04-final-validation
 inputDocuments:
   - docs/SPEC.md
   - docs/downstroke/source-guides/_bmad-output/architecture-downstroke-mvp.md
@@ -322,6 +323,19 @@ FR36-FR40: Epic 7 - Three-pass 2D and 3D interactive delivery.
 FR41-FR50: Epic 8 - Design system, brand and internationalization.
 FR60-FR68: Epic 9 - Evidence-gated native platform evolution.
 FR72-FR81: Epic 10 - Package distribution, sanitized public release and documentation.
+
+### Story Coverage Map
+
+- 1.1: FR1; 1.2: FR1-FR3; 1.3: FR1-FR3.
+- 2.1: FR4; 2.2: FR4; 2.3: FR5; 2.4: FR27-FR29; 2.5: FR56-FR59.
+- 3.1: FR6-FR9; 3.2: FR10-FR11; 3.3: FR12-FR14; 3.4: FR15-FR16.
+- 4.1: FR69-FR71; 4.2: FR26, FR30; 4.3: FR25-FR26; 4.4: FR26, FR31; 4.5: FR17-FR18, FR24; 4.6: FR19-FR20; 4.7: FR51-FR52; 4.8: FR53-FR54; 4.9: FR55.
+- 5.1: FR21-FR23; 5.2: FR35; 5.3: FR21, FR35; 5.4: FR22-FR23; 5.5: FR23.
+- 6.1: FR32; 6.2: FR33; 6.3: FR34.
+- 7.1: FR38-FR40; 7.2: FR36, FR38-FR40; 7.3: FR37-FR40.
+- 8.1: FR42, FR45; 8.2: FR41; 8.3: FR46-FR47; 8.4: FR48-FR50; 8.5: FR43-FR44.
+- 9.1: FR60-FR61; 9.2: FR62; 9.3: FR63; 9.4: FR64; 9.5: FR65; 9.6: FR66; 9.7: FR67; 9.8: FR68.
+- 10.1: FR72; 10.2: FR73-FR74; 10.3: FR75; 10.4: FR78; 10.5: FR77, FR79-FR81; 10.6: FR76.
 
 ## Epic List
 
