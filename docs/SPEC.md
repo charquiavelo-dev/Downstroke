@@ -154,9 +154,11 @@ Como queres revisar este trabajo?
 
 Record the answer here:
 
-- Review mode: `<una-a-una | bloques | por-sprint | solo-al-final>`
+- Review mode: `por-sprint`
 - Block size when applicable: `<X>`
-- Sprint length/capacity/WIP when applicable: `<days | capacity | WIP>`
+- Sprint length: `15 working days, Monday through Friday`
+- Gross capacity: `8 hours/day, 40 hours/week, 120 hours/sprint`
+- WIP limit: `3 concurrent tasks`
 - Last reviewed artifact: `<BMAD ID>`
 
 Rules:
