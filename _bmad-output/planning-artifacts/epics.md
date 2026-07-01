@@ -510,3 +510,31 @@ So that automation remains reproducible and important choices stay under human c
 **Given** any proposed operation
 **When** it is previewed
 **Then** responsibility is explicit: user approves, LLM advises, CLI executes, repository records and provider applies infrastructure.
+
+### Story 2.5: Estimate and Report LLM Token Usage
+
+As a developer,
+I want token estimates and usage status by planning scope,
+So that I can evaluate backlog and sprint cost before execution.
+
+**Acceptance Criteria:**
+
+**Given** a task, backlog subset or sprint
+**When** I request an estimate
+**Then** the CLI reports a token range, model assumptions, included context and uncertainty.
+
+**Given** observed session usage
+**When** I run `downstroke status`
+**Then** it separates consumed tokens from projected remaining tokens.
+
+**Given** an LLM surface supporting custom commands
+**When** its adapter is installed
+**Then** an equivalent `/status` capability is available without replacing the CLI source of truth.
+
+**Given** a console session
+**When** compact status display is enabled
+**Then** a non-blocking footer or closing summary shows the estimate.
+
+**Given** unknown provider pricing or accounting rules
+**When** monetary cost cannot be verified
+**Then** Downstroke reports tokens without inventing a currency estimate.
