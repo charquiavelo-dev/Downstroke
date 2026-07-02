@@ -61,3 +61,20 @@ test("setup-agents emits a redacted plan and does not mutate without authorizati
   assert.equal(JSON.stringify(plan).includes("secret"), false);
   await assert.rejects(readFile(join(root, ".codegraph", "codegraph.db")));
 });
+
+test("cadence query exposes English choices without mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+
+  try {
+    assert.equal(await run(["cadence", "--json"], root), 0);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const query = JSON.parse(output.join("\n"));
+  assert.deepEqual(query.choices, ["one-at-a-time", "blocks", "sprint", "final-draft"]);
+  await assert.rejects(readFile(join(root, ".downstroke", "planning.json")));
+});

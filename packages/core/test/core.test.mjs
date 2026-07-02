@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { applyBreakdownStack, diagnoseBreakdownStack, inspectProject, installFiles, planBreakdownStack, runProjectChecks } from "../dist/index.js";
+import { applyBreakdownStack, applyCadenceUpdate, diagnoseBreakdownStack, diagnosePlanningCadence, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, runProjectChecks } from "../dist/index.js";
 
 test("copy-if-missing preserves an existing user file", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-"));
@@ -153,4 +153,47 @@ test("Breakdown Stack apply executes once and verifies all tools", async () => {
   assert.equal(calls, 1);
   assert.equal(result.status, "verified");
   assert.ok(result.results.every(({ status }) => status === "ok"));
+});
+
+test("cadence planning validates mode-specific fields without mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cadence-"));
+  const plan = await planCadenceUpdate(root, { reviewMode: "sprint" });
+
+  assert.equal(plan.status, "blocked");
+  assert.deepEqual(plan.blockers, ["sprintLengthDays must be a positive integer", "grossCapacityHoursPerSprint must be a positive integer", "wipLimit must be a positive integer"]);
+  await assert.rejects(readFile(join(root, ".downstroke", "planning.json")));
+});
+
+test("cadence planning blocks malformed existing state instead of overwriting it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cadence-"));
+  await mkdir(join(root, ".downstroke"));
+  await writeFile(join(root, ".downstroke", "planning.json"), '{"reviewMode":"sprint"}');
+
+  const plan = await planCadenceUpdate(root, { reviewMode: "one-at-a-time" });
+
+  assert.equal(plan.status, "blocked");
+  assert.ok(plan.blockers.includes("Planning cadence is malformed"));
+});
+
+test("authorized cadence update synchronizes state and SPEC while preserving unrelated content", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cadence-"));
+  await mkdir(join(root, "docs"));
+  await writeFile(join(root, "docs", "SPEC.md"), "# Product\n\n## BMAD Governance\n\n- Review mode: `one-at-a-time`\n- Block size when applicable: `not-applicable`\n- Sprint length: `not-applicable`\n- Gross capacity: `not-applicable`\n- WIP limit: `not-applicable`\n- High-risk review: `individual`\n\n## Kept\n\nDo not change.\n");
+  const plan = await planCadenceUpdate(root, {
+    reviewMode: "sprint",
+    sprintLengthDays: 15,
+    grossCapacityHoursPerSprint: 120,
+    wipLimit: 3,
+  });
+
+  const result = await applyCadenceUpdate(root, plan);
+
+  assert.equal(result.status, "ok");
+  assert.equal(JSON.parse(await readFile(join(root, ".downstroke", "planning.json"), "utf8")).reviewMode, "sprint");
+  const spec = await readFile(join(root, "docs", "SPEC.md"), "utf8");
+  assert.match(spec, /Review mode: `sprint`/);
+  assert.match(spec, /Do not change\./);
+  assert.equal((await diagnosePlanningCadence(root)).status, "ok");
+  await writeFile(join(root, ".downstroke", "planning.json"), (await readFile(join(root, ".downstroke", "planning.json",), "utf8")).replace('"wipLimit": 3', '"wipLimit": 4'));
+  assert.equal((await diagnosePlanningCadence(root)).status, "fail");
 });

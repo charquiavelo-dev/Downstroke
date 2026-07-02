@@ -160,19 +160,20 @@ How do you want to review this work?
 
 Record the answer here:
 
-- Review mode: `por-sprint`
-- Block size when applicable: `<X>`
+- Review mode: `sprint`
+- Block size when applicable: `not-applicable`
 - Sprint length: `15 working days, Monday through Friday`
 - Gross capacity: `8 hours/day, 40 hours/week, 120 hours/sprint`
-- WIP limit: `3 concurrent tasks`
+- WIP limit: `3`
+- High-risk review: `individual`
 - Last reviewed artifact: `<BMAD ID>`
 
 Rules:
 
-- `una-a-una`: stop after each story/task for review.
-- `bloques`: stop after exactly `X` new artifacts.
-- `por-sprint`: confirm objective, real capacity, risks and WIP before generation; review at planning close.
-- `solo-al-final`: generated work remains a draft until explicit review.
+- `one-at-a-time`: stop after each story/task for review.
+- `blocks`: stop after exactly `X` new artifacts.
+- `sprint`: confirm objective, real capacity, risks and WIP before generation; review at planning close.
+- `final-draft`: generated work remains a draft until explicit review.
 - High-risk auth, money, permissions, destructive data, migration and production work is reviewed individually regardless of cadence.
 - Changing cadence never deletes or silently rewrites accepted work.
 

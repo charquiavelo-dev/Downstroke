@@ -1,10 +1,11 @@
 {
-  "reviewMode": "por-sprint",
+  "reviewMode": "sprint",
   "sprintLengthDays": 15,
   "workingDays": ["monday", "tuesday", "wednesday", "thursday", "friday"],
   "capacityHoursPerDay": 8,
   "capacityHoursPerWeek": 40,
   "grossCapacityHoursPerSprint": 120,
   "wipLimit": 3,
+  "highRiskReview": "individual",
   "lastReviewedStory": null
 }

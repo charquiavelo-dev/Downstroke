@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -30,6 +30,27 @@ export type BreakdownInstallPlan = {
 };
 
 export type BootstrapExecutor = (root: string) => Promise<number>;
+
+export const cadenceChoices = ["one-at-a-time", "blocks", "sprint", "final-draft"] as const;
+export type ReviewMode = typeof cadenceChoices[number];
+export type PlanningCadence = {
+  reviewMode: ReviewMode;
+  blockSize?: number;
+  sprintLengthDays?: number;
+  workingDays?: string[];
+  capacityHoursPerDay?: number;
+  capacityHoursPerWeek?: number;
+  grossCapacityHoursPerSprint?: number;
+  wipLimit?: number;
+  highRiskReview: "individual";
+  lastReviewedStory: string | null;
+};
+export type CadencePlan = {
+  status: "ready" | "blocked";
+  files: [".downstroke/planning.json", "docs/SPEC.md"];
+  next: PlanningCadence;
+  blockers: string[];
+};
 
 const expectedBmadVersion = "6.9.0";
 
@@ -198,6 +219,201 @@ export async function applyBreakdownStack(
     && results.every((result) => result.status === "ok")
     && results.find((result) => result.id === "bmad.exists")?.version === expectedBmadVersion;
   return { status: verified ? "verified" : "failed", exitCode: verified ? 0 : exitCode || 1, results };
+}
+
+function positiveInteger(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) > 0;
+}
+
+function parseCadence(value: unknown): PlanningCadence | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  const legacyModes: Record<string, ReviewMode> = {
+    "una-a-una": "one-at-a-time",
+    bloques: "blocks",
+    "por-sprint": "sprint",
+    "solo-al-final": "final-draft",
+  };
+  const reviewMode = cadenceChoices.includes(input.reviewMode as ReviewMode)
+    ? input.reviewMode as ReviewMode
+    : typeof input.reviewMode === "string" ? legacyModes[input.reviewMode] : undefined;
+  if (!reviewMode) return undefined;
+  const cadence: PlanningCadence = {
+    reviewMode,
+    highRiskReview: "individual",
+    lastReviewedStory: typeof input.lastReviewedStory === "string" ? input.lastReviewedStory : null,
+  };
+  if (positiveInteger(input.blockSize)) cadence.blockSize = input.blockSize;
+  if (positiveInteger(input.sprintLengthDays)) cadence.sprintLengthDays = input.sprintLengthDays;
+  if (Array.isArray(input.workingDays) && input.workingDays.every((day) => typeof day === "string")) cadence.workingDays = input.workingDays;
+  if (positiveInteger(input.capacityHoursPerDay)) cadence.capacityHoursPerDay = input.capacityHoursPerDay;
+  if (positiveInteger(input.capacityHoursPerWeek)) cadence.capacityHoursPerWeek = input.capacityHoursPerWeek;
+  if (positiveInteger(input.grossCapacityHoursPerSprint)) cadence.grossCapacityHoursPerSprint = input.grossCapacityHoursPerSprint;
+  if (positiveInteger(input.wipLimit)) cadence.wipLimit = input.wipLimit;
+  if (input.highRiskReview !== undefined && input.highRiskReview !== "individual") return undefined;
+  if (reviewMode === "blocks" && cadence.blockSize === undefined) return undefined;
+  if (reviewMode === "sprint" && (cadence.sprintLengthDays === undefined || cadence.grossCapacityHoursPerSprint === undefined || cadence.wipLimit === undefined)) return undefined;
+  return cadence;
+}
+
+export async function readPlanningCadence(root: string): Promise<PlanningCadence | null> {
+  const state = await readLocalFile(root, ".downstroke/planning.json");
+  if (state.kind === "missing") return null;
+  if (state.kind !== "file") throw new Error(`Cannot read planning cadence (${state.code})`);
+  try {
+    const cadence = parseCadence(JSON.parse(state.content.toString("utf8")) as unknown);
+    if (!cadence) throw new Error("Planning cadence is malformed");
+    return cadence;
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "Planning cadence is malformed") throw error;
+    throw new Error("Planning cadence is malformed");
+  }
+}
+
+export async function planCadenceUpdate(
+  root: string,
+  input: Omit<PlanningCadence, "highRiskReview" | "lastReviewedStory">,
+): Promise<CadencePlan> {
+  const blockers: string[] = [];
+  if (input.reviewMode === "blocks" && !positiveInteger(input.blockSize)) blockers.push("blockSize must be a positive integer");
+  if (input.reviewMode === "sprint") {
+    if (!positiveInteger(input.sprintLengthDays)) blockers.push("sprintLengthDays must be a positive integer");
+    if (!positiveInteger(input.grossCapacityHoursPerSprint)) blockers.push("grossCapacityHoursPerSprint must be a positive integer");
+    if (!positiveInteger(input.wipLimit)) blockers.push("wipLimit must be a positive integer");
+  }
+  let previous: PlanningCadence | null = null;
+  try {
+    previous = await readPlanningCadence(root);
+  } catch (error: unknown) {
+    blockers.push(error instanceof Error ? error.message : "Planning cadence is unreadable");
+  }
+  const next: PlanningCadence = {
+    reviewMode: input.reviewMode,
+    ...(input.reviewMode === "blocks" ? { blockSize: input.blockSize } : {}),
+    ...(input.reviewMode === "sprint" ? {
+      sprintLengthDays: input.sprintLengthDays,
+      ...(previous?.workingDays ? { workingDays: previous.workingDays } : {}),
+      ...(previous?.capacityHoursPerDay ? { capacityHoursPerDay: previous.capacityHoursPerDay } : {}),
+      ...(previous?.capacityHoursPerWeek ? { capacityHoursPerWeek: previous.capacityHoursPerWeek } : {}),
+      grossCapacityHoursPerSprint: input.grossCapacityHoursPerSprint,
+      wipLimit: input.wipLimit,
+    } : {}),
+    highRiskReview: "individual",
+    lastReviewedStory: previous?.lastReviewedStory ?? null,
+  };
+  if (blockers.length === 0) {
+    const spec = await readLocalFile(root, "docs/SPEC.md");
+    if (spec.kind !== "file") blockers.push(`docs/SPEC.md: ${evidence("docs/SPEC.md", spec)}`);
+    else {
+      try {
+        updateCadenceSpec(spec.content.toString("utf8"), next);
+      } catch (error: unknown) {
+        blockers.push(error instanceof Error ? error.message : "docs/SPEC.md cannot be updated safely");
+      }
+    }
+  }
+  return {
+    status: blockers.length ? "blocked" : "ready",
+    files: [".downstroke/planning.json", "docs/SPEC.md"],
+    next,
+    blockers,
+  };
+}
+
+function cadenceSpecLines(cadence: PlanningCadence): string[] {
+  const workingDays = cadence.workingDays?.join(", ") === "monday, tuesday, wednesday, thursday, friday"
+    ? "Monday through Friday"
+    : cadence.workingDays?.join(", ");
+  const sprintLength = cadence.sprintLengthDays === undefined
+    ? "not-applicable"
+    : workingDays
+      ? `${cadence.sprintLengthDays} working days, ${workingDays}`
+      : String(cadence.sprintLengthDays);
+  const capacity = cadence.grossCapacityHoursPerSprint === undefined
+    ? "not-applicable"
+    : cadence.capacityHoursPerDay && cadence.capacityHoursPerWeek
+      ? `${cadence.capacityHoursPerDay} hours/day, ${cadence.capacityHoursPerWeek} hours/week, ${cadence.grossCapacityHoursPerSprint} hours/sprint`
+      : String(cadence.grossCapacityHoursPerSprint);
+  return [
+    `- Review mode: \`${cadence.reviewMode}\``,
+    `- Block size when applicable: \`${cadence.blockSize ?? "not-applicable"}\``,
+    `- Sprint length: \`${sprintLength}\``,
+    `- Gross capacity: \`${capacity}\``,
+    `- WIP limit: \`${cadence.wipLimit ?? "not-applicable"}\``,
+    "- High-risk review: `individual`",
+  ];
+}
+
+function cadenceSpecBounds(content: string): { start: number; end: number } | undefined {
+  const start = content.indexOf("## BMAD Governance");
+  const end = start < 0 ? -1 : content.indexOf("\n## ", start + 3);
+  return start < 0 || end < 0 ? undefined : { start, end };
+}
+
+function updateCadenceSpec(content: string, cadence: PlanningCadence): string {
+  const bounds = cadenceSpecBounds(content);
+  if (!bounds) throw new Error("docs/SPEC.md has no bounded BMAD Governance section");
+  const { start, end } = bounds;
+  let section = content.slice(start, end);
+  const patterns = [
+    /^- Review mode:.*$/m,
+    /^- Block size when applicable:.*$/m,
+    /^- Sprint length:.*$/m,
+    /^- Gross capacity:.*$/m,
+    /^- WIP limit:.*$/m,
+  ];
+  const lines = cadenceSpecLines(cadence);
+  for (let index = 0; index < patterns.length; index += 1) {
+    if (!patterns[index]?.test(section)) throw new Error("docs/SPEC.md BMAD Governance fields are incomplete");
+    section = section.replace(patterns[index]!, lines[index]!);
+  }
+  section = /^- High-risk review:.*$/m.test(section)
+    ? section.replace(/^- High-risk review:.*$/m, lines[5]!)
+    : section.replace(lines[4]!, `${lines[4]}\n${lines[5]}`);
+  return content.slice(0, start) + section + content.slice(end);
+}
+
+export async function diagnosePlanningCadence(root: string): Promise<DoctorResult> {
+  let cadence: PlanningCadence | null;
+  try {
+    cadence = await readPlanningCadence(root);
+  } catch (error: unknown) {
+    return { id: "planning.cadence", status: "fail", message: error instanceof Error ? error.message : "Planning cadence is unreadable", evidence: ".downstroke/planning.json", remediation: "Run downstroke cadence with valid options" };
+  }
+  if (!cadence) return { id: "planning.cadence", status: "warn", message: "Planning cadence is not configured", evidence: ".downstroke/planning.json not found", remediation: "Run downstroke cadence" };
+  const spec = await readLocalFile(root, "docs/SPEC.md");
+  if (spec.kind !== "file") return { id: "planning.cadence", status: "fail", message: "Planning cadence cannot be verified against docs/SPEC.md", evidence: evidence("docs/SPEC.md", spec), remediation: "Restore docs/SPEC.md and run downstroke cadence" };
+  const specContent = spec.content.toString("utf8");
+  const bounds = cadenceSpecBounds(specContent);
+  const section = bounds ? specContent.slice(bounds.start, bounds.end) : "";
+  const matches = cadenceSpecLines(cadence).every((line) => section.includes(line));
+  return {
+    id: "planning.cadence",
+    status: matches ? "ok" : "fail",
+    message: matches ? `Planning cadence is synchronized (${cadence.reviewMode})` : "Planning cadence differs from docs/SPEC.md",
+    evidence: ".downstroke/planning.json + docs/SPEC.md",
+    remediation: matches ? "No action required" : "Preview and apply downstroke cadence again",
+  };
+}
+
+export async function applyCadenceUpdate(root: string, plan: CadencePlan): Promise<DoctorResult> {
+  if (plan.status === "blocked") return { id: "planning.cadence", status: "fail", message: plan.blockers.join("; "), remediation: "Correct the cadence options" };
+  const spec = await readLocalFile(root, "docs/SPEC.md");
+  if (spec.kind !== "file") return { id: "planning.cadence", status: "fail", message: "docs/SPEC.md is missing or unreadable", evidence: evidence("docs/SPEC.md", spec), remediation: "Restore docs/SPEC.md" };
+  let updatedSpec: string;
+  try {
+    updatedSpec = updateCadenceSpec(spec.content.toString("utf8"), plan.next);
+  } catch (error: unknown) {
+    return { id: "planning.cadence", status: "fail", message: error instanceof Error ? error.message : "docs/SPEC.md cannot be updated safely", evidence: "docs/SPEC.md", remediation: "Restore the BMAD Governance section" };
+  }
+  const statePath = join(root, ".downstroke", "planning.json");
+  const specPath = join(root, "docs", "SPEC.md");
+  await mkdir(dirname(statePath), { recursive: true });
+  await writeFile(`${statePath}.tmp`, `${JSON.stringify(plan.next, null, 2)}\n`);
+  await writeFile(`${specPath}.tmp`, updatedSpec);
+  await rename(`${statePath}.tmp`, statePath);
+  await rename(`${specPath}.tmp`, specPath);
+  return diagnosePlanningCadence(root);
 }
 
 export async function installFiles(
