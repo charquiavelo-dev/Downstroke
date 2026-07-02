@@ -4,7 +4,7 @@ baseline_commit: 0e5c3f8
 
 # Story 2.2: Install the Breakdown Stack
 
-Status: review
+Status: done
 
 ## Story
 
