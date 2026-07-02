@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -40,4 +40,24 @@ test("doctor JSON keeps its envelope and includes structured Breakdown Stack res
   assert.equal(bmad.version, "6.9.0");
   assert.equal(bmad.evidence, "_bmad/bmm/config.yaml");
   assert.equal(JSON.stringify(report).includes(root), false);
+});
+
+test("setup-agents emits a redacted plan and does not mutate without authorization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
+  await mkdir(join(root, "scripts"));
+  await writeFile(join(root, "scripts", "bootstrap-agents.ps1"), "Write-Host bootstrap");
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+
+  try {
+    assert.equal(await run(["setup-agents", "--json"], root, { PONYTAIL_INSTALL_COMMAND: "secret" }), 0);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const plan = JSON.parse(output.join("\n"));
+  assert.equal(plan.status, "ready");
+  assert.equal(JSON.stringify(plan).includes("secret"), false);
+  await assert.rejects(readFile(join(root, ".codegraph", "codegraph.db")));
 });

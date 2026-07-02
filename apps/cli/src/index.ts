@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { checkFiles, diagnoseBreakdownStack, inspectProject, installFiles, runProjectChecks } from "@downstroke/core";
+import { applyBreakdownStack, checkFiles, diagnoseBreakdownStack, inspectProject, installFiles, planBreakdownStack, runProjectChecks } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -9,7 +9,7 @@ const requirements = [
   { id: "claude.exists", path: "CLAUDE.md", severity: "warn" },
 ] as const;
 
-export async function run(argv: string[], cwd = process.cwd()): Promise<number> {
+export async function run(argv: string[], cwd = process.cwd(), environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
   const command = argv[0];
   const { values } = parseArgs({
     args: argv.slice(1),
@@ -18,6 +18,7 @@ export async function run(argv: string[], cwd = process.cwd()): Promise<number> 
       "dry-run": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       "run-checks": { type: "boolean", default: false },
+      yes: { type: "boolean", default: false },
     },
     strict: true,
   });
@@ -54,7 +55,30 @@ export async function run(argv: string[], cwd = process.cwd()): Promise<number> 
     return verification.status === "failed" || results.some((result) => result.status === "fail") ? 1 : 0;
   }
 
-  console.error("Usage: downstroke <init|doctor> [--preset lite] [--dry-run] [--json] [--run-checks]");
+  if (command === "setup-agents") {
+    const plan = await planBreakdownStack(cwd, environment);
+    const apply = values.yes && !values["dry-run"];
+    if (!apply) {
+      if (values.json) console.log(JSON.stringify(plan, null, 2));
+      else {
+        console.log(`PLAN ${plan.status}`);
+        console.log(`TOOLS ${plan.tools.join(", ") || "none"}`);
+        console.log(`COMMAND ${plan.command}`);
+        for (const file of plan.files) console.log(`FILE ${file}`);
+        for (const mutation of plan.mutations) console.log(`MUTATION ${mutation}`);
+        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+        if (plan.status === "ready") console.log("Run again with --yes to authorize this plan.");
+      }
+      return plan.status === "blocked" ? 1 : 0;
+    }
+
+    const result = await applyBreakdownStack(cwd, plan);
+    if (values.json) console.log(JSON.stringify({ plan, result }, null, 2));
+    else console.log(`INSTALL ${result.status}`);
+    return result.exitCode;
+  }
+
+  console.error("Usage: downstroke <init|doctor|setup-agents> [--preset lite] [--dry-run] [--json] [--run-checks] [--yes]");
   return 1;
 }
 

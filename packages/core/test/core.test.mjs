@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { diagnoseBreakdownStack, inspectProject, installFiles, runProjectChecks } from "../dist/index.js";
+import { applyBreakdownStack, diagnoseBreakdownStack, inspectProject, installFiles, planBreakdownStack, runProjectChecks } from "../dist/index.js";
 
 test("copy-if-missing preserves an existing user file", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-"));
@@ -113,4 +113,44 @@ test("Breakdown Stack diagnosis rejects a fake CodeGraph database and invalid sk
   assert.equal(codegraph?.status, "warn");
   assert.equal(ponytail?.status, "warn");
   assert.equal(ponytail?.version, undefined);
+});
+
+test("Breakdown Stack installation plan is blocked by conflicts and redacts Ponytail configuration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-stack-plan-"));
+  await mkdir(join(root, "scripts"));
+  await mkdir(join(root, "_bmad", "bmm"), { recursive: true });
+  await writeFile(join(root, "scripts", "bootstrap-agents.ps1"), "Write-Host bootstrap");
+  await writeFile(join(root, "_bmad", "bmm", "config.yaml"), "malformed");
+
+  const plan = await planBreakdownStack(root, { PONYTAIL_INSTALL_COMMAND: "secret canonical command" });
+
+  assert.equal(plan.status, "blocked");
+  assert.ok(plan.blockers.some((blocker) => blocker.includes("bmad.exists")));
+  assert.equal(JSON.stringify(plan).includes("secret canonical command"), false);
+  assert.ok(plan.files.every((path) => !path.includes(root)));
+});
+
+test("Breakdown Stack apply executes once and verifies all tools", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-stack-apply-"));
+  await mkdir(join(root, "scripts"));
+  await writeFile(join(root, "scripts", "bootstrap-agents.ps1"), "Write-Host bootstrap");
+  const plan = await planBreakdownStack(root, { PONYTAIL_INSTALL_COMMAND: "canonical" });
+  let calls = 0;
+
+  const result = await applyBreakdownStack(root, plan, async () => {
+    calls += 1;
+    await mkdir(join(root, ".codegraph"));
+    await mkdir(join(root, "_bmad", "bmm"), { recursive: true });
+    await mkdir(join(root, ".agents", "skills", "caveman"), { recursive: true });
+    await mkdir(join(root, ".agents", "skills", "ponytail"), { recursive: true });
+    await writeFile(join(root, ".codegraph", "codegraph.db"), Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(84)]));
+    await writeFile(join(root, "_bmad", "bmm", "config.yaml"), "# Version: 6.9.0\n");
+    await writeFile(join(root, ".agents", "skills", "caveman", "SKILL.md"), "---\nname: caveman\n---\n");
+    await writeFile(join(root, ".agents", "skills", "ponytail", "SKILL.md"), "---\nname: ponytail\n---\n");
+    return 0;
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(result.status, "verified");
+  assert.ok(result.results.every(({ status }) => status === "ok"));
 });

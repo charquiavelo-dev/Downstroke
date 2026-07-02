@@ -20,6 +20,19 @@ export type DoctorResult = {
   remediation?: string;
 };
 
+export type BreakdownInstallPlan = {
+  status: "ready" | "blocked" | "noop";
+  tools: string[];
+  command: string;
+  files: string[];
+  mutations: string[];
+  blockers: string[];
+};
+
+export type BootstrapExecutor = (root: string) => Promise<number>;
+
+const expectedBmadVersion = "6.9.0";
+
 export type ProjectInspection = {
   stage: "empty" | "documented" | "scaffolded" | "implemented";
   stacks: string[];
@@ -124,6 +137,67 @@ export async function diagnoseBreakdownStack(root: string): Promise<DoctorResult
   };
 
   return [codegraph, bmad, await skillResult("caveman"), await skillResult("ponytail")];
+}
+
+export async function planBreakdownStack(
+  root: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<BreakdownInstallPlan> {
+  const results = await diagnoseBreakdownStack(root);
+  const script = await readLocalFile(root, "scripts/bootstrap-agents.ps1");
+  const blockers = results
+    .filter((result) => result.status !== "ok" && !result.evidence?.endsWith(" not found"))
+    .map((result) => `${result.id}: ${result.message}; manual review required`);
+  const bmad = results.find((result) => result.id === "bmad.exists");
+  if (bmad?.status === "ok" && bmad.version !== expectedBmadVersion) {
+    blockers.push(`bmad.exists: expected ${expectedBmadVersion}, found ${bmad.version}; manual review required`);
+  }
+  if (script.kind !== "file") blockers.push(`scripts/bootstrap-agents.ps1: ${evidence("scripts/bootstrap-agents.ps1", script)}`);
+
+  const missing = results.filter((result) => result.status !== "ok" && result.evidence?.endsWith(" not found"));
+  if (missing.some((result) => result.id === "ponytail.exists") && !environment.PONYTAIL_INSTALL_COMMAND) {
+    blockers.push("ponytail.exists: set PONYTAIL_INSTALL_COMMAND to the canonical install command");
+  }
+
+  const tools = missing.map((result) => result.id.split(".")[0] ?? result.id);
+  return {
+    status: blockers.length > 0 ? "blocked" : tools.length === 0 ? "noop" : "ready",
+    tools,
+    command: `${process.platform === "win32" ? "powershell.exe" : "pwsh"} -NoProfile -File ./scripts/bootstrap-agents.ps1`,
+    files: [
+      "scripts/bootstrap-agents.ps1",
+      ...missing.map((result) => result.evidence?.replace(/ not found$/, "") ?? result.id),
+    ],
+    mutations: tools.map((tool) => `install missing ${tool} repository evidence`),
+    blockers,
+  };
+}
+
+const executeBootstrap: BootstrapExecutor = async (root) => new Promise<number>((resolve, reject) => {
+  const command = process.platform === "win32" ? "powershell.exe" : "pwsh";
+  const child = spawn(command, ["-NoProfile", "-File", "./scripts/bootstrap-agents.ps1"], {
+    cwd: root,
+    env: process.env,
+    shell: false,
+    stdio: "inherit",
+  });
+  child.once("error", reject);
+  child.once("exit", (code) => resolve(code ?? 1));
+});
+
+export async function applyBreakdownStack(
+  root: string,
+  plan: BreakdownInstallPlan,
+  execute: BootstrapExecutor = executeBootstrap,
+): Promise<{ status: "verified" | "failed" | "blocked"; exitCode: number; results: DoctorResult[] }> {
+  if (plan.status === "blocked") return { status: "blocked", exitCode: 1, results: await diagnoseBreakdownStack(root) };
+  if (plan.status === "noop") return { status: "verified", exitCode: 0, results: await diagnoseBreakdownStack(root) };
+  const exitCode = await execute(root);
+  const results = await diagnoseBreakdownStack(root);
+  const verified = exitCode === 0
+    && results.every((result) => result.status === "ok")
+    && results.find((result) => result.id === "bmad.exists")?.version === expectedBmadVersion;
+  return { status: verified ? "verified" : "failed", exitCode: verified ? 0 : exitCode || 1, results };
 }
 
 export async function installFiles(
