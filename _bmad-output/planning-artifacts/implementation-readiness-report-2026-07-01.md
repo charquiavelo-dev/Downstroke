@@ -165,3 +165,19 @@ The backlog is comprehensive and internally traceable, but downstream completene
 
 **Assessor:** Codex implementation-readiness workflow
 **Completed:** 2026-07-01
+
+## Scoped Reassessment — 2026-07-01
+
+### Status
+
+**READY FOR EPIC 2 ONLY.** The canonical PRD is final and the expanded Architecture Spine passes deterministic and semantic review. Epic 2 is CLI/tooling work and does not require the missing UX contract.
+
+### Remaining Phase Gates
+
+- Epics 4, 5, 7, 8 and 10 require the relevant UX/design contract before visible-surface implementation.
+- Epic 9 remains blocked by its external-tool evidence gate.
+- npm publication and public-history replacement remain release-time high-risk operations.
+
+### Sprint Planning Direction
+
+Regenerate the next sprint in English using the approved 15-working-day, 120-gross-hour, WIP-3 cadence. Schedule Epic 2 only after Sprint 1 review closes.

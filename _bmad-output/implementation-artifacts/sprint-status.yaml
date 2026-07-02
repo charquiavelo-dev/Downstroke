@@ -14,25 +14,82 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   epic-1: in-progress
-  1-1-preservar-baseline-e-importar-fuentes: review
-  1-2-crear-fundacion-del-monorepo: review
-  1-3-inicializar-y-diagnosticar-preset-lite: review
+  1-1-preserve-the-baseline-and-import-sources: review
+  1-2-create-the-monorepo-foundation: review
+  1-3-initialize-and-diagnose-the-lite-preset: review
   epic-1-retrospective: optional
 
   epic-2: backlog
-  2-1-diagnosticar-breakdown-stack: backlog
-  2-2-persistir-cadencia-bmad: backlog
-  2-3-integrar-codegraph-caveman-ponytail-y-bmad: backlog
+  2-1-diagnose-the-breakdown-stack: backlog
+  2-2-install-the-breakdown-stack: backlog
+  2-3-persist-the-bmad-review-cadence: backlog
+  2-4-govern-cli-and-llm-decisions: backlog
+  2-5-estimate-and-report-llm-token-usage: backlog
   epic-2-retrospective: optional
 
   epic-3: backlog
-  3-1-preset-react-frontend: backlog
-  3-2-preset-react-native: backlog
-  3-3-preset-net-y-blazor: backlog
+  3-1-configure-project-gitflow-and-authorization: backlog
+  3-2-commit-important-work-blocks-safely: backlog
+  3-3-resolve-repository-roots-and-workspace-topology: backlog
+  3-4-recover-git-authentication-safely: backlog
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-bloques-gestionados-sin-sobrescritura: backlog
-  4-2-diff-y-migracion-segura: backlog
-  4-3-promocion-de-reglas-probadas: backlog
+  4-1-recommend-a-supported-greenfield-stack: backlog
+  4-2-initialize-a-react-web-project: backlog
+  4-3-initialize-an-expo-and-eas-project: backlog
+  4-4-initialize-a-net-or-blazor-project: backlog
+  4-5-configure-a-hosting-provider: backlog
+  4-6-enforce-production-deployment-gates: backlog
+  4-7-establish-backend-contracts-before-frontend-work: backlog
+  4-8-add-optional-dashboard-totp: backlog
+  4-9-add-optional-mobile-biometric-unlocking: backlog
   epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-select-map-capabilities-and-providers: backlog
+  5-2-embed-a-simple-google-map: backlog
+  5-3-integrate-google-maps-javascript: backlog
+  5-4-integrate-an-open-map-stack: backlog
+  5-5-validate-map-production-readiness: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-manage-versioned-content-blocks: backlog
+  6-2-preview-and-apply-safe-migrations: backlog
+  6-3-promote-proven-project-rules: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-enforce-the-three-pass-interactive-quality-gate: backlog
+  7-2-create-a-phaser-2d-experience: backlog
+  7-3-create-a-babylon-js-3d-experience: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-create-the-neutral-design-system: backlog
+  8-2-install-project-typography: backlog
+  8-3-generate-consistent-brand-assets: backlog
+  8-4-initialize-internationalized-content: backlog
+  8-5-generate-llm-design-guidance: backlog
+  epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-gate-native-capability-investment: backlog
+  9-2-add-native-structural-code-intelligence: backlog
+  9-3-add-native-communication-compression: backlog
+  9-4-add-native-minimal-engineering-policy: backlog
+  9-5-add-native-planning-workflows: backlog
+  9-6-add-an-explicit-agent-runtime: backlog
+  9-7-add-a-remote-module-registry: backlog
+  9-8-automate-conflict-aware-managed-migrations: backlog
+  epic-9-retrospective: optional
+
+  epic-10: backlog
+  10-1-deliver-a-complete-repository-readme: backlog
+  10-2-prepare-the-npm-package: backlog
+  10-3-publish-and-verify-the-npm-release: backlog
+  10-4-preserve-the-private-maintenance-repository: backlog
+  10-5-cut-a-sanitized-single-commit-public-release: backlog
+  10-6-launch-the-react-documentation-and-showcase-site: backlog
+  epic-10-retrospective: optional
