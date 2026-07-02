@@ -44,7 +44,12 @@ export async function run(argv: string[], cwd = process.cwd()): Promise<number> 
       console.log(`STACK ${inspection.stacks.join(", ") || "unknown"}`);
       console.log(`ORIGIN ${inspection.originInference}`);
       console.log(`VERIFY ${verification.status}`);
-      for (const result of results) console.log(`${result.status.toUpperCase().padEnd(4)} ${result.id} ${result.message}`);
+      for (const result of results) {
+        const details = [result.version && `version=${result.version}`, result.evidence && `evidence=${result.evidence}`, result.remediation && `next=${result.remediation}`]
+          .filter(Boolean)
+          .join(" ");
+        console.log(`${result.status.toUpperCase().padEnd(4)} ${result.id} ${result.message}${details ? ` ${details}` : ""}`);
+      }
     }
     return verification.status === "failed" || results.some((result) => result.status === "fail") ? 1 : 0;
   }

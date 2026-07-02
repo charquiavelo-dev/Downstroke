@@ -4,7 +4,7 @@ baseline_commit: 41aabacd42c7d837ec78cad4c5124cb86ae02773
 
 # Story 2.1: Diagnose the Breakdown Stack
 
-Status: review
+Status: done
 
 ## Story
 
@@ -35,6 +35,18 @@ so that I can correct incomplete installations before planning or implementation
 - [x] Add focused tests to the existing Node test suites (AC: 1-7)
   - [x] Cover healthy local fixtures, missing tools, malformed BMAD version metadata and CodeGraph directory without an index database.
   - [x] Assert JSON compatibility, repository-relative evidence and absence of mutation.
+
+### Review Findings
+
+- [x] [Review][Patch] Validate CodeGraph as a readable SQLite file, not path presence [packages/core/src/index.ts:47]
+- [x] [Review][Patch] Distinguish missing metadata from permission and I/O failures [packages/core/src/index.ts:36]
+- [x] [Review][Patch] Accept only valid BMAD semantic versions [packages/core/src/index.ts:64]
+- [x] [Review][Patch] Parse skill identity only from bounded YAML frontmatter, including quoted values [packages/core/src/index.ts:75]
+- [x] [Review][Patch] Reject diagnostic symlinks that resolve outside the repository root [packages/core/src/index.ts:63]
+- [x] [Review][Patch] Render version, evidence and remediation in human doctor output [apps/cli/src/index.ts:44]
+- [x] [Review][Patch] Emit remediation that exists or is platform-neutral; do not claim missing paths as evidence [packages/core/src/index.ts:41]
+- [x] [Review][Patch] Preserve existing public doctor result IDs while adding health fields [apps/cli/src/index.ts:6]
+- [x] [Review][Defer] Remove temporary fixture directories across the full legacy test suite [packages/core/test/core.test.mjs:8] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -95,6 +107,7 @@ GPT-5 Codex
 - Added repository-local Breakdown Stack health and version detection without downloads or mutations.
 - Preserved the CLI JSON envelope, human rendering, required-file checks and exit-code behavior.
 - Restored npm workspace links with `npm install`; no dependency or lockfile change was produced.
+- Resolved all eight actionable code-review findings; final gate passed with 10 tests.
 - Comprehensive developer context prepared from current code, PRD, epics and architecture.
 
 ### File List
@@ -105,7 +118,9 @@ GPT-5 Codex
 - `apps/cli/test/cli.test.mjs`
 - `packages/core/src/index.ts`
 - `packages/core/test/core.test.mjs`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
 
 ## Change Log
 
 - 2026-07-01: Added structured, repository-local Breakdown Stack diagnosis and regression coverage.
+- 2026-07-01: Addressed eight adversarial review findings and completed the story.

@@ -1,5 +1,5 @@
-import { access, copyFile, mkdir, readFile, readdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { access, copyFile, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 
 export type FileOperation = {
@@ -37,54 +37,89 @@ async function exists(path: string): Promise<boolean> {
   return access(path).then(() => true, () => false);
 }
 
-async function readOptional(path: string): Promise<string | undefined> {
-  return readFile(path, "utf8").catch(() => undefined);
+type LocalRead =
+  | { kind: "file"; content: Buffer }
+  | { kind: "missing" }
+  | { kind: "error"; code: string };
+
+async function readLocalFile(root: string, path: string): Promise<LocalRead> {
+  try {
+    const rootPath = await realpath(root);
+    const targetPath = await realpath(join(root, ...path.split("/")));
+    const targetRelative = relative(rootPath, targetPath);
+    if (targetRelative.startsWith("..") || isAbsolute(targetRelative)) return { kind: "error", code: "OUTSIDE_ROOT" };
+    if (!(await stat(targetPath)).isFile()) return { kind: "error", code: "NOT_A_FILE" };
+    return { kind: "file", content: await readFile(targetPath) };
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+      ? error.code
+      : "READ_ERROR";
+    return code === "ENOENT" ? { kind: "missing" } : { kind: "error", code };
+  }
 }
 
-const bootstrapRemediation = ".\\scripts\\bootstrap-agents.ps1";
+function evidence(path: string, read: LocalRead): string {
+  return read.kind === "file" ? path : read.kind === "missing" ? `${path} not found` : `${path} unreadable (${read.code})`;
+}
+
+function text(read: LocalRead): string | undefined {
+  return read.kind === "file" ? read.content.toString("utf8") : undefined;
+}
+
+function frontmatterValue(content: string | undefined, key: string): string | undefined {
+  const block = content?.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1];
+  const raw = block?.match(new RegExp(`^${key}:\\s*([^\\r\\n]+)$`, "m"))?.[1]?.trim();
+  if (!raw) return undefined;
+  return raw.match(/^(["'])(.*)\1$/)?.[2] ?? raw;
+}
+
+const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+async function bootstrapRemediation(root: string, fallback: string): Promise<string> {
+  const script = await readLocalFile(root, "scripts/bootstrap-agents.ps1");
+  return script.kind === "file" ? "pwsh -File ./scripts/bootstrap-agents.ps1" : fallback;
+}
 
 export async function diagnoseBreakdownStack(root: string): Promise<DoctorResult[]> {
-  const codegraphDirectory = await exists(join(root, ".codegraph"));
-  const codegraphDatabase = await exists(join(root, ".codegraph", "codegraph.db"));
+  const codegraphDatabase = await readLocalFile(root, ".codegraph/codegraph.db");
+  const codegraphHealthy = codegraphDatabase.kind === "file"
+    && codegraphDatabase.content.subarray(0, 16).equals(Buffer.from("SQLite format 3\0"));
   const codegraph: DoctorResult = {
-    id: "codegraph.health",
-    status: codegraphDatabase ? "ok" : "warn",
-    message: codegraphDatabase
-      ? "CodeGraph index database is present"
-      : codegraphDirectory
-        ? "CodeGraph directory exists but its index database is missing"
-        : "CodeGraph is not initialized",
-    evidence: codegraphDatabase ? ".codegraph/codegraph.db" : ".codegraph",
-    remediation: codegraphDirectory
-      ? "Run npx @colbymchenry/codegraph init -i"
-      : bootstrapRemediation,
+    id: "codegraph.exists",
+    status: codegraphHealthy ? "ok" : codegraphDatabase.kind === "error" ? "fail" : "warn",
+    message: codegraphHealthy ? "CodeGraph SQLite index is readable" : "CodeGraph index is missing or invalid",
+    evidence: evidence(".codegraph/codegraph.db", codegraphDatabase),
+    remediation: codegraphHealthy ? "No action required" : "npx @colbymchenry/codegraph init -i",
   };
 
   const bmadPath = "_bmad/bmm/config.yaml";
-  const bmadConfig = await readOptional(join(root, ...bmadPath.split("/")));
-  const bmadVersion = bmadConfig?.match(/^# Version:\s*(\S+)/m)?.[1];
+  const bmadConfig = await readLocalFile(root, bmadPath);
+  const rawBmadVersion = text(bmadConfig)?.match(/^# Version:\s*(\S+)/m)?.[1];
+  const bmadVersion = rawBmadVersion && semver.test(rawBmadVersion) ? rawBmadVersion : undefined;
   const bmad: DoctorResult = {
-    id: "bmad.health",
-    status: bmadVersion ? "ok" : "warn",
+    id: "bmad.exists",
+    status: bmadVersion ? "ok" : bmadConfig.kind === "error" ? "fail" : "warn",
     message: bmadVersion ? `BMAD ${bmadVersion} is configured` : "BMAD version metadata is missing or malformed",
     ...(bmadVersion ? { version: bmadVersion } : {}),
-    evidence: bmadPath,
-    remediation: bootstrapRemediation,
+    evidence: evidence(bmadPath, bmadConfig),
+    remediation: bmadVersion ? "No action required" : await bootstrapRemediation(root, "Install BMAD with its canonical project command"),
   };
 
   const skillResult = async (name: "caveman" | "ponytail"): Promise<DoctorResult> => {
     const path = `.agents/skills/${name}/SKILL.md`;
-    const content = await readOptional(join(root, ...path.split("/")));
-    const detectedName = content?.match(/^name:\s*([^\r\n]+)$/m)?.[1]?.trim();
-    const version = content?.match(/^version:\s*([^\r\n]+)$/m)?.[1]?.trim();
+    const skill = await readLocalFile(root, path);
+    const content = text(skill);
+    const detectedName = frontmatterValue(content, "name");
+    const rawVersion = frontmatterValue(content, "version");
     const valid = detectedName === name;
+    const version = valid && rawVersion && semver.test(rawVersion) ? rawVersion : undefined;
     return {
-      id: `${name}.health`,
-      status: valid ? "ok" : "warn",
+      id: `${name}.exists`,
+      status: valid ? "ok" : skill.kind === "error" ? "fail" : "warn",
       message: valid ? `${name} project skill is configured` : `${name} project skill is missing or malformed`,
       ...(version ? { version } : {}),
-      evidence: path,
-      remediation: bootstrapRemediation,
+      evidence: evidence(path, skill),
+      remediation: valid ? "No action required" : await bootstrapRemediation(root, `Install ${name} with its canonical project command`),
     };
   };
 

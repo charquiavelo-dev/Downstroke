@@ -65,18 +65,18 @@ test("Breakdown Stack diagnosis reports local health and versions", async () => 
   await mkdir(join(root, "_bmad", "bmm"), { recursive: true });
   await mkdir(join(root, ".agents", "skills", "caveman"), { recursive: true });
   await mkdir(join(root, ".agents", "skills", "ponytail"), { recursive: true });
-  await writeFile(join(root, ".codegraph", "codegraph.db"), "index");
+  await writeFile(join(root, ".codegraph", "codegraph.db"), Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(84)]));
   await writeFile(join(root, "_bmad", "bmm", "config.yaml"), "# Version: 6.9.0\n");
-  await writeFile(join(root, ".agents", "skills", "caveman", "SKILL.md"), "---\nname: caveman\n---\n");
+  await writeFile(join(root, ".agents", "skills", "caveman", "SKILL.md"), "---\nname: \"caveman\"\n---\nname: wrong-outside-frontmatter\n");
   await writeFile(join(root, ".agents", "skills", "ponytail", "SKILL.md"), "---\nname: ponytail\nversion: 4.8.4\n---\n");
 
   const results = await diagnoseBreakdownStack(root);
 
   assert.deepEqual(results.map(({ id, status, version }) => ({ id, status, version })), [
-    { id: "codegraph.health", status: "ok", version: undefined },
-    { id: "bmad.health", status: "ok", version: "6.9.0" },
-    { id: "caveman.health", status: "ok", version: undefined },
-    { id: "ponytail.health", status: "ok", version: "4.8.4" },
+    { id: "codegraph.exists", status: "ok", version: undefined },
+    { id: "bmad.exists", status: "ok", version: "6.9.0" },
+    { id: "caveman.exists", status: "ok", version: undefined },
+    { id: "ponytail.exists", status: "ok", version: "4.8.4" },
   ]);
   assert.ok(results.every((result) => result.evidence && result.remediation));
 });
@@ -89,12 +89,28 @@ test("Breakdown Stack diagnosis does not treat a CodeGraph directory as a health
   const before = await readdir(root, { recursive: true });
 
   const results = await diagnoseBreakdownStack(root);
-  const codegraph = results.find((result) => result.id === "codegraph.health");
-  const bmad = results.find((result) => result.id === "bmad.health");
+  const codegraph = results.find((result) => result.id === "codegraph.exists");
+  const bmad = results.find((result) => result.id === "bmad.exists");
 
   assert.equal(codegraph?.status, "warn");
-  assert.match(codegraph?.message ?? "", /index database is missing/);
+  assert.match(codegraph?.message ?? "", /index is missing or invalid/);
   assert.equal(bmad?.status, "warn");
   assert.equal(bmad?.version, undefined);
   assert.deepEqual(await readdir(root, { recursive: true }), before);
+});
+
+test("Breakdown Stack diagnosis rejects a fake CodeGraph database and invalid skill identity", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-stack-"));
+  await mkdir(join(root, ".codegraph"));
+  await mkdir(join(root, ".agents", "skills", "ponytail"), { recursive: true });
+  await writeFile(join(root, ".codegraph", "codegraph.db"), "not sqlite");
+  await writeFile(join(root, ".agents", "skills", "ponytail", "SKILL.md"), "---\nname: wrong\nversion: 9.9.9\n---\nname: ponytail\n");
+
+  const results = await diagnoseBreakdownStack(root);
+  const codegraph = results.find((result) => result.id === "codegraph.exists");
+  const ponytail = results.find((result) => result.id === "ponytail.exists");
+
+  assert.equal(codegraph?.status, "warn");
+  assert.equal(ponytail?.status, "warn");
+  assert.equal(ponytail?.version, undefined);
 });

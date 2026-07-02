@@ -20,7 +20,7 @@ test("doctor JSON keeps its envelope and includes structured Breakdown Stack res
   await mkdir(join(root, ".agents", "skills", "ponytail"), { recursive: true });
   await writeFile(join(root, "AGENTS.md"), "rules");
   await writeFile(join(root, "docs", "SPEC.md"), "spec");
-  await writeFile(join(root, ".codegraph", "codegraph.db"), "index");
+  await writeFile(join(root, ".codegraph", "codegraph.db"), Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(84)]));
   await writeFile(join(root, "_bmad", "bmm", "config.yaml"), "# Version: 6.9.0\n");
   await writeFile(join(root, ".agents", "skills", "caveman", "SKILL.md"), "---\nname: caveman\n---\n");
   await writeFile(join(root, ".agents", "skills", "ponytail", "SKILL.md"), "---\nname: ponytail\n---\n");
@@ -36,7 +36,7 @@ test("doctor JSON keeps its envelope and includes structured Breakdown Stack res
 
   const report = JSON.parse(output.join("\n"));
   assert.deepEqual(Object.keys(report), ["inspection", "verification", "results"]);
-  const bmad = report.results.find((result) => result.id === "bmad.health");
+  const bmad = report.results.find((result) => result.id === "bmad.exists");
   assert.equal(bmad.version, "6.9.0");
   assert.equal(bmad.evidence, "_bmad/bmm/config.yaml");
   assert.equal(JSON.stringify(report).includes(root), false);
