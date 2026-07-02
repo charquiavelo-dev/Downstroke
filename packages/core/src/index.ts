@@ -52,7 +52,80 @@ export type CadencePlan = {
   blockers: string[];
 };
 
+export type DecisionKind = "deterministic" | "contextual" | "high-risk";
+export type DecisionGovernance = {
+  status: "ready" | "needs-input" | "approved" | "blocked";
+  requiresAuthorization: boolean;
+  responsibilities: { user: "approves"; llm: "advises"; cli: "executes"; repository: "records"; provider: "applies infrastructure" };
+  questions: string[];
+  blockers: string[];
+  selectedOption?: string;
+};
+
 const expectedBmadVersion = "6.9.0";
+
+const responsibilities = {
+  user: "approves",
+  llm: "advises",
+  cli: "executes",
+  repository: "records",
+  provider: "applies infrastructure",
+} as const;
+
+export function governDecision(input: {
+  kind: DecisionKind;
+  mutates: boolean;
+  options?: unknown[];
+  selectedOption?: string;
+  scope?: string;
+  owner?: string;
+  environment?: string;
+  risk?: string;
+  rollback?: string;
+}): DecisionGovernance {
+  const questions: string[] = [];
+  const blockers: string[] = [];
+
+  if (input.kind === "contextual") {
+    if (!input.options || input.options.length < 2) questions.push("Provide at least two options with rationale, tradeoffs and affected artifacts.");
+    else {
+      const declaredIds: string[] = [];
+      for (const value of input.options) {
+        const option = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+        const id = typeof option.id === "string" ? option.id : "";
+        const rationale = typeof option.rationale === "string" ? option.rationale : "";
+        const tradeoffs = Array.isArray(option.tradeoffs) && option.tradeoffs.every((item) => typeof item === "string") ? option.tradeoffs : [];
+        const artifacts = Array.isArray(option.artifacts) && option.artifacts.every((item) => typeof item === "string") ? option.artifacts : [];
+        if (!id || !rationale || tradeoffs.length === 0 || artifacts.length === 0) {
+          blockers.push(`Option ${id || "<missing-id>"} is incomplete`);
+        } else if (artifacts.some((artifact) => isAbsolute(artifact) || /^(?:\.\.[/\\]|[/\\])/.test(artifact))) {
+          blockers.push(`Option ${id} contains a non-repository-relative artifact`);
+        }
+        if (id) declaredIds.push(id);
+      }
+      if (new Set(declaredIds).size !== declaredIds.length) blockers.push("Option IDs must be unique");
+      if (!input.selectedOption) questions.push("Which declared option do you approve?");
+      else if (!declaredIds.includes(input.selectedOption)) blockers.push("Selected option is not declared");
+    }
+  }
+
+  if (input.kind === "high-risk") {
+    if (!input.scope) questions.push("What is the exact scope?");
+    if (!input.owner) questions.push("Who owns the decision?");
+    if (!input.environment) questions.push("Which environment is affected?");
+    if (!input.risk) questions.push("What is the material risk?");
+    if (!input.rollback) questions.push("What is the rollback plan?");
+  }
+
+  return {
+    status: blockers.length ? "blocked" : questions.length ? "needs-input" : input.kind === "contextual" ? "approved" : "ready",
+    requiresAuthorization: input.mutates || input.kind !== "deterministic",
+    responsibilities,
+    questions,
+    blockers,
+    ...(input.kind === "contextual" && blockers.length === 0 && questions.length === 0 ? { selectedOption: input.selectedOption } : {}),
+  };
+}
 
 export type ProjectInspection = {
   stage: "empty" | "documented" | "scaffolded" | "implemented";

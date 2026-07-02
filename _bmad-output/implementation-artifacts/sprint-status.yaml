@@ -23,7 +23,7 @@ development_status:
   2-1-diagnose-the-breakdown-stack: done
   2-2-install-the-breakdown-stack: done
   2-3-persist-the-bmad-review-cadence: review
-  2-4-govern-cli-and-llm-decisions: backlog
+  2-4-govern-cli-and-llm-decisions: review
   2-5-estimate-and-report-llm-token-usage: backlog
   epic-2-retrospective: optional
 

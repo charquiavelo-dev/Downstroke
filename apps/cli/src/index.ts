@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyBreakdownStack, applyCadenceUpdate, cadenceChoices, checkFiles, diagnoseBreakdownStack, diagnosePlanningCadence, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, readPlanningCadence, runProjectChecks, type ReviewMode } from "@downstroke/core";
+import { applyBreakdownStack, applyCadenceUpdate, cadenceChoices, checkFiles, diagnoseBreakdownStack, diagnosePlanningCadence, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, readPlanningCadence, runProjectChecks, type DecisionKind, type ReviewMode } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -24,6 +24,15 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
       "sprint-days": { type: "string" },
       "capacity-hours": { type: "string" },
       "wip-limit": { type: "string" },
+      kind: { type: "string" },
+      mutates: { type: "boolean", default: false },
+      option: { type: "string", multiple: true },
+      select: { type: "string" },
+      scope: { type: "string" },
+      owner: { type: "string" },
+      environment: { type: "string" },
+      risk: { type: "string" },
+      rollback: { type: "string" },
     },
     strict: true,
   });
@@ -129,7 +138,42 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence> [options]");
+  if (command === "govern") {
+    const kind = values.kind;
+    if (!kind || !["deterministic", "contextual", "high-risk"].includes(kind)) {
+      console.error("--kind must be deterministic, contextual or high-risk");
+      return 1;
+    }
+    let options: unknown[] | undefined;
+    try {
+      options = values.option?.map((option) => JSON.parse(option) as unknown);
+    } catch {
+      console.error("Each --option must be valid JSON");
+      return 1;
+    }
+    const result = governDecision({
+      kind: kind as DecisionKind,
+      mutates: values.mutates,
+      ...(options ? { options } : {}),
+      ...(values.select ? { selectedOption: values.select } : {}),
+      ...(values.scope ? { scope: values.scope } : {}),
+      ...(values.owner ? { owner: values.owner } : {}),
+      ...(values.environment ? { environment: values.environment } : {}),
+      ...(values.risk ? { risk: values.risk } : {}),
+      ...(values.rollback ? { rollback: values.rollback } : {}),
+    });
+    if (values.json) console.log(JSON.stringify(result, null, 2));
+    else {
+      console.log(`GOVERNANCE ${result.status}`);
+      console.log(`RESPONSIBILITY user=${result.responsibilities.user} llm=${result.responsibilities.llm} cli=${result.responsibilities.cli} repository=${result.responsibilities.repository} provider=${result.responsibilities.provider}`);
+      console.log(`AUTHORIZATION ${result.requiresAuthorization ? "required" : "not-required"}`);
+      for (const question of result.questions) console.log(`QUESTION ${question}`);
+      for (const blocker of result.blockers) console.log(`BLOCKED ${blocker}`);
+    }
+    return result.status === "blocked" ? 1 : 0;
+  }
+
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern> [options]");
   return 1;
 }
 

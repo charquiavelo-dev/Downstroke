@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { applyBreakdownStack, applyCadenceUpdate, diagnoseBreakdownStack, diagnosePlanningCadence, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, runProjectChecks } from "../dist/index.js";
+import { applyBreakdownStack, applyCadenceUpdate, diagnoseBreakdownStack, diagnosePlanningCadence, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, runProjectChecks } from "../dist/index.js";
 
 test("copy-if-missing preserves an existing user file", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-"));
@@ -196,4 +196,29 @@ test("authorized cadence update synchronizes state and SPEC while preserving unr
   assert.equal((await diagnosePlanningCadence(root)).status, "ok");
   await writeFile(join(root, ".downstroke", "planning.json"), (await readFile(join(root, ".downstroke", "planning.json",), "utf8")).replace('"wipLimit": 3', '"wipLimit": 4'));
   assert.equal((await diagnosePlanningCadence(root)).status, "fail");
+});
+
+test("decision governance requires explicit contextual selection and reports fixed responsibilities", () => {
+  const proposal = {
+    kind: "contextual",
+    mutates: true,
+    options: [
+      { id: "a", rationale: "Smallest change", tradeoffs: ["Less flexibility"], artifacts: ["docs/SPEC.md"] },
+      { id: "b", rationale: "More configurable", tradeoffs: ["More code"], artifacts: ["packages/core/src/index.ts"] },
+    ],
+  };
+
+  const pending = governDecision(proposal);
+  const approved = governDecision({ ...proposal, selectedOption: "a" });
+
+  assert.equal(pending.status, "needs-input");
+  assert.deepEqual(pending.questions, ["Which declared option do you approve?"]);
+  assert.equal(approved.status, "approved");
+  assert.equal(approved.selectedOption, "a");
+  assert.deepEqual(approved.responsibilities, { user: "approves", llm: "advises", cli: "executes", repository: "records", provider: "applies infrastructure" });
+});
+
+test("high-risk governance asks only for missing boundary context", () => {
+  const result = governDecision({ kind: "high-risk", mutates: true, scope: "production database", owner: "platform" });
+  assert.deepEqual(result.questions, ["Which environment is affected?", "What is the material risk?", "What is the rollback plan?"]);
 });

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -77,4 +77,22 @@ test("cadence query exposes English choices without mutation", async () => {
   const query = JSON.parse(output.join("\n"));
   assert.deepEqual(query.choices, ["one-at-a-time", "blocks", "sprint", "final-draft"]);
   await assert.rejects(readFile(join(root, ".downstroke", "planning.json")));
+});
+
+test("govern reports deterministic responsibility without filesystem mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+
+  try {
+    assert.equal(await run(["govern", "--kind", "deterministic", "--json"], root), 0);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const result = JSON.parse(output.join("\n"));
+  assert.equal(result.status, "ready");
+  assert.equal(result.responsibilities.llm, "advises");
+  assert.deepEqual(await readdir(root), []);
 });
