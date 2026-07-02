@@ -15,6 +15,9 @@ export type DoctorResult = {
   id: string;
   status: "ok" | "warn" | "fail";
   message: string;
+  version?: string;
+  evidence?: string;
+  remediation?: string;
 };
 
 export type ProjectInspection = {
@@ -32,6 +35,60 @@ export type ProjectVerification = {
 
 async function exists(path: string): Promise<boolean> {
   return access(path).then(() => true, () => false);
+}
+
+async function readOptional(path: string): Promise<string | undefined> {
+  return readFile(path, "utf8").catch(() => undefined);
+}
+
+const bootstrapRemediation = ".\\scripts\\bootstrap-agents.ps1";
+
+export async function diagnoseBreakdownStack(root: string): Promise<DoctorResult[]> {
+  const codegraphDirectory = await exists(join(root, ".codegraph"));
+  const codegraphDatabase = await exists(join(root, ".codegraph", "codegraph.db"));
+  const codegraph: DoctorResult = {
+    id: "codegraph.health",
+    status: codegraphDatabase ? "ok" : "warn",
+    message: codegraphDatabase
+      ? "CodeGraph index database is present"
+      : codegraphDirectory
+        ? "CodeGraph directory exists but its index database is missing"
+        : "CodeGraph is not initialized",
+    evidence: codegraphDatabase ? ".codegraph/codegraph.db" : ".codegraph",
+    remediation: codegraphDirectory
+      ? "Run npx @colbymchenry/codegraph init -i"
+      : bootstrapRemediation,
+  };
+
+  const bmadPath = "_bmad/bmm/config.yaml";
+  const bmadConfig = await readOptional(join(root, ...bmadPath.split("/")));
+  const bmadVersion = bmadConfig?.match(/^# Version:\s*(\S+)/m)?.[1];
+  const bmad: DoctorResult = {
+    id: "bmad.health",
+    status: bmadVersion ? "ok" : "warn",
+    message: bmadVersion ? `BMAD ${bmadVersion} is configured` : "BMAD version metadata is missing or malformed",
+    ...(bmadVersion ? { version: bmadVersion } : {}),
+    evidence: bmadPath,
+    remediation: bootstrapRemediation,
+  };
+
+  const skillResult = async (name: "caveman" | "ponytail"): Promise<DoctorResult> => {
+    const path = `.agents/skills/${name}/SKILL.md`;
+    const content = await readOptional(join(root, ...path.split("/")));
+    const detectedName = content?.match(/^name:\s*([^\r\n]+)$/m)?.[1]?.trim();
+    const version = content?.match(/^version:\s*([^\r\n]+)$/m)?.[1]?.trim();
+    const valid = detectedName === name;
+    return {
+      id: `${name}.health`,
+      status: valid ? "ok" : "warn",
+      message: valid ? `${name} project skill is configured` : `${name} project skill is missing or malformed`,
+      ...(version ? { version } : {}),
+      evidence: path,
+      remediation: bootstrapRemediation,
+    };
+  };
+
+  return [codegraph, bmad, await skillResult("caveman"), await skillResult("ponytail")];
 }
 
 export async function installFiles(

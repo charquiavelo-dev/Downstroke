@@ -1,6 +1,10 @@
+---
+baseline_commit: 41aabacd42c7d837ec78cad4c5124cb86ae02773
+---
+
 # Story 2.1: Diagnose the Breakdown Stack
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -20,17 +24,17 @@ so that I can correct incomplete installations before planning or implementation
 
 ## Tasks / Subtasks
 
-- [ ] Add a Breakdown Stack diagnostic function to `packages/core/src/index.ts` (AC: 1-5)
-  - [ ] Model tool results using the existing `DoctorResult` status vocabulary; add optional structured fields only if JSON consumers need them.
-  - [ ] Detect repository-local evidence for CodeGraph, BMAD, Caveman and Ponytail.
-  - [ ] Parse external text/config as `unknown`; tolerate missing or malformed metadata without throwing.
-  - [ ] Do not invoke `npx`, install packages, mutate files or access credentials.
-- [ ] Integrate tool diagnostics into the existing `doctor` flow in `apps/cli/src/index.ts` (AC: 5-7)
-  - [ ] Reuse the current output envelope and rendering loop.
-  - [ ] Keep the current required-file checks and exit-code rules.
-- [ ] Add focused tests to the existing Node test suites (AC: 1-7)
-  - [ ] Cover healthy local fixtures, missing tools, malformed BMAD version metadata and CodeGraph directory without an index database.
-  - [ ] Assert JSON compatibility, repository-relative evidence and absence of mutation.
+- [x] Add a Breakdown Stack diagnostic function to `packages/core/src/index.ts` (AC: 1-5)
+  - [x] Model tool results using the existing `DoctorResult` status vocabulary; add optional structured fields only if JSON consumers need them.
+  - [x] Detect repository-local evidence for CodeGraph, BMAD, Caveman and Ponytail.
+  - [x] Parse external text/config as `unknown`; tolerate missing or malformed metadata without throwing.
+  - [x] Do not invoke `npx`, install packages, mutate files or access credentials.
+- [x] Integrate tool diagnostics into the existing `doctor` flow in `apps/cli/src/index.ts` (AC: 5-7)
+  - [x] Reuse the current output envelope and rendering loop.
+  - [x] Keep the current required-file checks and exit-code rules.
+- [x] Add focused tests to the existing Node test suites (AC: 1-7)
+  - [x] Cover healthy local fixtures, missing tools, malformed BMAD version metadata and CodeGraph directory without an index database.
+  - [x] Assert JSON compatibility, repository-relative evidence and absence of mutation.
 
 ## Dev Notes
 
@@ -81,10 +85,27 @@ GPT-5 Codex
 
 ### Debug Log References
 
+- Red: new core tests failed because `diagnoseBreakdownStack` did not exist.
+- Green: focused core build and seven core tests passed.
+- Regression: `npm run typecheck`, `npm test` (nine tests), and `npm run build` passed.
+- Manual: `node apps/cli/dist/index.js doctor --json` reported all four local tools healthy without absolute paths.
+
 ### Completion Notes List
 
+- Added repository-local Breakdown Stack health and version detection without downloads or mutations.
+- Preserved the CLI JSON envelope, human rendering, required-file checks and exit-code behavior.
+- Restored npm workspace links with `npm install`; no dependency or lockfile change was produced.
 - Comprehensive developer context prepared from current code, PRD, epics and architecture.
 
 ### File List
 
 - `_bmad-output/implementation-artifacts/2-1-diagnose-the-breakdown-stack.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `apps/cli/src/index.ts`
+- `apps/cli/test/cli.test.mjs`
+- `packages/core/src/index.ts`
+- `packages/core/test/core.test.mjs`
+
+## Change Log
+
+- 2026-07-01: Added structured, repository-local Breakdown Stack diagnosis and regression coverage.

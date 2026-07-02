@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { checkFiles, inspectProject, installFiles, runProjectChecks } from "@downstroke/core";
+import { checkFiles, diagnoseBreakdownStack, inspectProject, installFiles, runProjectChecks } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
   { id: "spec.exists", path: "docs/SPEC.md", severity: "fail" },
   { id: "agents.exists", path: "AGENTS.md", severity: "fail" },
   { id: "claude.exists", path: "CLAUDE.md", severity: "warn" },
-  { id: "codegraph.exists", path: ".codegraph", severity: "warn" },
-  { id: "bmad.exists", path: "_bmad", severity: "warn" },
-  { id: "caveman.exists", path: ".agents/skills/caveman/SKILL.md", severity: "warn" },
-  { id: "ponytail.exists", path: ".agents/skills/ponytail/SKILL.md", severity: "warn" },
 ] as const;
 
 export async function run(argv: string[], cwd = process.cwd()): Promise<number> {
@@ -35,7 +31,10 @@ export async function run(argv: string[], cwd = process.cwd()): Promise<number> 
 
   if (command === "doctor") {
     const inspection = await inspectProject(cwd);
-    const results = await checkFiles(cwd, requirements);
+    const results = [
+      ...await checkFiles(cwd, requirements),
+      ...await diagnoseBreakdownStack(cwd),
+    ];
     const verification = values["run-checks"]
       ? await runProjectChecks(cwd, inspection.scripts)
       : { status: "not-run", checks: [] } as const;
