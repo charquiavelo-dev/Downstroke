@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { applyBreakdownStack, applyCadenceUpdate, diagnoseBreakdownStack, diagnosePlanningCadence, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, runProjectChecks } from "../dist/index.js";
+import { applyBreakdownStack, applyCadenceUpdate, diagnoseBreakdownStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, runProjectChecks, tokenUsageStatus } from "../dist/index.js";
 
 test("copy-if-missing preserves an existing user file", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-"));
@@ -221,4 +221,14 @@ test("decision governance requires explicit contextual selection and reports fix
 test("high-risk governance asks only for missing boundary context", () => {
   const result = governDecision({ kind: "high-risk", mutates: true, scope: "production database", owner: "platform" });
   assert.deepEqual(result.questions, ["Which environment is affected?", "What is the material risk?", "What is the rollback plan?"]);
+});
+
+test("token estimation is bounded, repository-relative and separates observed usage", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-tokens-"));
+  await writeFile(join(root, "task.md"), "a".repeat(300));
+  const estimate = await estimateTokenUsage(root, "task", ["task.md"]);
+  assert.deepEqual(estimate.range, { low: 60, high: 100 });
+  assert.equal(tokenUsageStatus(estimate).consumedTokens, "unavailable");
+  assert.equal(tokenUsageStatus(estimate, 42).consumedTokens, 42);
+  await assert.rejects(estimateTokenUsage(root, "task", ["../outside.md"]), /outside|OUTSIDE_ROOT|not found/i);
 });

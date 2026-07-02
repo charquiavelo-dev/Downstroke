@@ -96,3 +96,19 @@ test("govern reports deterministic responsibility without filesystem mutation", 
   assert.equal(result.responsibilities.llm, "advises");
   assert.deepEqual(await readdir(root), []);
 });
+
+test("status separates unavailable consumption from projected tokens", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
+  await writeFile(join(root, "task.md"), "a".repeat(30));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["status", "--scope", "task", "--path", "task.md", "--json"], root), 0);
+  } finally {
+    console.log = originalLog;
+  }
+  const status = JSON.parse(output.join("\n"));
+  assert.equal(status.consumedTokens, "unavailable");
+  assert.deepEqual(status.projectedRemainingTokens, { low: 6, high: 10 });
+});

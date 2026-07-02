@@ -61,6 +61,13 @@ export type DecisionGovernance = {
   blockers: string[];
   selectedOption?: string;
 };
+export type TokenEstimate = {
+  scope: "task" | "backlog" | "sprint";
+  range: { low: number; high: number };
+  modelAssumption: string;
+  includedContext: string[];
+  uncertainty: "high";
+};
 
 const expectedBmadVersion = "6.9.0";
 
@@ -125,6 +132,33 @@ export function governDecision(input: {
     blockers,
     ...(input.kind === "contextual" && blockers.length === 0 && questions.length === 0 ? { selectedOption: input.selectedOption } : {}),
   };
+}
+
+export async function estimateTokenUsage(root: string, scope: TokenEstimate["scope"], paths: readonly string[]): Promise<TokenEstimate> {
+  if (paths.length === 0) throw new Error("At least one --path is required");
+  let characters = 0;
+  for (const path of paths) {
+    const file = await readLocalFile(root, path);
+    if (file.kind !== "file") throw new Error(`${path}: ${evidence(path, file)}`);
+    characters += file.content.toString("utf8").length;
+    if (characters > 1_000_000) throw new Error("Selected context exceeds the 1,000,000 character limit");
+  }
+  return {
+    scope,
+    range: { low: Math.ceil(characters / 5), high: Math.ceil(characters / 3) },
+    modelAssumption: "generic text estimate at 3-5 characters per token",
+    includedContext: [...paths],
+    uncertainty: "high",
+  };
+}
+
+export function tokenUsageStatus(estimate: TokenEstimate, consumedTokens?: number): {
+  consumedTokens: number | "unavailable";
+  projectedRemainingTokens: TokenEstimate["range"];
+  estimate: TokenEstimate;
+} {
+  if (consumedTokens !== undefined && (!Number.isInteger(consumedTokens) || consumedTokens < 0)) throw new Error("consumedTokens must be a non-negative integer");
+  return { consumedTokens: consumedTokens ?? "unavailable", projectedRemainingTokens: estimate.range, estimate };
 }
 
 export type ProjectInspection = {

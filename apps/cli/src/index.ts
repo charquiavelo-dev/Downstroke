@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyBreakdownStack, applyCadenceUpdate, cadenceChoices, checkFiles, diagnoseBreakdownStack, diagnosePlanningCadence, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, readPlanningCadence, runProjectChecks, type DecisionKind, type ReviewMode } from "@downstroke/core";
+import { applyBreakdownStack, applyCadenceUpdate, cadenceChoices, checkFiles, diagnoseBreakdownStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, readPlanningCadence, runProjectChecks, tokenUsageStatus, type DecisionKind, type ReviewMode } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -33,6 +33,8 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
       environment: { type: "string" },
       risk: { type: "string" },
       rollback: { type: "string" },
+      path: { type: "string", multiple: true },
+      "consumed-tokens": { type: "string" },
     },
     strict: true,
   });
@@ -173,7 +175,30 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
     return result.status === "blocked" ? 1 : 0;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern> [options]");
+  if (command === "estimate" || command === "status") {
+    const scope = values.scope;
+    if (!scope || !["task", "backlog", "sprint"].includes(scope)) {
+      console.error("--scope must be task, backlog or sprint");
+      return 1;
+    }
+    try {
+      const estimate = await estimateTokenUsage(cwd, scope as "task" | "backlog" | "sprint", values.path ?? []);
+      if (command === "estimate") {
+        if (values.json) console.log(JSON.stringify(estimate, null, 2));
+        else console.log(`ESTIMATE ${estimate.range.low}-${estimate.range.high} tokens (${estimate.uncertainty} uncertainty)`);
+      } else {
+        const status = tokenUsageStatus(estimate, values["consumed-tokens"] === undefined ? undefined : Number(values["consumed-tokens"]));
+        if (values.json) console.log(JSON.stringify(status, null, 2));
+        else console.log(`STATUS consumed=${status.consumedTokens} projected=${status.projectedRemainingTokens.low}-${status.projectedRemainingTokens.high}`);
+      }
+      return 0;
+    } catch (error: unknown) {
+      console.error(error instanceof Error ? error.message : "Token estimation failed");
+      return 1;
+    }
+  }
+
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern|estimate|status> [options]");
   return 1;
 }
 
