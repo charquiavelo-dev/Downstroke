@@ -1,6 +1,6 @@
 ---
 title: Downstroke
-status: draft
+status: final
 created: 2026-07-01
 updated: 2026-07-01
 sourceRequirements: ../../epics.md
@@ -367,9 +367,11 @@ NFR45: npm recovery keys and equivalent account-recovery material are never trac
 - **SM-4:** Published packages install and pass smoke checks from a clean fixture. Validates FR72-FR75.
 - **SM-C1:** Minimize framework-owned files; feature count and generated-code volume are not success metrics.
 
-## 13. Assumptions and Open Decisions
+## 13. Decisions and Deferred Release Inputs
 
-- The initial npm publisher is `charquiavelo`; package name and scope remain undecided.
-- Public license, private maintenance remote and sanitized public remote remain undecided.
-- Quantitative CLI startup, doctor runtime and package-size budgets require measurement before final targets.
+- The npm publisher is `charquiavelo`; the working package name is `downstroke`. Final scope is selected during package-readiness work.
+- The current `origin` is the intended public GitHub repository. Public-history replacement still requires explicit release-time confirmation.
+- License selection is owned by the maintainer and must be resolved before `npm publish`; it does not block current framework implementation.
+- The private maintenance remote is created and verified before public sanitization; it does not block current framework implementation.
+- Quantitative CLI startup, doctor runtime and package-size targets are set from measurements before the release gate.
 - UX contracts are created before each visible product surface.
