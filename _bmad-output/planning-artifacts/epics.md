@@ -142,19 +142,19 @@ FR58: LLM integrations can expose an equivalent `/status` command when the surfa
 
 FR59: Token estimates can appear compactly in a console footer or session summary without blocking the primary workflow.
 
-FR60: Downstroke keeps native replacements for CodeGraph, Caveman, Ponytail and BMAD as explicit planned work rather than silently dropping them from the roadmap.
+FR60: Downstroke provides native workflow, communication, simplicity and code-intelligence capabilities under Downstroke-owned contracts and names.
 
-FR61: Native replacement work starts only after the corresponding external tool is installed, working in real projects and measured against documented use cases.
+FR61: External construction artifacts are migration sources only; they are detected without execution, imported with provenance and excluded from distributable output.
 
-FR62: Downstroke can later provide native structural code intelligence that covers the proven CodeGraph use cases selected by evidence.
+FR62: Downstroke provides repo-scoped incremental file, symbol, import, impact and bounded-context intelligence for supported stacks.
 
-FR63: Downstroke can later provide native token-efficient communication controls that cover the proven Caveman use cases selected by evidence.
+FR63: Downstroke provides native communication modes, protected-content rules, context budgets and source-linked handoffs.
 
-FR64: Downstroke can later provide native minimal-engineering policy enforcement that covers the proven Ponytail use cases selected by evidence.
+FR64: Downstroke provides native reuse, dependency, abstraction and broad-rewrite gates with explicit safety exceptions.
 
-FR65: Downstroke can later provide native planning and execution workflows that cover the proven BMAD use cases selected by evidence.
+FR65: Downstroke provides native briefs, specs, epics, stories, cadence, checkpoints, QA evidence and resume behavior.
 
-FR66: Downstroke can later provide an agent runtime for explicit, schema-bound orchestration after normal functions and the external stack prove insufficient.
+FR66: Downstroke can later provide an agent runtime for explicit, schema-bound orchestration after normal functions prove insufficient.
 
 FR67: Downstroke can later provide a remote module registry with provenance, versions, integrity verification and safe installation.
 
@@ -185,6 +185,10 @@ FR79: The sanitized public repository can start from one clean initial commit so
 FR80: The final public `.gitignore` excludes local agent state, BMAD development output, caches, credentials, build artifacts and maintenance-only files while retaining assets required by installed framework features.
 
 FR81: Replacing public history or force-pushing the single-commit release requires a final preview, secret scan, package/build verification and explicit maintainer confirmation.
+
+FR82: Material conflicts between active project sources require evidence, options, decision ownership and a human checkpoint; Downstroke never chooses a semantic winner silently.
+
+FR83: Downstroke provides a controlled development mode with persisted plan, review, implementation and verification checkpoints and safe resume behavior.
 
 ### Non-Functional Requirements
 
@@ -595,6 +599,8 @@ So that I can evaluate backlog and sprint cost before execution.
 **When** monetary cost cannot be verified
 **Then** Downstroke reports tokens without inventing a currency estimate.
 
+This story provides preliminary visibility only. Accuracy calibration and available-budget decisions are deferred to Story 10.7, after all product and release workflows are complete and representative observed usage exists.
+
 ## Epic 3: Safe Git and Multi-Repository Delivery
 
 Developers can use GitFlow, semantic commits, scoped authorization and correct credentials across isolated repositories.
@@ -712,6 +718,32 @@ So that each repository can authenticate against its intended remote safely.
 **Given** repositories using different accounts
 **When** each repository is configured
 **Then** credential context remains repository-specific and no token is stored in project files.
+
+### Story 3.5: Import a Hosted Git Repository Safely
+
+As a developer,
+I want Downstroke to clone an existing hosted repository into a safe target,
+So that onboarding preserves repository identity, credentials and workspace boundaries.
+
+**Acceptance Criteria:**
+
+**Given** a provider shorthand, HTTPS URL or SSH URL **When** import is planned **Then** provider, normalized remote, engine, destination, ref, depth, submodules, LFS and subsequent Downstroke initialization are previewed without network mutation.
+**Given** an available authenticated provider CLI **When** it matches the remote **Then** it may be selected; otherwise argument-safe `git clone` is used without embedding credentials in URLs or logs.
+**Given** a non-empty destination or unintended parent Git repository **When** import is planned **Then** the operation blocks unless an explicit safe workspace target is selected.
+**Given** `--yes` **When** cloning succeeds **Then** preflight runs inside the resolved child repository and initialization occurs unless `--no-install` was selected.
+**Given** branch, tag or commit options **When** supplied together **Then** incompatible selections fail before network access.
+
+### Story 3.6: Diagnose Git Provider and Clone Readiness
+
+As a developer,
+I want provider and destination readiness diagnosed without changing credentials,
+So that private and multi-repository imports fail safely and explain the next action.
+
+**Acceptance Criteria:**
+
+**Given** `downstroke repo doctor` **When** run locally **Then** Git, optional provider CLIs, authentication readiness, protocol, LFS, destination and parent-repository risk are reported without revealing secrets.
+**Given** a private or unreachable repository **When** diagnosis fails **Then** scoped provider login, SSH or credential-manager options are explained without reading or mutating global credentials.
+**Given** workspace import **When** multiple repositories are proposed **Then** each destination, identity and context namespace is isolated and previewed individually.
 
 ## Epic 4: Guided Stack Setup and Deployment
 
@@ -935,60 +967,131 @@ As a developer, I want design guidance for the active LLM, So that generated UI 
 **Given** Claude Design availability **When** selected **Then** it is preferred for visual exploration under approved tokens.
 **Given** unavailable Claude Design **When** work continues **Then** the active LLM follows the same contract and review gates.
 
-## Epic 9: Evidence-Gated Native Platform Evolution
-
-Maintainers can replace proven external workflows only after evidence, parity and rollback exist.
-
-### Story 9.1: Gate Native Capability Investment
-As a maintainer, I want a parity and evidence gate, So that native work solves measured problems.
+### Story 8.6: Create Native UX Direction Workflows
+As a product team, I want Downstroke to turn incomplete UI requests into an intentional design direction, So that generated interfaces fit the product instead of repeating generic AI layouts.
 
 **Acceptance Criteria:**
-**Given** an external tool **When** replacement is proposed **Then** real use cases, limitations, parity, migration, rollback and interoperability are documented.
-**Given** insufficient evidence **When** reviewed **Then** the external integration remains the default.
+**Given** an incomplete visual brief **When** UX planning starts **Then** only design-shaping questions about scope, mood, geometry, density, typography, icons, styling, motion, theme and source are asked.
+**Given** sufficient answers or explicit speed preference **When** direction is produced **Then** assumptions, semantic tokens, layout rules, state model, accessibility and responsive behavior are documented.
+**Given** a user-facing first viewport **When** reviewed **Then** it exposes the real product workflow and avoids decorative template patterns without product purpose.
 
-### Story 9.2: Add Native Structural Code Intelligence
-As a developer, I want proven structural queries available natively, So that selected CodeGraph workflows can run with less external setup.
-
-**Acceptance Criteria:**
-**Given** approved parity scope **When** implemented **Then** only measured search, caller, callee, impact or context use cases are included.
-**Given** unsupported parity **When** requested **Then** the external CodeGraph path remains available.
-
-### Story 9.3: Add Native Communication Compression
-As a developer, I want native response compression controls, So that proven Caveman workflows remain available when appropriate.
+### Story 8.7: Document Components and Storybook States
+As a frontend team, I want reusable components documented with their complete states, So that design intent and implementation remain inspectable across products.
 
 **Acceptance Criteria:**
-**Given** approved use cases **When** enabled **Then** communication shrinks without reducing engineering, security or QA requirements.
-**Given** disablement **When** requested **Then** normal communication resumes without project changes.
+**Given** repeated UI or a component system **When** components are planned **Then** ownership, purpose, variants, composition, behavior, accessibility and misuse guidance are required.
+**Given** Storybook is justified **When** stories are generated **Then** default, variants, loading, disabled, error, empty, long-content, narrow-layout and theme states are covered where relevant.
+**Given** a one-off static surface **When** Storybook adds no current value **Then** it remains optional rather than mandatory ceremony.
 
-### Story 9.4: Add Native Minimal-Engineering Policy
-As a developer, I want native simplicity guidance, So that proven Ponytail behavior can operate without speculative complexity.
-
-**Acceptance Criteria:**
-**Given** an implementation task **When** enabled **Then** reuse, standard library, native platform and minimum-diff checks run in order.
-**Given** security, validation or data-loss controls **When** evaluated **Then** simplicity cannot remove them.
-
-### Story 9.5: Add Native Planning Workflows
-As a maintainer, I want selected planning workflows natively, So that proven BMAD practices can run with fewer external dependencies.
+### Story 8.8: Enforce Visual QA and Design Adapters
+As a product team, I want observable visual and accessibility evidence, So that UI quality is verified beyond compilation.
 
 **Acceptance Criteria:**
-**Given** approved workflow parity **When** implemented **Then** artifacts, checkpoints and resume behavior remain compatible.
-**Given** unsupported workflows **When** requested **Then** BMAD remains the supported route.
+**Given** user-facing UI **When** delivery runs **Then** relevant desktop, tablet and mobile screenshots, interaction states, accessibility and reduced-motion behavior are checked.
+**Given** Figma or another design source **When** available **Then** structured variables, components and annotations are preferred while paid or beta capabilities remain optional and explicit.
+**Given** an external design/prototype adapter **When** used **Then** production code still lands in the repository and passes normal Downstroke QA.
 
-### Story 9.6: Add an Explicit Agent Runtime
+## Epic 9: Native Platform and Operational Experience
+
+Downstroke ships self-contained project intelligence, workflow, communication and engineering controls while safely importing existing project knowledge as untrusted, source-attributed data.
+
+### Story 9.1: Enforce the Native-Only Product Boundary
+As a maintainer, I want external construction tools isolated from distributable output, So that installed Downstroke has no runtime dependency or public branding tied to them.
+
+**Acceptance Criteria:**
+**Given** a new project **When** initialization or doctor runs **Then** no external agent stack installation is required or recommended.
+**Given** package, CLI, templates or public docs **When** release scanning runs **Then** external product names, installers, dependencies and active instructions fail the gate.
+**Given** internal maintenance artifacts **When** packaged **Then** allowlists exclude planning, development skills, historical imports and local tool configuration.
+
+### Story 9.2: Create the Operational Experience Foundation
+As a developer, I want project facts stored with provenance and evidence, So that project continuity is durable without trusting chat history or generated claims.
+
+**Acceptance Criteria:**
+**Given** `experience init` **When** no manifest exists **Then** local JSONL storage, security defaults, evidence, quarantine and indexes are created without overwrite.
+**Given** a fact write **When** evaluated **Then** source, trust, scope, status, TTL and evidence rules are validated; generated output cannot become verified directly.
+**Given** lite mode **When** initialized **Then** network, arbitrary shell, embeddings and dangerous bridge capabilities are disabled.
+
+### Story 9.3: Import Legacy and SPEC-Driven Project Knowledge
+As a developer, I want existing project documents safely classified and imported, So that migration preserves useful work without activating untrusted instructions.
+
+**Acceptance Criteria:**
+**Given** Markdown, YAML, JSON or legacy project artifacts **When** scan runs **Then** repo-relative path, SHA-256, size, classification, trust and active-instruction risk are recorded without executing content.
+**Given** secrets, injection patterns, unsafe paths, binaries or conflicts **When** detected **Then** derived content is redacted or quarantined and excluded from active context.
+**Given** import authorization **When** records are written **Then** requirements, decisions, workflow items and QA claims remain observed until evidence verifies them.
+
+### Story 9.4: Add Native Planning and Delivery Workflows
+As a developer, I want native briefs, specs, epics, stories, cadence, QA and review checkpoints, So that Downstroke owns its delivery workflow end to end.
+
+**Acceptance Criteria:**
+**Given** imported or new work **When** workflows run **Then** items, acceptance criteria, tasks, status, evidence, deferred work and review cadence use native versioned state.
+**Given** a checkpoint **When** work resumes **Then** deterministic state identifies the next valid action without depending on an external workflow engine.
+**Given** high-risk work **When** planned **Then** individual review remains mandatory.
+**Given** controlled mode **When** work advances **Then** plan, review, implementation and verification are separate persisted checkpoints with explicit approval and resume behavior.
+**Given** materially conflicting active sources **When** encountered **Then** source evidence, options, consequences and decision owner are shown and execution pauses instead of choosing silently.
+
+### Story 9.5: Add Native Communication Policy
+As a developer, I want concise communication modes with protected content, So that token savings never remove security, commands, schemas, evidence or acceptance criteria.
+
+**Acceptance Criteria:**
+**Given** normal, compact, technical, audit or handoff mode **When** output is produced **Then** the configured budget and style apply without rewriting canonical sources.
+**Given** protected content **When** compression is requested **Then** code, commands, diffs, schemas, security, permissions, QA and rollback remain complete.
+**Given** imported communication preferences **When** mapped **Then** roleplay or safety-reducing instructions remain inactive.
+
+### Story 9.6: Add Native Simplicity Gates
+As a developer, I want reuse, dependency, abstraction and rewrite gates, So that minimal engineering remains auditable without permitting under-engineering.
+
+**Acceptance Criteria:**
+**Given** proposed work **When** evaluated **Then** deletion, reuse, configuration, platform, existing dependency and small local code are considered before new dependencies or abstractions.
+**Given** a dependency, shared package, abstraction or broad rewrite **When** proposed **Then** evidence, consumers, impact, owner, tests and removal/rollback are required as applicable.
+**Given** security, data integrity, accessibility or production reliability **When** simplicity conflicts **Then** the safety requirement wins and the exception is recorded.
+
+### Story 9.7: Add Native Code Intelligence
+As a developer, I want a repo-scoped incremental code index, So that structural context is available without a daemon, external server or runtime dependency.
+
+**Acceptance Criteria:**
+**Given** a TypeScript/JavaScript repository **When** indexed **Then** safe files, hashes, package ownership, imports, exports and top-level symbols are stored incrementally.
+**Given** changed files **When** impact or task context is requested **Then** bounded relevant files are returned and stale indexes are explicit.
+**Given** ignored, generated, secret or external-root files **When** scanning **Then** they are excluded without executing builds or arbitrary scripts.
+
+### Story 9.8: Route Work with Native Token Economy
+As a developer, I want greedy, balanced and rich execution policies, So that each task uses the lowest sufficient reasoning and context while preserving quality.
+
+**Acceptance Criteria:**
+**Given** a task **When** routed **Then** mode, task class, risk, model tier, context budget, cache strategy, escalation trigger and verification gate are recorded.
+**Given** deterministic work **When** tools can prove the result **Then** no LLM is required.
+**Given** risk, ambiguity or failed verification **When** thresholds are crossed **Then** execution escalates and the task ledger records the outcome.
+
+### Story 9.9: Compile Safe Task Context
+As a developer, I want deterministic task-specific context packs, So that agents receive relevant project truth without full-history dumps or poisoned memory.
+
+**Acceptance Criteria:**
+**Given** experience records and a task **When** context compiles **Then** identity, active rules, relevant facts, evidence, risks, unknowns and blocked assumptions fit configured category budgets.
+**Given** quarantine, secrets, conflicted or stale authority **When** encountered **Then** compilation excludes or labels it and fails on critical leakage.
+**Given** identical inputs **When** compiled repeatedly **Then** output is stable apart from explicitly volatile metadata.
+
+### Story 9.10: Enforce Strict Native Health and Cleanup
+As a developer, I want native health and migration cleanup verified, So that old active instructions become inert only after useful project knowledge is preserved.
+
+**Acceptance Criteria:**
+**Given** existing legacy artifacts **When** doctor runs **Then** they are classified as migration sources or conflicts, never healthy dependencies or installation recommendations.
+**Given** cleanup **When** previewed **Then** native parity, imported hashes, rewritten active docs, quarantine and archive targets are shown and `--yes` is required.
+**Given** strict native mode **When** active legacy instructions, missing parity, secret leakage or quarantine leakage remain **Then** doctor fails.
+
+### Story 9.11: Add an Explicit Agent Runtime
 As a maintainer, I want schema-bound agent orchestration, So that multi-step work can run only where normal functions are insufficient.
 
 **Acceptance Criteria:**
 **Given** an orchestration use case **When** runtime use is proposed **Then** tool schemas, permissions, budgets, stopping conditions and audit events are required.
 **Given** mutations **When** agents request them **Then** UI and ownership confirmation cannot be bypassed.
 
-### Story 9.7: Add a Remote Module Registry
+### Story 9.12: Add a Remote Module Registry
 As a developer, I want trusted remote modules, So that reusable capabilities can be discovered and installed safely.
 
 **Acceptance Criteria:**
 **Given** a registry module **When** inspected **Then** provenance, version, compatibility, integrity and requested mutations are visible.
 **Given** installation **When** approved **Then** no arbitrary postinstall code runs and rollback metadata is retained.
 
-### Story 9.8: Automate Conflict-Aware Managed Migrations
+### Story 9.13: Automate Conflict-Aware Managed Migrations
 As a developer, I want safe automatic managed migrations, So that routine upgrades require less manual editing.
 
 **Acceptance Criteria:**
@@ -1014,6 +1117,7 @@ As a maintainer, I want a verified npm tarball, So that the CLI installs cleanly
 **Given** functional readiness **When** `npm pack --dry-run` runs **Then** metadata, license, exports, binary, Node compatibility and allowlisted contents pass.
 **Given** a packed artifact **When** installed in a clean fixture **Then** init, doctor and CLI help run successfully.
 **Given** package contents **When** scanned **Then** secrets, planning output, source archives and maintenance-only files are absent.
+**Given** package, CLI help and generated templates **When** release scanning runs **Then** external construction-tool names, installers, dependencies and active instructions are absent.
 
 ### Story 10.3: Publish and Verify the npm Release
 As a maintainer, I want an authenticated npm release, So that users can install the approved version.
@@ -1045,3 +1149,13 @@ As a prospective user, I want accurate searchable documentation and examples, So
 **Given** stable README and npm workflows **When** the site is built **Then** installation, CLI reference, guides and working showcases match the released version.
 **Given** visible content **When** rendered **Then** it uses the design system, localization catalogs, accessibility and responsive rules.
 **Given** planned capabilities **When** displayed **Then** they are not represented as available or interactive.
+**Given** public documentation **When** scanned **Then** it describes only Downstroke-owned capabilities and contains no maintenance-tool branding or setup instructions.
+
+### Story 10.7: Calibrate Token Estimates Against Observed Usage
+As a developer, I want estimates compared with observed provider usage and the currently available token budget, So that I can judge whether planned work fits before execution.
+
+**Acceptance Criteria:**
+**Given** representative completed Downstroke workflows **When** provider-reported token usage is recorded **Then** the system compares observed usage with the original estimate without treating either value as monetary cost.
+**Given** repeated observations by scope and model **When** calibration is evaluated **Then** accuracy, sample size and uncertainty are reported and estimation assumptions are adjusted only from sufficient evidence.
+**Given** an estimate and a current available-token budget **When** feasibility is requested **Then** the result is `fits`, `does-not-fit` or `uncertain` based on the calibrated range.
+**Given** missing or incompatible provider observations **When** comparison is requested **Then** the result remains unavailable rather than claiming accuracy.

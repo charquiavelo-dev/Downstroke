@@ -32,19 +32,36 @@ A developer can safely initialize or inspect an existing project, install only t
 ### Scope
 
 - In: `lite preset initialization, project inspection, health diagnosis, safe copy-if-missing operations and guided greenfield stack selection within supported ecosystems`
-- Deferred but planned after the external Breakdown Stack is working and measurable: `native Breakdown Stack capabilities, agent runtime, remote module registry and conflict-aware managed-block migrations` (Epic 9).
+- Required before public release: `native workflows, communication policy, simplicity gates, code intelligence, operational experience and safe import of existing project knowledge` (Epic 9).
+- External construction tools are maintenance-only inputs. They are not runtime dependencies, generated-project requirements, public product concepts or permanent fallbacks.
 - Deferred: `additional language ecosystems beyond the supported web, mobile, backend and .NET paths`.
 - Planned after the framework is functionally validated: `npm distribution followed by a React documentation and showcase site` (Epic 10).
+- Token-estimate calibration is the final planned feature: compare estimates with observed provider usage and report whether remaining work fits the available token budget only after the product and release workflows are complete.
 - The public release is cut from a sanitized allowlisted tree with one initial commit only after the complete development history is verified in a private maintenance repository.
 - Success signal: `init and doctor pass against empty and existing fixtures while preserving user files`
 
+### Milestone: Native Framework Ready for Local Acceptance
+
+This milestone is reached only when:
+
+- Every planned product capability through Epics 1-9 is implemented, reviewed and verified, including Stories 9.11-9.13.
+- README completion (Story 10.1), local npm package preparation (Story 10.2) and token calibration (Story 10.7) are done.
+- All runtime, templates, generated projects, CLI help and active public documentation are Downstroke-native; maintenance tools remain excluded from release output.
+- A clean local tarball installation passes init, doctor, help, build, typecheck, tests and native-only scans without unpublished workspace dependencies.
+- No story remains in backlog, ready-for-dev, in-progress or review within the milestone scope, and no unresolved high/medium release finding remains.
+
+When these gates pass, announce the milestone explicitly and ask the owner to perform local acceptance. npm publication (Story 10.3), public-history work and the documentation site begin only after that local acceptance.
+
 ## Business Rules And Invariants
 
-Number every rule so code, tests and BMAD stories can reference it.
+Number every rule so code, tests and Downstroke workflow items can reference it.
 
 | ID | Rule | Enforcement | Evidence |
 | --- | --- | --- | --- |
-| `BR-001` | `<business invariant>` | `<database | server | UI>` | `<test or audit>` |
+| `BR-001` | Shipped Downstroke uses native Downstroke capabilities and terminology; maintenance tooling never becomes a runtime dependency or public product contract. | Release manifest and forbidden-reference scan | Clean package and generated-project fixture |
+| `BR-002` | When active sources conflict on product behavior, scope, safety, ownership or architecture, Downstroke presents the conflicting evidence and pauses for the responsible human; it never silently chooses a winner. | Workflow decision gate | Conflict fixture and approval record |
+| `BR-003` | Controlled development mode separates plan, review, implementation and verification, with explicit checkpoints before product-owned or high-risk decisions. | Native workflow state machine | Resume/checkpoint tests and workflow evidence |
+| `BR-004` | Durable project facts retain source, trust, scope, status, TTL and evidence; generated output cannot directly become verified truth. | Experience runtime validation and authorized JSONL writes | Experience trust/evidence tests |
 
 ## User Flows
 
@@ -88,6 +105,7 @@ Keep product domains isolated. Shared packages contain only contracts or primiti
 | Entity | Owner/scope | Key invariants | Retention/audit |
 | --- | --- | --- | --- |
 | `<entity>` | `<user | tenant | system>` | `<constraints>` | `<policy>` |
+| Experience fact | Repository | Valid provenance/trust; verified requires sanitized matching evidence; conflicting IDs fail | Local append-only JSONL plus deterministic ID index |
 
 - PostgreSQL constraints enforce important invariants.
 - Tenant-owned queries include tenant ownership server-side.
@@ -102,6 +120,8 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | Contract | Auth/role | Input/output | Failure behavior | Evidence |
 | --- | --- | --- | --- | --- |
 | `<contract>` | `<role>` | `<schemas>` | `<errors/retry>` | `<test>` |
+| `downstroke experience init` | Project developer | Repository-local v0.1 lite manifest and stores | Never overwrites; malformed/weakened manifest fails | Core and CLI initialization tests |
+| `downstroke experience add` | Project developer | Valid fact JSON; preview then `--yes` | Secret-free summary; duplicate conflict blocks | Core and CLI fact-write tests |
 
 External integrations must define timeout, retry, rate-limit, fallback, secret ownership and observability behavior.
 
@@ -146,7 +166,7 @@ Profile before memoizing or virtualizing. Parallelize independent I/O. Lazy-load
 - Deployment and rollback: `<commands/runbook links>`
 - Environment ownership: `<development, staging, production>`
 
-## BMAD Governance
+## Downstroke Workflow Governance
 
 Before generating multiple stories or tasks, ask exactly:
 
@@ -166,7 +186,7 @@ Record the answer here:
 - Gross capacity: `8 hours/day, 40 hours/week, 120 hours/sprint`
 - WIP limit: `3`
 - High-risk review: `individual`
-- Last reviewed artifact: `<BMAD ID>`
+- Last reviewed artifact: `3-1-configure-project-gitflow-and-authorization`
 
 Rules:
 
@@ -193,7 +213,7 @@ Rules:
 - Observable acceptance criteria pass.
 - Typecheck/lint/build and focused tests pass where available.
 - Security, accessibility, responsive and failure states were checked for the changed scope.
-- Docs and BMAD status match implementation.
+- Docs and Downstroke workflow status match implementation.
 - Deployment, migration and rollback evidence exists when relevant.
 - No known broken workflow or undeclared production blocker remains.
 

@@ -1,6 +1,6 @@
 # Project Specification
 
-This is the canonical product and engineering contract. Replace every `<...>` value before implementation. Keep decisions here stable; use `_bmad-output/` for generated planning artifacts.
+This is the canonical product and engineering contract. Replace every `<...>` value before implementation. Keep decisions here stable; use `.downstroke/workflows/` for native planning artifacts.
 
 ## Metadata
 
@@ -34,7 +34,7 @@ This is the canonical product and engineering contract. Replace every `<...>` va
 
 ## Business Rules And Invariants
 
-Number every rule so code, tests and BMAD stories can reference it.
+Number every rule so code, tests and Downstroke workflow items can reference it.
 
 | ID | Rule | Enforcement | Evidence |
 | --- | --- | --- | --- |
@@ -140,7 +140,7 @@ Profile before memoizing or virtualizing. Parallelize independent I/O. Lazy-load
 - Deployment and rollback: `<commands/runbook links>`
 - Environment ownership: `<development, staging, production>`
 
-## BMAD Governance
+## Downstroke Workflow Governance
 
 Before generating multiple stories or tasks, ask exactly:
 
@@ -159,7 +159,7 @@ Record the answer here:
 - Sprint length: `15 working days, Monday through Friday`
 - Gross capacity: `8 hours/day, 40 hours/week, 120 hours/sprint`
 - WIP limit: `3 concurrent tasks`
-- Last reviewed artifact: `<BMAD ID>`
+- Last reviewed artifact: `<Downstroke workflow ID>`
 
 Rules:
 
@@ -186,7 +186,7 @@ Rules:
 - Observable acceptance criteria pass.
 - Typecheck/lint/build and focused tests pass where available.
 - Security, accessibility, responsive and failure states were checked for the changed scope.
-- Docs and BMAD status match implementation.
+- Docs and Downstroke workflow status match implementation.
 - Deployment, migration and rollback evidence exists when relevant.
 - No known broken workflow or undeclared production blocker remains.
 

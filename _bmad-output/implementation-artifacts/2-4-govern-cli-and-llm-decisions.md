@@ -4,7 +4,7 @@ baseline_commit: 8de25f3
 
 # Story 2.4: Govern CLI and LLM Decisions
 
-Status: review
+Status: done
 
 ## Story
 

@@ -4,10 +4,10 @@
 
 1. Create git and commit the initial baseline.
 2. Fill the canonical `docs/SPEC.md`.
-3. Run agent bootstrap: CodeGraph, BMAD, Caveman and Ponytail.
-4. Choose BMAD review cadence: one-by-one, blocks of `X`, by sprint or final draft review.
+3. Initialize native Downstroke workflow, communication, simplicity and code-intelligence state.
+4. Choose Downstroke review cadence: one-by-one, blocks of `X`, by sprint or final draft review.
 5. Decide the smallest shippable slice.
-6. Write the BMAD brief/quick spec only as deep as the slice needs.
+6. Write the Downstroke brief/quick spec only as deep as the slice needs.
 7. Build one verified path before adding secondary screens.
 
 ## React / Next.js Start
@@ -104,17 +104,17 @@ Advice:
 - Use server authorization, not UI hiding, as the real security boundary.
 - Review EF migrations before applying.
 
-## Agent Installation Path
+## Native Capability Roadmap
 
-Progressively install in this order:
+Deliver native capabilities in this order:
 
 1. Git.
-2. CodeGraph.
-3. BMAD for Codex with Spanish output.
-4. Caveman project skill.
-5. Ponytail from the canonical source only.
+2. Downstroke code intelligence.
+3. Downstroke native workflows with the selected communication language.
+4. Downstroke communication policy.
+5. Downstroke simplicity gates.
 
-The bootstrap script handles this for JS/TS projects. For .NET, run the same agent bootstrap from the repo root, then add .NET-specific checks manually.
+Until each capability ships, development tools may assist migration but must not become generated-project or runtime dependencies.
 
 ## Framework Direction
 

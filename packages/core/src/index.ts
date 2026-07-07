@@ -1,6 +1,7 @@
-import { access, copyFile, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { access, appendFile, copyFile, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 export type FileOperation = {
   source: string;
@@ -19,17 +20,6 @@ export type DoctorResult = {
   evidence?: string;
   remediation?: string;
 };
-
-export type BreakdownInstallPlan = {
-  status: "ready" | "blocked" | "noop";
-  tools: string[];
-  command: string;
-  files: string[];
-  mutations: string[];
-  blockers: string[];
-};
-
-export type BootstrapExecutor = (root: string) => Promise<number>;
 
 export const cadenceChoices = ["one-at-a-time", "blocks", "sprint", "final-draft"] as const;
 export type ReviewMode = typeof cadenceChoices[number];
@@ -69,7 +59,84 @@ export type TokenEstimate = {
   uncertainty: "high";
 };
 
-const expectedBmadVersion = "6.9.0";
+export type GitPermission = {
+  enabled: boolean;
+  scope: "repository";
+  lifetime: "project";
+  requiresFreshAuthorization: boolean;
+};
+export type GitPolicy = {
+  schemaVersion: 1;
+  revision: number;
+  enabled: boolean;
+  strategy: "gitflow";
+  branches: { main: "main"; develop: "develop"; feature: "feature/*"; release: "release/*"; hotfix: "hotfix/*" };
+  permissions: { branch: GitPermission; commit: GitPermission; push: GitPermission };
+};
+export type GitPolicyPlan = {
+  status: "ready" | "blocked";
+  root: ".";
+  file: ".downstroke/git-policy.json";
+  currentBranch: string | null;
+  head: string | null;
+  createBranches: string[];
+  expectedRevision: number;
+  next: GitPolicy;
+  blockers: string[];
+};
+
+export const experienceManifest = {
+  schemaVersion: "0.1.0",
+  module: "downstroke-experience",
+  status: "experimental",
+  storage: { driver: "local-jsonl", path: ".downstroke/experience" },
+  security: {
+    defaultTrust: "untrusted",
+    allowNetwork: false,
+    allowShell: false,
+    allowWriteOutsideManagedBlocks: false,
+    secretScanning: true,
+    promptInjectionScanning: true,
+    quarantineSuspiciousContext: true,
+  },
+  performance: {
+    maxContextTokens: 12000,
+    maxMemoryItemsPerContext: 40,
+    enableFileHashCache: true,
+    enableIncrementalSnapshots: true,
+    enableEmbeddings: false,
+  },
+  verification: {
+    verifiedRequiresExecution: true,
+    acceptedEvidenceTypes: ["command_exit_code", "file_hash", "git_status", "test_report", "typecheck_report", "build_report", "lint_report", "manual_approval"],
+  },
+  bridges: {
+    enabled: false,
+    defaultOutputTrust: "external",
+    requireCapabilityDeclaration: true,
+    requireDescriptorHash: true,
+    allowWriteCapabilities: false,
+    allowNetworkCapabilities: false,
+    allowSecretCapabilities: false,
+  },
+} as const;
+
+export type ExperienceFact = {
+  id: string;
+  kind: "stack" | "dependency" | "rule" | "decision" | "risk" | "gate" | "script" | "integration" | "repo" | "qa" | "security";
+  scope: "repo" | "workspace" | "module" | "file" | "org";
+  status: "unknown" | "observed" | "inferred" | "verified" | "stale" | "conflicted" | "quarantined" | "rejected";
+  value: unknown;
+  source: { type: "file" | "command" | "git" | "manifest" | "managed-block" | "user-input" | "llm-output" | "external-tool" | "bridge"; path?: string; command?: string; hash?: string; bridgeId?: string };
+  confidence: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt?: string;
+  evidence?: { type: typeof experienceManifest.verification.acceptedEvidenceTypes[number]; ref: string };
+  security: { trustLevel: "trusted" | "project" | "generated" | "external" | "untrusted"; secretScan: "passed" | "failed" | "not_run"; injectionScan: "passed" | "failed" | "not_run" };
+};
+
+export type ExperienceFactPlan = { status: "ready" | "blocked"; action: "append" | "skip"; fact: ExperienceFact | null; blockers: string[] };
 
 const responsibilities = {
   user: "approves",
@@ -161,6 +228,185 @@ export function tokenUsageStatus(estimate: TokenEstimate, consumedTokens?: numbe
   return { consumedTokens: consumedTokens ?? "unavailable", projectedRemainingTokens: estimate.range, estimate };
 }
 
+const gitBranches = { main: "main", develop: "develop", feature: "feature/*", release: "release/*", hotfix: "hotfix/*" } as const;
+
+function permission(enabled: boolean, fresh = false): GitPermission {
+  return { enabled, scope: "repository", lifetime: "project", requiresFreshAuthorization: fresh };
+}
+
+function parseGitPolicy(value: unknown): GitPolicy | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  const permissions = typeof input.permissions === "object" && input.permissions !== null ? input.permissions as Record<string, unknown> : {};
+  const exactKeys = (value: Record<string, unknown>, keys: readonly string[]) => Object.keys(value).sort().join() === [...keys].sort().join();
+  const validPermission = (value: unknown, fresh: boolean): value is GitPermission => {
+    if (typeof value !== "object" || value === null) return false;
+    const item = value as Record<string, unknown>;
+    return exactKeys(item, ["enabled", "scope", "lifetime", "requiresFreshAuthorization"])
+      && typeof item.enabled === "boolean" && item.scope === "repository" && item.lifetime === "project" && item.requiresFreshAuthorization === fresh;
+  };
+  if (!exactKeys(input, ["schemaVersion", "revision", "enabled", "strategy", "branches", "permissions"])) return undefined;
+  if (input.schemaVersion !== 1 || !Number.isSafeInteger(input.revision) || !positiveInteger(input.revision) || typeof input.enabled !== "boolean" || input.strategy !== "gitflow") return undefined;
+  if (typeof input.branches !== "object" || input.branches === null) return undefined;
+  const branches = input.branches as Record<string, unknown>;
+  if (!exactKeys(branches, Object.keys(gitBranches)) || Object.entries(gitBranches).some(([key, expected]) => branches[key] !== expected)) return undefined;
+  if (!exactKeys(permissions, ["branch", "commit", "push"])) return undefined;
+  if (!validPermission(permissions.branch, false) || !validPermission(permissions.commit, false) || !validPermission(permissions.push, true)) return undefined;
+  return {
+    schemaVersion: 1,
+    revision: input.revision as number,
+    enabled: input.enabled,
+    strategy: "gitflow",
+    branches: gitBranches,
+    permissions: {
+      branch: permission(permissions.branch.enabled),
+      commit: permission(permissions.commit.enabled),
+      push: permission(permissions.push.enabled, true),
+    },
+  };
+}
+
+function runGit(root: string, args: readonly string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn("git", ["-C", root, ...args], { shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
+    child.once("error", (error) => resolve({ code: 1, stdout, stderr: error.message }));
+    child.once("exit", (code) => resolve({ code: code ?? 1, stdout: stdout.trim(), stderr: stderr.trim() }));
+  });
+}
+
+async function gitRoot(root: string): Promise<string> {
+  const result = await runGit(root, ["rev-parse", "--show-toplevel"]);
+  if (result.code !== 0 || !result.stdout) throw new Error(result.stderr || "Not a Git repository");
+  return realpath(result.stdout);
+}
+
+export async function readGitPolicy(root: string): Promise<GitPolicy | null> {
+  const resolved = await gitRoot(root);
+  const state = await readLocalFile(resolved, ".downstroke/git-policy.json");
+  if (state.kind === "missing") return null;
+  if (state.kind !== "file") throw new Error(`Cannot read Git policy (${state.code})`);
+  try {
+    const policy = parseGitPolicy(JSON.parse(state.content.toString("utf8")) as unknown);
+    if (!policy) throw new Error("Git policy is malformed");
+    return policy;
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "Git policy is malformed") throw error;
+    throw new Error("Git policy is malformed");
+  }
+}
+
+export async function planGitPolicy(root: string, input: { enabled: boolean; branch: boolean; commit: boolean; push: boolean }): Promise<GitPolicyPlan> {
+  const blockers: string[] = [];
+  let resolved = root;
+  let currentBranch: string | null = null;
+  let head: string | null = null;
+  let previous: GitPolicy | null = null;
+  try {
+    resolved = await gitRoot(root);
+    const branch = await runGit(resolved, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    const revision = await runGit(resolved, ["rev-parse", "HEAD"]);
+    if (branch.code !== 0) blockers.push("Detached or unborn HEAD is not supported");
+    else currentBranch = branch.stdout;
+    if (revision.code !== 0) blockers.push("Repository has no commit to anchor GitFlow branches");
+    else head = revision.stdout;
+    previous = await readGitPolicy(resolved);
+  } catch (error: unknown) {
+    blockers.push(error instanceof Error ? error.message : "Git repository cannot be inspected");
+  }
+  const expectedRevision = previous?.revision ?? 0;
+  const next: GitPolicy = {
+    schemaVersion: 1,
+    revision: expectedRevision + 1,
+    enabled: input.enabled,
+    strategy: "gitflow",
+    branches: gitBranches,
+    permissions: {
+      branch: permission(input.enabled && input.branch),
+      commit: permission(input.enabled && input.commit),
+      push: permission(input.enabled && input.push, true),
+    },
+  };
+  const createBranches: string[] = [];
+  if (input.enabled && head && blockers.length === 0) {
+    for (const branch of ["main", "develop"] as const) {
+      const found = await runGit(resolved, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+      if (found.code === 1) createBranches.push(branch);
+      else if (found.code !== 0) blockers.push(`Cannot inspect ${branch}: ${found.stderr || `git exited ${found.code}`}`);
+    }
+  }
+  return { status: blockers.length ? "blocked" : "ready", root: ".", file: ".downstroke/git-policy.json", currentBranch, head, createBranches, expectedRevision, next, blockers };
+}
+
+export async function applyGitPolicy(root: string, plan: GitPolicyPlan): Promise<DoctorResult> {
+  if (plan.status === "blocked" || !plan.head) return { id: "git.policy", status: "fail", message: plan.blockers.join("; ") || "Git policy plan is blocked", remediation: "Correct the Git policy plan" };
+  const normalized = parseGitPolicy(plan.next);
+  if (!normalized || JSON.stringify(normalized) !== JSON.stringify(plan.next) || plan.root !== "." || plan.file !== ".downstroke/git-policy.json"
+    || plan.createBranches.some((branch) => branch !== "main" && branch !== "develop")
+    || new Set(plan.createBranches).size !== plan.createBranches.length) {
+    return { id: "git.policy", status: "fail", message: "Git policy plan is malformed", remediation: "Preview the Git policy again" };
+  }
+  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  let lockPath = "";
+  let temporary = "";
+  const created: string[] = [];
+  try {
+    const resolved = await gitRoot(root);
+    const statePath = join(resolved, ".downstroke", "git-policy.json");
+    lockPath = `${statePath}.lock`;
+    await mkdir(dirname(statePath), { recursive: true });
+    try {
+      lock = await open(lockPath, "wx");
+    } catch {
+      return { id: "git.policy", status: "fail", message: "Another Git policy apply is in progress", remediation: "Wait and preview the policy again" };
+    }
+    const fresh = await planGitPolicy(resolved, {
+      enabled: plan.next.enabled,
+      branch: plan.next.permissions.branch.enabled,
+      commit: plan.next.permissions.commit.enabled,
+      push: plan.next.permissions.push.enabled,
+    });
+    if (JSON.stringify(fresh) !== JSON.stringify(plan)) {
+      return { id: "git.policy", status: "fail", message: "Git state changed after preview", remediation: "Preview the Git policy again" };
+    }
+    for (const branch of plan.createBranches) {
+      const result = await runGit(resolved, ["branch", branch, plan.head]);
+      if (result.code !== 0) throw new Error(`Cannot create ${branch}: ${result.stderr || `git exited ${result.code}`}`);
+      created.push(branch);
+    }
+    temporary = `${statePath}.${process.pid}.${randomUUID()}.tmp`;
+    const output = await open(temporary, "wx");
+    try {
+      await output.writeFile(`${JSON.stringify(plan.next, null, 2)}\n`);
+    } finally {
+      await output.close();
+    }
+    await rename(temporary, statePath);
+    temporary = "";
+    const verified = await readGitPolicy(resolved);
+    return JSON.stringify(verified) === JSON.stringify(plan.next)
+      ? { id: "git.policy", status: "ok", message: `Git policy is ${plan.next.enabled ? "enabled" : "disabled"}`, evidence: ".downstroke/git-policy.json", remediation: "No action required" }
+      : { id: "git.policy", status: "fail", message: "Git policy verification failed", remediation: "Preview and apply the policy again" };
+  } catch (error: unknown) {
+    return {
+      id: "git.policy",
+      status: "fail",
+      message: error instanceof Error ? error.message : "Git policy apply failed",
+      ...(created.length ? { evidence: `Created branches preserved: ${created.join(", ")}` } : {}),
+      remediation: "Inspect repository state and preview the policy again",
+    };
+  } finally {
+    if (temporary) await unlink(temporary).catch(() => undefined);
+    if (lock) {
+      await lock.close().catch(() => undefined);
+      await unlink(lockPath).catch(() => undefined);
+    }
+  }
+}
+
 export type ProjectInspection = {
   stage: "empty" | "documented" | "scaffolded" | "implemented";
   stacks: string[];
@@ -176,6 +422,140 @@ export type ProjectVerification = {
 
 async function exists(path: string): Promise<boolean> {
   return access(path).then(() => true, () => false);
+}
+
+const experienceFiles = [
+  ["evidence", "directory"], ["quarantine", "directory"], ["indexes", "directory"],
+  ["manifest.json", "file"], ["facts.jsonl", "file"], ["evidence.jsonl", "file"], ["indexes/facts-by-id.json", "file"],
+] as const;
+
+function safeExperiencePath(path: string): boolean {
+  return path.length > 0 && !path.includes("\\") && !isAbsolute(path) && !path.split("/").includes("..");
+}
+
+function parseExperienceFact(value: unknown): ExperienceFact | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  const allowed = ["id", "kind", "scope", "status", "value", "source", "confidence", "createdAt", "updatedAt", "expiresAt", "evidence", "security"];
+  if (Object.keys(input).some((key) => !allowed.includes(key))) return undefined;
+  const kinds = ["stack", "dependency", "rule", "decision", "risk", "gate", "script", "integration", "repo", "qa", "security"];
+  const scopes = ["repo", "workspace", "module", "file", "org"];
+  const statuses = ["unknown", "observed", "inferred", "verified", "stale", "conflicted", "quarantined", "rejected"];
+  if (typeof input.id !== "string" || !/^[A-Za-z0-9._:-]+$/.test(input.id) || !kinds.includes(String(input.kind)) || !scopes.includes(String(input.scope)) || !statuses.includes(String(input.status))) return undefined;
+  if (typeof input.confidence !== "number" || !Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1) return undefined;
+  const validDate = (date: unknown) => typeof date === "string" && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString() === date;
+  if (!validDate(input.createdAt) || !validDate(input.updatedAt) || (input.expiresAt !== undefined && (!validDate(input.expiresAt) || Date.parse(input.expiresAt as string) <= Date.parse(input.updatedAt as string)))) return undefined;
+  if (typeof input.source !== "object" || input.source === null || typeof input.security !== "object" || input.security === null) return undefined;
+  const source = input.source as Record<string, unknown>;
+  const sourceTypes = ["file", "command", "git", "manifest", "managed-block", "user-input", "llm-output", "external-tool", "bridge"];
+  if (Object.keys(source).some((key) => !["type", "path", "command", "hash", "bridgeId"].includes(key)) || !sourceTypes.includes(String(source.type))) return undefined;
+  if (source.path !== undefined && (typeof source.path !== "string" || !safeExperiencePath(source.path))) return undefined;
+  for (const key of ["command", "hash", "bridgeId"] as const) if (source[key] !== undefined && typeof source[key] !== "string") return undefined;
+  const security = input.security as Record<string, unknown>;
+  if (Object.keys(security).some((key) => !["trustLevel", "secretScan", "injectionScan"].includes(key)) || !["trusted", "project", "generated", "external", "untrusted"].includes(String(security.trustLevel))
+    || !["passed", "failed", "not_run"].includes(String(security.secretScan)) || !["passed", "failed", "not_run"].includes(String(security.injectionScan))) return undefined;
+  let evidence: ExperienceFact["evidence"];
+  if (input.evidence !== undefined) {
+    if (typeof input.evidence !== "object" || input.evidence === null) return undefined;
+    const item = input.evidence as Record<string, unknown>;
+    if (Object.keys(item).some((key) => !["type", "ref"].includes(key)) || !experienceManifest.verification.acceptedEvidenceTypes.includes(item.type as never) || typeof item.ref !== "string" || !/^[A-Za-z0-9._:-]+$/.test(item.ref)) return undefined;
+    evidence = { type: item.type as NonNullable<ExperienceFact["evidence"]>["type"], ref: item.ref };
+  }
+  return {
+    id: input.id, kind: input.kind as ExperienceFact["kind"], scope: input.scope as ExperienceFact["scope"], status: input.status as ExperienceFact["status"], value: input.value,
+    source: { type: source.type as ExperienceFact["source"]["type"], ...(source.path === undefined ? {} : { path: source.path as string }), ...(source.command === undefined ? {} : { command: source.command as string }), ...(source.hash === undefined ? {} : { hash: source.hash as string }), ...(source.bridgeId === undefined ? {} : { bridgeId: source.bridgeId as string }) },
+    confidence: input.confidence, createdAt: input.createdAt as string, updatedAt: input.updatedAt as string, ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt as string }), ...(evidence ? { evidence } : {}), security: security as ExperienceFact["security"],
+  };
+}
+
+async function experienceRoot(root: string, create = false): Promise<string> {
+  const resolved = await gitRoot(root);
+  const base = join(resolved, ".downstroke", "experience");
+  if (create) await mkdir(base, { recursive: true });
+  const actual = await realpath(base);
+  const location = relative(resolved, actual);
+  if (location.startsWith("..") || isAbsolute(location)) throw new Error("Experience storage resolves outside the repository");
+  return actual;
+}
+
+export async function initializeExperience(root: string): Promise<{ status: "ok" | "fail"; actions: { path: string; action: "create" | "skip" }[]; message: string }> {
+  try {
+    const resolved = await gitRoot(root);
+    const base = await experienceRoot(resolved, true);
+    const manifestPath = join(base, "manifest.json");
+    if (await exists(manifestPath)) {
+      const existing = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
+      if (JSON.stringify(existing) !== JSON.stringify(experienceManifest)) return { status: "fail", actions: [], message: "Experience manifest is malformed or weakens lite security defaults" };
+    }
+    const actions: { path: string; action: "create" | "skip" }[] = [];
+    for (const [path, kind] of experienceFiles) {
+      const target = join(base, ...path.split("/"));
+      const display = `.downstroke/experience/${path}`;
+      if (await exists(target)) { actions.push({ path: display, action: "skip" }); continue; }
+      if (kind === "directory") await mkdir(target);
+      else await writeFile(target, path === "manifest.json" ? `${JSON.stringify(experienceManifest, null, 2)}\n` : path.endsWith(".json") ? "{}\n" : "", { flag: "wx" });
+      actions.push({ path: display, action: "create" });
+    }
+    return { status: "ok", actions, message: "Experience storage is ready with lite security defaults" };
+  } catch (error: unknown) {
+    return { status: "fail", actions: [], message: error instanceof Error ? error.message : "Experience initialization failed" };
+  }
+}
+
+export async function planExperienceFact(root: string, value: unknown): Promise<ExperienceFactPlan> {
+  const blockers: string[] = [];
+  const fact = parseExperienceFact(value);
+  if (!fact) return { status: "blocked", action: "append", fact: null, blockers: ["Experience fact is malformed"] };
+  if (fact.status === "verified" && fact.source.type === "llm-output") blockers.push("LLM output cannot directly create a verified fact");
+  if ((fact.security.secretScan === "failed" || fact.security.injectionScan === "failed") && !["quarantined", "rejected"].includes(fact.status)) blockers.push("Failed security scans require quarantined or rejected status");
+  if (fact.status === "verified" && !fact.evidence) blockers.push("Verified facts require evidence");
+  try {
+    const base = await experienceRoot(root);
+    if (JSON.stringify(JSON.parse(await readFile(join(base, "manifest.json"), "utf8"))) !== JSON.stringify(experienceManifest)) blockers.push("Experience manifest is malformed or weakens lite security defaults");
+    if (fact.status === "verified" && fact.evidence) {
+      const evidence = (await readFile(join(base, "evidence.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
+      const item = evidence.find(({ id }) => id === fact.evidence?.ref);
+      const result = typeof item?.result === "object" && item.result !== null ? item.result as Record<string, unknown> : {};
+      const security = typeof item?.security === "object" && item.security !== null ? item.security as Record<string, unknown> : {};
+      if (!item || item.type !== fact.evidence.type || result.status !== "passed" || security.sanitized !== true || security.containsSecrets !== false || security.secretScan !== "passed") blockers.push("Verified fact evidence is missing, failed, unsanitized or the wrong type");
+      if (fact.evidence.type === "manual_approval" && fact.kind !== "decision") blockers.push("Manual approval can verify decisions only, not technical claims");
+    }
+    const records = (await readFile(join(base, "facts.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
+    const existing = records.find(({ id }) => id === fact.id);
+    if (existing) {
+      if (JSON.stringify(existing) !== JSON.stringify(fact)) blockers.push("Experience fact ID already exists with different content");
+      return { status: blockers.length ? "blocked" : "ready", action: "skip", fact, blockers };
+    }
+  } catch (error: unknown) { blockers.push(error instanceof Error ? error.message : "Experience storage cannot be inspected"); }
+  return { status: blockers.length ? "blocked" : "ready", action: "append", fact, blockers };
+}
+
+export async function applyExperienceFact(root: string, plan: ExperienceFactPlan): Promise<DoctorResult> {
+  if (plan.status === "blocked" || !plan.fact) return { id: "experience.fact", status: "fail", message: plan.blockers.join("; ") || "Experience fact plan is blocked", remediation: "Correct and preview the fact again" };
+  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  let lockPath = "";
+  try {
+    const base = await experienceRoot(root);
+    lockPath = join(base, "facts.lock");
+    lock = await open(lockPath, "wx");
+    const fresh = await planExperienceFact(root, plan.fact);
+    if (JSON.stringify(fresh) !== JSON.stringify(plan)) return { id: "experience.fact", status: "fail", message: "Experience facts changed after preview", remediation: "Preview the fact again" };
+    if (plan.action === "skip") return { id: "experience.fact", status: "ok", message: "Experience fact already exists", evidence: plan.fact.id, remediation: "No action required" };
+    const factsPath = join(base, "facts.jsonl");
+    const line = (await readFile(factsPath, "utf8")).split(/\r?\n/).filter(Boolean).length + 1;
+    await appendFile(factsPath, `${JSON.stringify(plan.fact)}\n`);
+    const indexPath = join(base, "indexes", "facts-by-id.json");
+    const index = JSON.parse(await readFile(indexPath, "utf8")) as Record<string, number>;
+    index[plan.fact.id] = line;
+    const temporary = `${indexPath}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(index, null, 2)}\n`, { flag: "wx" });
+    await rename(temporary, indexPath);
+    return { id: "experience.fact", status: "ok", message: "Experience fact stored", evidence: plan.fact.id, remediation: "No action required" };
+  } catch (error: unknown) {
+    return { id: "experience.fact", status: "fail", message: error instanceof Error ? error.message : "Experience fact write failed", remediation: "Inspect experience storage and preview again" };
+  } finally {
+    if (lock) { await lock.close().catch(() => undefined); await unlink(lockPath).catch(() => undefined); }
+  }
 }
 
 type LocalRead =
@@ -203,129 +583,80 @@ function evidence(path: string, read: LocalRead): string {
   return read.kind === "file" ? path : read.kind === "missing" ? `${path} not found` : `${path} unreadable (${read.code})`;
 }
 
-function text(read: LocalRead): string | undefined {
-  return read.kind === "file" ? read.content.toString("utf8") : undefined;
+const legacySources = [
+  { id: "legacy.code-intel", paths: [".codegraph"], label: "Legacy code-intelligence artifacts" },
+  { id: "legacy.workflow", paths: ["_bmad", "_bmad-output"], label: "Legacy workflow artifacts" },
+  { id: "legacy.communication", paths: [".agents/skills/caveman", "skills/caveman"], label: "Legacy communication instructions" },
+  { id: "legacy.simplicity", paths: [".agents/skills/ponytail"], label: "Legacy simplicity instructions" },
+] as const;
+
+async function inspectLegacyPath(path: string): Promise<"present" | "missing" | "unreadable"> {
+  try {
+    await stat(path);
+    return "present";
+  } catch (error: unknown) {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+      ? "missing"
+      : "unreadable";
+  }
 }
 
-function frontmatterValue(content: string | undefined, key: string): string | undefined {
-  const block = content?.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1];
-  const raw = block?.match(new RegExp(`^${key}:\\s*([^\\r\\n]+)$`, "m"))?.[1]?.trim();
-  if (!raw) return undefined;
-  return raw.match(/^(["'])(.*)\1$/)?.[2] ?? raw;
-}
-
-const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-
-async function bootstrapRemediation(root: string, fallback: string): Promise<string> {
-  const script = await readLocalFile(root, "scripts/bootstrap-agents.ps1");
-  return script.kind === "file" ? "pwsh -File ./scripts/bootstrap-agents.ps1" : fallback;
-}
-
-export async function diagnoseBreakdownStack(root: string): Promise<DoctorResult[]> {
-  const codegraphDatabase = await readLocalFile(root, ".codegraph/codegraph.db");
-  const codegraphHealthy = codegraphDatabase.kind === "file"
-    && codegraphDatabase.content.subarray(0, 16).equals(Buffer.from("SQLite format 3\0"));
-  const codegraph: DoctorResult = {
-    id: "codegraph.exists",
-    status: codegraphHealthy ? "ok" : codegraphDatabase.kind === "error" ? "fail" : "warn",
-    message: codegraphHealthy ? "CodeGraph SQLite index is readable" : "CodeGraph index is missing or invalid",
-    evidence: evidence(".codegraph/codegraph.db", codegraphDatabase),
-    remediation: codegraphHealthy ? "No action required" : "npx @colbymchenry/codegraph init -i",
-  };
-
-  const bmadPath = "_bmad/bmm/config.yaml";
-  const bmadConfig = await readLocalFile(root, bmadPath);
-  const rawBmadVersion = text(bmadConfig)?.match(/^# Version:\s*(\S+)/m)?.[1];
-  const bmadVersion = rawBmadVersion && semver.test(rawBmadVersion) ? rawBmadVersion : undefined;
-  const bmad: DoctorResult = {
-    id: "bmad.exists",
-    status: bmadVersion ? "ok" : bmadConfig.kind === "error" ? "fail" : "warn",
-    message: bmadVersion ? `BMAD ${bmadVersion} is configured` : "BMAD version metadata is missing or malformed",
-    ...(bmadVersion ? { version: bmadVersion } : {}),
-    evidence: evidence(bmadPath, bmadConfig),
-    remediation: bmadVersion ? "No action required" : await bootstrapRemediation(root, "Install BMAD with its canonical project command"),
-  };
-
-  const skillResult = async (name: "caveman" | "ponytail"): Promise<DoctorResult> => {
-    const path = `.agents/skills/${name}/SKILL.md`;
-    const skill = await readLocalFile(root, path);
-    const content = text(skill);
-    const detectedName = frontmatterValue(content, "name");
-    const rawVersion = frontmatterValue(content, "version");
-    const valid = detectedName === name;
-    const version = valid && rawVersion && semver.test(rawVersion) ? rawVersion : undefined;
+export async function diagnoseLegacyAgentStack(root: string): Promise<DoctorResult[]> {
+  return Promise.all(legacySources.map(async ({ id, paths, label }) => {
+    const inspected = await Promise.all(paths.map(async (path) => ({ path, state: await inspectLegacyPath(join(root, path)) })));
+    const found = inspected.find(({ state }) => state === "present");
+    const unreadable = inspected.find(({ state }) => state === "unreadable");
     return {
-      id: `${name}.exists`,
-      status: valid ? "ok" : skill.kind === "error" ? "fail" : "warn",
-      message: valid ? `${name} project skill is configured` : `${name} project skill is missing or malformed`,
-      ...(version ? { version } : {}),
-      evidence: evidence(path, skill),
-      remediation: valid ? "No action required" : await bootstrapRemediation(root, `Install ${name} with its canonical project command`),
+      id,
+      status: found ? "warn" : unreadable ? "fail" : "ok",
+      message: found
+        ? `${label} detected; preserve for native migration`
+        : unreadable
+          ? `${label} could not be inspected`
+          : `No active ${label.toLowerCase()} detected`,
+      evidence: found?.path ?? (unreadable ? `${unreadable.path} unreadable` : `${paths[0]} not found`),
+      remediation: found
+        ? "Preserve this source for native migration; do not execute or delete it"
+        : unreadable
+          ? "Restore read access and run doctor again"
+          : "No action required",
     };
-  };
-
-  return [codegraph, bmad, await skillResult("caveman"), await skillResult("ponytail")];
+  }));
 }
 
-export async function planBreakdownStack(
-  root: string,
-  environment: Readonly<Record<string, string | undefined>> = process.env,
-): Promise<BreakdownInstallPlan> {
-  const results = await diagnoseBreakdownStack(root);
-  const script = await readLocalFile(root, "scripts/bootstrap-agents.ps1");
-  const blockers = results
-    .filter((result) => result.status !== "ok" && !result.evidence?.endsWith(" not found"))
-    .map((result) => `${result.id}: ${result.message}; manual review required`);
-  const bmad = results.find((result) => result.id === "bmad.exists");
-  if (bmad?.status === "ok" && bmad.version !== expectedBmadVersion) {
-    blockers.push(`bmad.exists: expected ${expectedBmadVersion}, found ${bmad.version}; manual review required`);
+export const nativeOnlySurfaces = [
+  "README.md",
+  "apps/cli/src/index.ts",
+  "docs/dotnet-bridge.md",
+  "docs/process/downstroke-workflow.md",
+  "docs/project-start-guides.md",
+  "docs/proven-project-rules.md",
+  "packages/agents/templates/AGENTS.md",
+  "packages/agents/templates/CLAUDE.md",
+  "packages/gates/src/index.ts",
+  "packages/gates/templates/downstroke-workflow.md",
+  "packages/spec/templates/SPEC.md",
+] as const;
+
+export async function scanNativeOnlySurfaces(root: string): Promise<{
+  status: "ok" | "fail";
+  files: string[];
+  matches: { path: string; terms: string[] }[];
+}> {
+  const forbidden = ["codegraph", "bmad", "caveman", "ponytail", "breakdown stack", "bootstrap-agents"];
+  const matches: { path: string; terms: string[] }[] = [];
+  const invalid: string[] = [];
+  for (const path of nativeOnlySurfaces) {
+    const source = await readLocalFile(root, path);
+    if (source.kind !== "file") {
+      invalid.push(path);
+      continue;
+    }
+    const content = source.content.toString("utf8").toLowerCase();
+    const terms = forbidden.filter((term) => content.includes(term));
+    if (terms.length) matches.push({ path, terms });
   }
-  if (script.kind !== "file") blockers.push(`scripts/bootstrap-agents.ps1: ${evidence("scripts/bootstrap-agents.ps1", script)}`);
-
-  const missing = results.filter((result) => result.status !== "ok" && result.evidence?.endsWith(" not found"));
-  if (missing.some((result) => result.id === "ponytail.exists") && !environment.PONYTAIL_INSTALL_COMMAND) {
-    blockers.push("ponytail.exists: set PONYTAIL_INSTALL_COMMAND to the canonical install command");
-  }
-
-  const tools = missing.map((result) => result.id.split(".")[0] ?? result.id);
-  return {
-    status: blockers.length > 0 ? "blocked" : tools.length === 0 ? "noop" : "ready",
-    tools,
-    command: `${process.platform === "win32" ? "powershell.exe" : "pwsh"} -NoProfile -File ./scripts/bootstrap-agents.ps1`,
-    files: [
-      "scripts/bootstrap-agents.ps1",
-      ...missing.map((result) => result.evidence?.replace(/ not found$/, "") ?? result.id),
-    ],
-    mutations: tools.map((tool) => `install missing ${tool} repository evidence`),
-    blockers,
-  };
-}
-
-const executeBootstrap: BootstrapExecutor = async (root) => new Promise<number>((resolve, reject) => {
-  const command = process.platform === "win32" ? "powershell.exe" : "pwsh";
-  const child = spawn(command, ["-NoProfile", "-File", "./scripts/bootstrap-agents.ps1"], {
-    cwd: root,
-    env: process.env,
-    shell: false,
-    stdio: "inherit",
-  });
-  child.once("error", reject);
-  child.once("exit", (code) => resolve(code ?? 1));
-});
-
-export async function applyBreakdownStack(
-  root: string,
-  plan: BreakdownInstallPlan,
-  execute: BootstrapExecutor = executeBootstrap,
-): Promise<{ status: "verified" | "failed" | "blocked"; exitCode: number; results: DoctorResult[] }> {
-  if (plan.status === "blocked") return { status: "blocked", exitCode: 1, results: await diagnoseBreakdownStack(root) };
-  if (plan.status === "noop") return { status: "verified", exitCode: 0, results: await diagnoseBreakdownStack(root) };
-  const exitCode = await execute(root);
-  const results = await diagnoseBreakdownStack(root);
-  const verified = exitCode === 0
-    && results.every((result) => result.status === "ok")
-    && results.find((result) => result.id === "bmad.exists")?.version === expectedBmadVersion;
-  return { status: verified ? "verified" : "failed", exitCode: verified ? 0 : exitCode || 1, results };
+  return { status: matches.length || invalid.length ? "fail" : "ok", files: [...invalid, ...matches.map(({ path }) => path)], matches };
 }
 
 function positiveInteger(value: unknown): value is number {
@@ -452,16 +783,17 @@ function cadenceSpecLines(cadence: PlanningCadence): string[] {
 }
 
 function cadenceSpecBounds(content: string): { start: number; end: number } | undefined {
-  const start = content.indexOf("## BMAD Governance");
+  const headings = ["## Downstroke Workflow Governance", "## BMAD Governance"];
+  const start = headings.map((heading) => content.indexOf(heading)).filter((index) => index >= 0).sort((left, right) => left - right)[0] ?? -1;
   const end = start < 0 ? -1 : content.indexOf("\n## ", start + 3);
   return start < 0 || end < 0 ? undefined : { start, end };
 }
 
 function updateCadenceSpec(content: string, cadence: PlanningCadence): string {
   const bounds = cadenceSpecBounds(content);
-  if (!bounds) throw new Error("docs/SPEC.md has no bounded BMAD Governance section");
+  if (!bounds) throw new Error("docs/SPEC.md has no bounded Downstroke Workflow Governance section");
   const { start, end } = bounds;
-  let section = content.slice(start, end);
+  let section = content.slice(start, end).replace(/^## BMAD Governance$/m, "## Downstroke Workflow Governance");
   const patterns = [
     /^- Review mode:.*$/m,
     /^- Block size when applicable:.*$/m,
@@ -471,7 +803,7 @@ function updateCadenceSpec(content: string, cadence: PlanningCadence): string {
   ];
   const lines = cadenceSpecLines(cadence);
   for (let index = 0; index < patterns.length; index += 1) {
-    if (!patterns[index]?.test(section)) throw new Error("docs/SPEC.md BMAD Governance fields are incomplete");
+    if (!patterns[index]?.test(section)) throw new Error("docs/SPEC.md Downstroke Workflow Governance fields are incomplete");
     section = section.replace(patterns[index]!, lines[index]!);
   }
   section = /^- High-risk review:.*$/m.test(section)
@@ -511,7 +843,7 @@ export async function applyCadenceUpdate(root: string, plan: CadencePlan): Promi
   try {
     updatedSpec = updateCadenceSpec(spec.content.toString("utf8"), plan.next);
   } catch (error: unknown) {
-    return { id: "planning.cadence", status: "fail", message: error instanceof Error ? error.message : "docs/SPEC.md cannot be updated safely", evidence: "docs/SPEC.md", remediation: "Restore the BMAD Governance section" };
+    return { id: "planning.cadence", status: "fail", message: error instanceof Error ? error.message : "docs/SPEC.md cannot be updated safely", evidence: "docs/SPEC.md", remediation: "Restore the Downstroke Workflow Governance section" };
   }
   const statePath = join(root, ".downstroke", "planning.json");
   const specPath = join(root, "docs", "SPEC.md");
@@ -569,8 +901,8 @@ export async function inspectProject(root: string): Promise<ProjectInspection> {
   let scripts: string[] = [];
 
   if (names.has("AGENTS.md") || names.has("CLAUDE.md")) signals.push("agent-instructions");
-  if (names.has("_bmad") || names.has("_bmad-output")) signals.push("bmad");
-  if (names.has(".codegraph")) signals.push("codegraph");
+  if (names.has("_bmad") || names.has("_bmad-output")) signals.push("legacy-workflow");
+  if (names.has(".codegraph")) signals.push("legacy-code-intel");
 
   if (names.has("package.json")) {
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
@@ -612,7 +944,7 @@ export async function inspectProject(root: string): Promise<ProjectInspection> {
     stacks: [...stacks].sort(),
     scripts: scripts.sort(),
     signals,
-    originInference: signals.includes("agent-instructions") || signals.includes("bmad")
+    originInference: ["agent-instructions", "legacy-workflow", "legacy-code-intel"].some((signal) => signals.includes(signal))
       ? "AI-assisted workflow artifacts found; prompting origin cannot be proven from files alone."
       : "No AI-assisted workflow artifacts detected; project origin is unknown.",
   };

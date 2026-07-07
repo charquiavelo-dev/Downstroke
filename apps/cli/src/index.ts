@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyBreakdownStack, applyCadenceUpdate, cadenceChoices, checkFiles, diagnoseBreakdownStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, inspectProject, installFiles, planBreakdownStack, planCadenceUpdate, readPlanningCadence, runProjectChecks, tokenUsageStatus, type DecisionKind, type ReviewMode } from "@downstroke/core";
+import { applyCadenceUpdate, applyExperienceFact, applyGitPolicy, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planGitPolicy, readGitPolicy, readPlanningCadence, runProjectChecks, tokenUsageStatus, type DecisionKind, type GitPolicy, type ReviewMode } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -9,9 +9,9 @@ const requirements = [
   { id: "claude.exists", path: "CLAUDE.md", severity: "warn" },
 ] as const;
 
-export async function run(argv: string[], cwd = process.cwd(), environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
+export async function run(argv: string[], cwd = process.cwd(), _environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
   const command = argv[0];
-  const { values } = parseArgs({
+  const { values, positionals } = parseArgs({
     args: argv.slice(1),
     options: {
       preset: { type: "string", default: "lite" },
@@ -35,8 +35,14 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
       rollback: { type: "string" },
       path: { type: "string", multiple: true },
       "consumed-tokens": { type: "string" },
+      "allow-branch": { type: "boolean", default: false },
+      "allow-commit": { type: "boolean", default: false },
+      "allow-push": { type: "boolean", default: false },
+      disable: { type: "boolean", default: false },
+      fact: { type: "string" },
     },
     strict: true,
+    allowPositionals: true,
   });
 
   if (command === "init") {
@@ -50,7 +56,7 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
     const inspection = await inspectProject(cwd);
     const results = [
       ...await checkFiles(cwd, requirements),
-      ...await diagnoseBreakdownStack(cwd),
+      ...await diagnoseLegacyAgentStack(cwd),
       await diagnosePlanningCadence(cwd),
     ];
     const verification = values["run-checks"]
@@ -73,26 +79,10 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
   }
 
   if (command === "setup-agents") {
-    const plan = await planBreakdownStack(cwd, environment);
-    const apply = values.yes && !values["dry-run"];
-    if (!apply) {
-      if (values.json) console.log(JSON.stringify(plan, null, 2));
-      else {
-        console.log(`PLAN ${plan.status}`);
-        console.log(`TOOLS ${plan.tools.join(", ") || "none"}`);
-        console.log(`COMMAND ${plan.command}`);
-        for (const file of plan.files) console.log(`FILE ${file}`);
-        for (const mutation of plan.mutations) console.log(`MUTATION ${mutation}`);
-        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
-        if (plan.status === "ready") console.log("Run again with --yes to authorize this plan.");
-      }
-      return plan.status === "blocked" ? 1 : 0;
-    }
-
-    const result = await applyBreakdownStack(cwd, plan);
-    if (values.json) console.log(JSON.stringify({ plan, result }, null, 2));
-    else console.log(`INSTALL ${result.status}`);
-    return result.exitCode;
+    const result = { status: "deprecated", replacement: "Native migration is planned in Epic 9", mutations: [] } as const;
+    if (values.json) console.log(JSON.stringify(result, null, 2));
+    else console.log("DEPRECATED setup-agents performs no installation; use the native migration roadmap.");
+    return 0;
   }
 
   if (command === "cadence") {
@@ -198,7 +188,101 @@ export async function run(argv: string[], cwd = process.cwd(), environment: Read
     }
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern|estimate|status> [options]");
+  if (command === "experience") {
+    const action = positionals[0];
+    if (action === "init") {
+      const result = await initializeExperience(cwd);
+      if (values.json) console.log(JSON.stringify(result, null, 2));
+      else {
+        console.log(`EXPERIENCE ${result.status}`);
+        for (const item of result.actions) console.log(`${item.action.toUpperCase()} ${item.path}`);
+        console.log(result.message);
+      }
+      return result.status === "ok" ? 0 : 1;
+    }
+    if (action === "add" && values.fact) {
+      let input: unknown;
+      try { input = JSON.parse(values.fact) as unknown; }
+      catch { console.error("--fact must be valid JSON"); return 1; }
+      const plan = await planExperienceFact(cwd, input);
+      const summary = { status: plan.status, action: plan.action, id: plan.fact?.id ?? null, blockers: plan.blockers };
+      if (!values.yes || values["dry-run"] || plan.status === "blocked") {
+        if (values.json) console.log(JSON.stringify(summary, null, 2));
+        else {
+          console.log(`EXPERIENCE FACT ${plan.status} ${plan.action} ${plan.fact?.id ?? "invalid"}`);
+          for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+          if (plan.status === "ready" && plan.action === "append") console.log("Run again with --yes to authorize this fact write.");
+        }
+        return plan.status === "blocked" ? 1 : 0;
+      }
+      const result = await applyExperienceFact(cwd, plan);
+      if (values.json) console.log(JSON.stringify({ plan: summary, result }, null, 2));
+      else console.log(`${result.status.toUpperCase()} ${result.message} id=${result.evidence ?? "unknown"}`);
+      return result.status === "ok" ? 0 : 1;
+    }
+    console.error("Usage: downstroke experience <init|add> [--fact <json>] [--yes] [--json]");
+    return 1;
+  }
+
+  if (command === "git-policy") {
+    const allows = values["allow-branch"] || values["allow-commit"] || values["allow-push"];
+    if (values.disable && allows) {
+      console.error("--disable cannot be combined with --allow-branch, --allow-commit or --allow-push");
+      return 1;
+    }
+    const changing = values.disable || allows;
+    let current = null;
+    try {
+      current = await readGitPolicy(cwd);
+    } catch {
+      // The plan returns the actionable repository/state blocker.
+    }
+    const plan = await planGitPolicy(cwd, changing
+      ? {
+          enabled: !values.disable,
+          branch: !values.disable && (values["allow-branch"] || current?.permissions.branch.enabled || false),
+          commit: !values.disable && (values["allow-commit"] || current?.permissions.commit.enabled || false),
+          push: !values.disable && (values["allow-push"] || current?.permissions.push.enabled || false),
+        }
+      : {
+          enabled: current?.enabled ?? true,
+          branch: current?.permissions.branch.enabled ?? false,
+          commit: current?.permissions.commit.enabled ?? false,
+          push: current?.permissions.push.enabled ?? false,
+        });
+    if (!changing || !values.yes || values["dry-run"] || plan.status === "blocked") {
+      const output = changing ? plan : { current, recommendation: plan.next, ...plan };
+      if (values.json) console.log(JSON.stringify(output, null, 2));
+      else {
+        const printPolicy = (label: string, policy: GitPolicy | null) => {
+          console.log(`${label} ${policy ? `enabled=${policy.enabled} revision=${policy.revision} strategy=${policy.strategy}` : "not-configured"}`);
+          if (policy) for (const [name, permission] of Object.entries(policy.permissions)) {
+            console.log(`PERMISSION ${name} enabled=${permission.enabled} scope=${permission.scope} lifetime=${permission.lifetime} fresh=${permission.requiresFreshAuthorization}`);
+          }
+        };
+        console.log(`GIT POLICY ${plan.status}`);
+        console.log(`ROOT ${plan.root} BRANCH ${plan.currentBranch ?? "unavailable"}`);
+        console.log(`FILE ${plan.file}`);
+        printPolicy(changing ? "NEXT" : "CURRENT", changing ? plan.next : current);
+        if (!changing) printPolicy("RECOMMENDATION", plan.next);
+        for (const branch of plan.createBranches) console.log(`CREATE BRANCH ${branch}`);
+        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+        if (changing && plan.status === "ready") console.log("Run again with --yes to authorize this plan.");
+      }
+      return plan.status === "blocked" ? 1 : 0;
+    }
+    const result = await applyGitPolicy(cwd, plan).catch((error: unknown) => ({
+      id: "git.policy",
+      status: "fail" as const,
+      message: error instanceof Error ? error.message : "Git policy apply failed",
+      remediation: "Inspect repository state and preview the policy again",
+    }));
+    if (values.json) console.log(JSON.stringify({ plan, result }, null, 2));
+    else console.log(`${result.status.toUpperCase()} ${result.message}`);
+    return result.status === "ok" ? 0 : 1;
+  }
+
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern|estimate|status|git-policy|experience> [options]");
   return 1;
 }
 

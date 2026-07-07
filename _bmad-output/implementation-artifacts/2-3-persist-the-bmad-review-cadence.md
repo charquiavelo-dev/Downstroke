@@ -4,7 +4,7 @@ baseline_commit: c0f5ec6
 
 # Story 2.3: Persist the BMAD Review Cadence
 
-Status: review
+Status: done
 
 ## Story
 

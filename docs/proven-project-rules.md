@@ -12,12 +12,12 @@ Projects stay easier to operate when documentation has clear jobs:
 - `docs/SPEC.md`: product and technical source of truth.
 - `docs/development-standard.md`: engineering and QA rules.
 - `docs/production-readiness.md`: release gate.
-- `docs/process/bmad-method.md`: planning and delivery flow.
+- `docs/process/downstroke-workflow.md`: planning and delivery flow.
 - `docs/handoff.md`: current state, blockers and next actions.
 - `docs/operations.md`: production commands, env, deploy and incident notes.
-- `_bmad-output/`: generated planning/spec/story/review artifacts.
+- `.downstroke/workflows/`: generated planning/spec/story/review state.
 
-Rule: permanent knowledge belongs in `docs/`; generated delivery artifacts belong in `_bmad-output/`.
+Rule: permanent knowledge belongs in `docs/`; generated delivery state belongs in `.downstroke/workflows/`.
 
 ## 2. Agent Token Strategy
 
@@ -26,15 +26,15 @@ Token savings come from better context, not from weaker engineering.
 Use this order:
 
 1. Read `AGENTS.md` and the relevant source-of-truth doc.
-2. Use CodeGraph for structure.
+2. Use Downstroke code intelligence for structure.
 3. Use native search only for literal strings.
-4. Use BMAD only as deep as the risk needs.
-5. Use Caveman when the user wants compressed communication.
-6. Use Ponytail to avoid unnecessary abstractions.
+4. Use Downstroke workflows only as deep as the risk needs.
+5. Use Downstroke communication budgets when the user wants compressed communication.
+6. Use Downstroke simplicity gates to avoid unnecessary abstractions.
 
 Good agent behavior:
 
-- Ask CodeGraph for a focused module instead of reading the whole repo.
+- Ask native code intelligence for a focused module instead of reading the whole repo.
 - Inspect callers before changing shared functions.
 - Commit coherent chunks.
 - Document skipped checks honestly.
@@ -45,14 +45,14 @@ Bad agent behavior:
 - Grepping for symbols when an AST index exists.
 - Reading all docs when one source-of-truth doc answers the task.
 - Adding an abstraction because a future project might need it.
-- Producing giant BMAD artifacts for a two-line fix.
+- Producing giant workflow artifacts for a two-line fix.
 - Marking production work done from simulator-only checks.
 
-## 3. BMAD That Actually Helps
+## 3. Workflows That Actually Help
 
-BMAD should prevent wrong work, not create paperwork.
+Downstroke workflows should prevent wrong work, not create paperwork.
 
-Use full BMAD for:
+Use full workflow depth for:
 
 - new workflows
 - auth/permissions
@@ -62,7 +62,7 @@ Use full BMAD for:
 - production launch
 - cross-module contracts
 
-Use lightweight BMAD for:
+Use lightweight workflow depth for:
 
 - narrow bug fixes
 - styling-only tasks
@@ -77,7 +77,7 @@ Quick spec: route/component/data/permissions/states.
 Acceptance: observable behavior + checks.
 ```
 
-Useful BMAD output names:
+Useful native workflow output names:
 
 - `brief-<feature>.md`
 - `spec-<feature>.md`

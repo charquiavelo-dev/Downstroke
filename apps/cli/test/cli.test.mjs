@@ -1,17 +1,32 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 import { run } from "../dist/index.js";
+
+const exec = promisify(execFile);
+process.env.GIT_CONFIG_NOSYSTEM = "1";
+process.env.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
 
 test("lite init creates its canonical documents", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
   assert.equal(await run(["init", "--preset", "lite"], root), 0);
+  assert.match(await readFile(join(root, "docs", "process", "downstroke-workflow.md"), "utf8"), /Downstroke Workflow/);
+  await assert.rejects(readFile(join(root, "docs", "process", "bmad-method.md")));
+  const generated = await Promise.all([
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs/SPEC.md",
+    "docs/process/downstroke-workflow.md",
+  ].map((path) => readFile(join(root, ...path.split("/")), "utf8")));
+  assert.equal(/codegraph|bmad|caveman|ponytail|breakdown stack|bootstrap-agents/i.test(generated.join("\n")), false);
   assert.equal(await run(["doctor", "--json"], root), 0);
 });
 
-test("doctor JSON keeps its envelope and includes structured Breakdown Stack results", async () => {
+test("doctor JSON reports legacy artifacts as migration risks", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
   await mkdir(join(root, "docs"));
   await mkdir(join(root, ".codegraph"));
@@ -36,13 +51,13 @@ test("doctor JSON keeps its envelope and includes structured Breakdown Stack res
 
   const report = JSON.parse(output.join("\n"));
   assert.deepEqual(Object.keys(report), ["inspection", "verification", "results"]);
-  const bmad = report.results.find((result) => result.id === "bmad.exists");
-  assert.equal(bmad.version, "6.9.0");
-  assert.equal(bmad.evidence, "_bmad/bmm/config.yaml");
+  const workflow = report.results.find((result) => result.id === "legacy.workflow");
+  assert.equal(workflow.status, "warn");
+  assert.equal(/install/i.test(workflow.remediation), false);
   assert.equal(JSON.stringify(report).includes(root), false);
 });
 
-test("setup-agents emits a redacted plan and does not mutate without authorization", async () => {
+test("setup-agents is a deterministic deprecated no-op", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
   await mkdir(join(root, "scripts"));
   await writeFile(join(root, "scripts", "bootstrap-agents.ps1"), "Write-Host bootstrap");
@@ -57,7 +72,8 @@ test("setup-agents emits a redacted plan and does not mutate without authorizati
   }
 
   const plan = JSON.parse(output.join("\n"));
-  assert.equal(plan.status, "ready");
+  assert.equal(plan.status, "deprecated");
+  assert.deepEqual(plan.mutations, []);
   assert.equal(JSON.stringify(plan).includes("secret"), false);
   await assert.rejects(readFile(join(root, ".codegraph", "codegraph.db")));
 });
@@ -111,4 +127,85 @@ test("status separates unavailable consumption from projected tokens", async () 
   const status = JSON.parse(output.join("\n"));
   assert.equal(status.consumedTokens, "unavailable");
   assert.deepEqual(status.projectedRemainingTokens, { low: 6, high: 10 });
+});
+
+test("git-policy JSON previews without mutation and applies only with authorization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-git-policy-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await exec("git", ["config", "user.name", "Downstroke Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: initialize fixture"], { cwd: root });
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["git-policy", "--allow-branch", "--allow-commit", "--json"], root), 0);
+  } finally {
+    console.log = originalLog;
+  }
+  const preview = JSON.parse(output.join("\n"));
+  assert.equal(preview.status, "ready");
+  assert.deepEqual(preview.createBranches, ["develop"]);
+  assert.equal(JSON.stringify(preview).includes(root), false);
+  await assert.rejects(readFile(join(root, ".downstroke", "git-policy.json")));
+
+  assert.equal(await run(["git-policy", "--allow-branch", "--allow-commit", "--yes"], root), 0);
+  assert.equal(JSON.parse(await readFile(join(root, ".downstroke", "git-policy.json"), "utf8")).permissions.push.enabled, false);
+
+  assert.equal(await run(["git-policy", "--allow-push", "--yes"], root), 0);
+  const updated = JSON.parse(await readFile(join(root, ".downstroke", "git-policy.json"), "utf8"));
+  assert.equal(updated.permissions.branch.enabled, true);
+  assert.equal(updated.permissions.commit.enabled, true);
+  assert.equal(updated.permissions.push.enabled, true);
+  assert.equal(await run(["git-policy", "--disable", "--allow-commit"], root), 1);
+});
+
+test("git-policy human output shows the policy and each permission", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-git-policy-human-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await exec("git", ["config", "user.name", "Downstroke Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: initialize fixture"], { cwd: root });
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["git-policy", "--allow-commit"], root), 0);
+  } finally {
+    console.log = originalLog;
+  }
+  assert.match(output.join("\n"), /NEXT enabled=true/);
+  assert.match(output.join("\n"), /PERMISSION branch/);
+  assert.match(output.join("\n"), /PERMISSION commit enabled=true/);
+  assert.match(output.join("\n"), /PERMISSION push/);
+});
+
+test("experience init and authorized fact writes stay repository-local and secret-free", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-experience-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await exec("git", ["config", "user.name", "Downstroke Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: initialize fixture"], { cwd: root });
+  assert.equal(await run(["experience", "init", "--json"], root), 0);
+  const fact = JSON.stringify({
+    id: "fact.repo.ready", kind: "repo", scope: "repo", status: "observed", value: "private-value",
+    source: { type: "manifest", path: "package.json" }, confidence: 0.9,
+    createdAt: "2026-07-07T00:00:00.000Z", updatedAt: "2026-07-07T00:00:00.000Z",
+    security: { trustLevel: "project", secretScan: "passed", injectionScan: "passed" },
+  });
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["experience", "add", "--fact", fact, "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.equal(output.join("\n").includes("private-value"), false);
+  assert.equal(await run(["experience", "add", "--fact", fact, "--yes"], root), 0);
+  assert.match(await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8"), /fact\.repo\.ready/);
 });

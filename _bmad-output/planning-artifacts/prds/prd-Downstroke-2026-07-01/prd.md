@@ -38,7 +38,7 @@ The product helps developers move from a human product description to an appropr
 
 - Installable lite preset and safe file operations.
 - Project inspection and verified doctor checks.
-- External Breakdown Stack integration and persisted BMAD cadence.
+- Native workflow governance, communication, simplicity and code-intelligence foundations.
 
 ### Planned Expansion
 
@@ -46,9 +46,10 @@ The product helps developers move from a human product description to an appropr
 - Guided supported stacks, providers, maps, design systems and interactive experiences.
 - Managed migrations, npm distribution, public documentation and sanitized release workflows.
 
-### Evidence-Gated Future
+### Native Platform Expansion
 
-- Native Breakdown Stack capabilities, agent runtime and remote registry only after external workflows are measured and parity/rollback are proven.
+- Operational Experience, native workflows, communication policy, simplicity gates and code intelligence before public release.
+- Explicit agent runtime and remote registry only after normal functions and local modules prove insufficient.
 
 ## 4. Glossary
 
@@ -57,7 +58,7 @@ The product helps developers move from a human product description to an appropr
 - **Project State:** Repository-local configuration, decisions, authorization and diagnostic results.
 - **Managed Block:** Downstroke-owned content delimited inside a user-owned file and safe to update independently.
 - **Doctor Check:** A deterministic inspection reporting `ok`, `warn` or `fail` with evidence and remediation.
-- **Breakdown Stack:** The external CodeGraph, Caveman, Ponytail and BMAD toolchain.
+- **Native Platform:** Downstroke-owned workflow, communication, simplicity, code-intelligence and operational-experience capabilities.
 - **Workspace:** A parent directory containing independent repositories whose state and context remain isolated.
 - **Release Manifest:** The allowlist defining package and sanitized public-repository contents.
 
@@ -74,12 +75,12 @@ The product helps developers move from a human product description to an appropr
 3. Supported stack and deployment guidance — FR17-FR35, FR51-FR55, FR69-FR71.
 4. Interactive and visual delivery — FR36-FR50.
 5. LLM usage visibility — FR56-FR59.
-6. Evidence-gated native platform evolution — FR60-FR68.
+6. Native platform and safe project-knowledge migration — FR60-FR68.
 7. Package distribution and public documentation — FR72-FR81.
 
 ## 7. Non-Goals
 
-- Replacing proven external tools before real evidence exists.
+- Shipping external construction tools as product dependencies or public framework concepts.
 - Supporting additional language ecosystems before current stack paths are reliable.
 - Becoming a general-purpose agent runtime during the MVP.
 - Treating vector indexes, frontend state or generated content as an authority over source data.
@@ -111,9 +112,9 @@ FR2: Downstroke can inspect an existing project and detect its stage, stack, scr
 
 FR3: `downstroke doctor` provides actionable results and can execute real typecheck, test and build commands when requested.
 
-FR4: Downstroke diagnoses and installs CodeGraph, Caveman, Ponytail and BMAD as the Breakdown Stack without replacing them with native reimplementations.
+FR4: Downstroke initializes and diagnoses native workflow, communication, simplicity and code-intelligence capabilities without requiring external agent tooling.
 
-FR5: Downstroke persists the BMAD review cadence and allows changes without deleting accepted work.
+FR5: Downstroke persists its native review cadence and allows changes without deleting accepted work.
 
 FR6: Downstroke offers GitFlow as the base Git policy using `main`, `develop`, `feature/*`, `release/*` and `hotfix/*`.
 
@@ -223,19 +224,19 @@ FR58: LLM integrations can expose an equivalent `/status` command when the surfa
 
 FR59: Token estimates can appear compactly in a console footer or session summary without blocking the primary workflow.
 
-FR60: Downstroke keeps native replacements for CodeGraph, Caveman, Ponytail and BMAD as explicit planned work rather than silently dropping them from the roadmap.
+FR60: Downstroke provides native workflow, communication, simplicity and code-intelligence capabilities under Downstroke-owned contracts and names.
 
-FR61: Native replacement work starts only after the corresponding external tool is installed, working in real projects and measured against documented use cases.
+FR61: External construction artifacts are migration sources only; they are detected without execution, imported with provenance and excluded from distributable output.
 
-FR62: Downstroke can later provide native structural code intelligence that covers the proven CodeGraph use cases selected by evidence.
+FR62: Downstroke provides repo-scoped incremental file, symbol, import, impact and bounded-context intelligence for supported stacks.
 
-FR63: Downstroke can later provide native token-efficient communication controls that cover the proven Caveman use cases selected by evidence.
+FR63: Downstroke provides native communication modes, protected-content rules, context budgets and source-linked handoffs.
 
-FR64: Downstroke can later provide native minimal-engineering policy enforcement that covers the proven Ponytail use cases selected by evidence.
+FR64: Downstroke provides native reuse, dependency, abstraction and broad-rewrite gates with explicit safety exceptions.
 
-FR65: Downstroke can later provide native planning and execution workflows that cover the proven BMAD use cases selected by evidence.
+FR65: Downstroke provides native briefs, specs, epics, stories, cadence, checkpoints, QA evidence and resume behavior.
 
-FR66: Downstroke can later provide an agent runtime for explicit, schema-bound orchestration after normal functions and the external stack prove insufficient.
+FR66: Downstroke can later provide an agent runtime for explicit, schema-bound orchestration after normal functions prove insufficient.
 
 FR67: Downstroke can later provide a remote module registry with provenance, versions, integrity verification and safe installation.
 
@@ -266,6 +267,10 @@ FR79: The sanitized public repository can start from one clean initial commit so
 FR80: The final public `.gitignore` excludes local agent state, BMAD development output, caches, credentials, build artifacts and maintenance-only files while retaining assets required by installed framework features.
 
 FR81: Replacing public history or force-pushing the single-commit release requires a final preview, secret scan, package/build verification and explicit maintainer confirmation.
+
+FR82: When active project sources conflict on product behavior, scope, safety, ownership or architecture, Downstroke records the conflicting evidence, presents options and pauses for the responsible human rather than resolving the contradiction silently.
+
+FR83: Downstroke provides a controlled development mode with persisted plan, review, implementation and verification checkpoints, explicit decision ownership and safe resume behavior.
 
 ## 11. Cross-Cutting Non-Functional Requirements
 
@@ -337,7 +342,7 @@ NFR33: Token estimates are reproducible ranges based on known model, context, ar
 
 NFR34: Provider-specific pricing, context windows and accounting rules are versioned or checked against current sources before estimating monetary cost.
 
-NFR35: No native replacement can become the default until it has a parity matrix, migration path, rollback path and evidence that it improves the proven external workflow.
+NFR35: Public releases contain no external agent-tool dependency, installer, active instruction or product branding; native capabilities require focused parity evidence and safe migration of existing project artifacts.
 
 NFR36: Native capabilities remain interoperable with existing project artifacts and do not lock users into the Downstroke runtime or registry.
 

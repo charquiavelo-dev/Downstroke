@@ -11,37 +11,37 @@ This project uses a reusable, specification-driven engineering baseline. Repeate
 - `docs/SPEC.md`: product and technical contract.
 - `docs/production-readiness.md`: release gate.
 - `docs/development-standard.md`: engineering, frontend, backend and QA rules.
-- `docs/process/bmad-method.md`: BMAD workflow.
+- `docs/process/downstroke-workflow.md`: native Downstroke workflow.
 - `docs/project-start-guides.md`: startup guidance for React, Next.js, React Native, backend and .NET.
 - `docs/dotnet-bridge.md`: Blazor/.NET bridge when the project is C#/.NET.
 - `docs/proven-project-rules.md`: detailed cross-project engineering rules and failure patterns.
-- `_bmad-output/`: BMAD planning and implementation artifacts.
+- `.downstroke/workflows/`: native planning and implementation state.
 - `docs/legacy/`: old context only, not current truth.
 
 If docs and code disagree, inspect code, document the conflict and avoid behavior changes until the product decision is clear.
 
-## Required Agent Bootstrap
+## Required Project Bootstrap
 
 Every new project must start with:
 
 - Local git initialized.
-- CodeGraph initialized and healthy.
-- BMAD installed for Codex with Spanish communication and output.
-- Caveman installed as a project-local skill.
-- Ponytail installed from the canonical project command.
+- Downstroke initialized locally.
+- Native workflow governance configured.
+- Native communication and simplicity policies available.
+- Native code-intelligence state healthy or explicitly exempted.
 
 Run from the new project root:
 
 ```powershell
-$env:PONYTAIL_INSTALL_COMMAND = '<canonical Ponytail install command>'
-.\scripts\bootstrap-agents.ps1
+downstroke init --preset lite
+downstroke doctor
 ```
 
-Do not begin meaningful implementation while bootstrap validation fails. Do not guess an unrelated package named `ponytail`; if the canonical command is missing, ask.
+Do not begin meaningful implementation while native project validation fails.
 
 ## Mandatory First Planning Question
 
-Before generating multiple BMAD stories or tasks, read `docs/SPEC.md` and ask:
+Before generating multiple Downstroke workflow items, read `docs/SPEC.md` and ask:
 
 ```txt
 Como queres revisar este trabajo?
@@ -53,46 +53,30 @@ Como queres revisar este trabajo?
 
 If the answer is blocks, ask for `X`. If it is sprint-based, ask for sprint length, real capacity and WIP limit. Record the choice in `docs/SPEC.md`; once Downstroke planning state exists, also persist it in `.downstroke/planning.json`. Never generate a large backlog before this decision. Review high-risk auth, money, permission, destructive data, migration and production tasks individually regardless of cadence.
 
-## CodeGraph
+## Native Code Intelligence
 
-Use CodeGraph first for structural work:
+Downstroke-native code intelligence is planned in Epic 9. Until its commands ship, use the host's existing read-only search and inspection capabilities; do not install a permanent runtime dependency.
 
-- `codegraph_status`: verify index health.
-- `codegraph_files`: inspect indexed project layout.
-- `codegraph_explore`: understand an unfamiliar area in one focused call.
-- `codegraph_search`: find symbol definitions.
-- `codegraph_callers`: see what calls a function/class.
-- `codegraph_callees`: see what a function/class calls.
-- `codegraph_impact`: inspect blast radius before changing shared code.
+## Native Workflows
 
-Use native search only for literal strings, docs, config values, comments and log messages.
-
-If `.codegraph/` is missing, initialize with:
-
-```bash
-npx @colbymchenry/codegraph init -i
-```
-
-## BMAD
-
-Use BMAD for meaningful changes:
+Use Downstroke workflows for meaningful changes:
 
 - New routes, screens, modules, jobs or data models.
 - Auth, permissions, billing, payments, destructive actions, production data or cross-module changes.
 - User-facing workflows that need product, UX, architecture and QA clarity.
 - Deployment, production launch, rollback or data migration decisions.
 
-Artifacts belong in `_bmad-output/`.
+Workflow state belongs in `.downstroke/workflows/`.
 
-Lightweight BMAD is acceptable for small fixes: one brief, one quick spec, one acceptance checklist. Do not create ceremony that does not protect the work.
+Lightweight workflow is acceptable for small fixes: one brief, one quick spec, one acceptance checklist. Do not create ceremony that does not protect the work.
 
-## Caveman
+## Native Communication
 
-Caveman is for compressed communication only. It reduces tokens in chat; it does not reduce engineering rigor, QA, security, accessibility or source-of-truth updates.
+Use Downstroke communication budgets for concise responses and handoffs. Compact mode cannot override code, command, security, QA or evidence completeness.
 
-## Ponytail
+## Native Simplicity
 
-Ponytail is the default development posture:
+Downstroke Simplicity is the default development posture:
 
 - Use the simplest working solution.
 - Reuse existing code before adding code.
@@ -105,7 +89,7 @@ Ponytail is the default development posture:
 Mark deliberate simplifications only when there is a real ceiling:
 
 ```ts
-// ponytail: linear scan is fine under 500 records; add indexed lookup if import size grows.
+// downstroke-simplicity: linear scan is fine under 500 records; add indexed lookup if import size grows.
 ```
 
 ## Stack Defaults
@@ -259,8 +243,8 @@ For Expo release work, also validate Expo/EAS config. For UI work, inspect the c
 Before reporting done:
 
 - Source-of-truth docs updated when behavior, routes, data, permissions, architecture or QA changed.
-- BMAD artifact exists for meaningful work.
-- CodeGraph or direct code inspection was used for structural changes.
+- A Downstroke workflow record exists for meaningful work.
+- Native code intelligence or direct code inspection was used for structural changes.
 - No unrelated refactor was included.
 - Loading, empty, error, success, disabled and permission states are covered where relevant.
 - Tests or manual QA evidence exist.

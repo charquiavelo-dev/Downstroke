@@ -1,12 +1,12 @@
 # generated: 2026-07-01
-# last_updated: 2026-07-02
+# last_updated: 2026-07-07
 # project: Downstroke
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: _bmad-output/implementation-artifacts
 
 generated: 2026-07-01
-last_updated: 2026-07-02
+last_updated: 2026-07-07
 project: Downstroke
 project_key: NOKEY
 tracking_system: file-system
@@ -19,19 +19,21 @@ development_status:
   1-3-initialize-and-diagnose-the-lite-preset: review
   epic-1-retrospective: optional
 
-  epic-2: in-progress
+  epic-2: done
   2-1-diagnose-the-breakdown-stack: done
   2-2-install-the-breakdown-stack: done
-  2-3-persist-the-bmad-review-cadence: review
-  2-4-govern-cli-and-llm-decisions: review
-  2-5-estimate-and-report-llm-token-usage: review
+  2-3-persist-the-bmad-review-cadence: done
+  2-4-govern-cli-and-llm-decisions: done
+  2-5-estimate-and-report-llm-token-usage: done
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-configure-project-gitflow-and-authorization: backlog
+  epic-3: in-progress
+  3-1-configure-project-gitflow-and-authorization: done
   3-2-commit-important-work-blocks-safely: backlog
   3-3-resolve-repository-roots-and-workspace-topology: backlog
   3-4-recover-git-authentication-safely: backlog
+  3-5-import-a-hosted-git-repository-safely: backlog
+  3-6-diagnose-git-provider-and-clone-readiness: backlog
   epic-3-retrospective: optional
 
   epic-4: backlog
@@ -72,17 +74,25 @@ development_status:
   8-3-generate-consistent-brand-assets: backlog
   8-4-initialize-internationalized-content: backlog
   8-5-generate-llm-design-guidance: backlog
+  8-6-create-native-ux-direction-workflows: backlog
+  8-7-document-components-and-storybook-states: backlog
+  8-8-enforce-visual-qa-and-design-adapters: backlog
   epic-8-retrospective: optional
 
-  epic-9: backlog
-  9-1-gate-native-capability-investment: backlog
-  9-2-add-native-structural-code-intelligence: backlog
-  9-3-add-native-communication-compression: backlog
-  9-4-add-native-minimal-engineering-policy: backlog
-  9-5-add-native-planning-workflows: backlog
-  9-6-add-an-explicit-agent-runtime: backlog
-  9-7-add-a-remote-module-registry: backlog
-  9-8-automate-conflict-aware-managed-migrations: backlog
+  epic-9: in-progress
+  9-1-enforce-the-native-only-product-boundary: done
+  9-2-create-the-operational-experience-foundation: review
+  9-3-import-legacy-and-spec-driven-project-knowledge: backlog
+  9-4-add-native-planning-and-delivery-workflows: backlog
+  9-5-add-native-communication-policy: backlog
+  9-6-add-native-simplicity-gates: backlog
+  9-7-add-native-code-intelligence: backlog
+  9-8-route-work-with-native-token-economy: backlog
+  9-9-compile-safe-task-context: backlog
+  9-10-enforce-strict-native-health-and-cleanup: backlog
+  9-11-add-an-explicit-agent-runtime: backlog
+  9-12-add-a-remote-module-registry: backlog
+  9-13-automate-conflict-aware-managed-migrations: backlog
   epic-9-retrospective: optional
 
   epic-10: backlog
@@ -92,4 +102,5 @@ development_status:
   10-4-preserve-the-private-maintenance-repository: backlog
   10-5-cut-a-sanitized-single-commit-public-release: backlog
   10-6-launch-the-react-documentation-and-showcase-site: backlog
+  10-7-calibrate-token-estimates-against-observed-usage: backlog
   epic-10-retrospective: optional

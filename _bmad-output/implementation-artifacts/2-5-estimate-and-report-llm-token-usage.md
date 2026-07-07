@@ -4,7 +4,7 @@ baseline_commit: f2e7051
 
 # Story 2.5: Estimate and Report LLM Token Usage
 
-Status: review
+Status: done
 
 ## Story
 
@@ -61,3 +61,4 @@ GPT-5 Codex
 ## Change Log
 
 - 2026-07-02: Added bounded local token estimation and usage status reporting.
+- 2026-07-06: Approved the preliminary estimator; deferred evidence-based calibration and available-budget decisions to Story 10.7.

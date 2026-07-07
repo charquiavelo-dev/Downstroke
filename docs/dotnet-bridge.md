@@ -32,9 +32,8 @@ project/
     UnitTests/
     IntegrationTests/
   docs/
-  _bmad/
-  _bmad-output/
-  .codegraph/
+  .downstroke/workflows/
+  .downstroke/code-intel/
 ```
 
 Keep this shape only if the project is large enough. Small apps can start with one ASP.NET Core project plus tests.
@@ -53,8 +52,8 @@ Keep this shape only if the project is large enough. Small apps can start with o
 ## Cross-Stack Rules
 
 - Source of truth lives in `docs/`.
-- BMAD before meaningful feature/data/auth/permission work.
-- CodeGraph before structural edits.
+- Downstroke workflows before meaningful feature/data/auth/permission work.
+- Downstroke code intelligence before structural edits.
 - No secrets in repo.
 - Additive migrations by default.
 - Database constraints enforce important invariants.

@@ -66,11 +66,11 @@ flowchart LR
 - **Prevents:** Planning approval becoming blanket mutation authority.
 - **Rule:** Authorization records operation, target and lifetime. Commit, push, credential removal, publish, production mutation and history replacement are separate capabilities; high-risk capabilities require fresh execution-time approval.
 
-### AD-6 — External tools remain external until evidence proves replacement
+### AD-6 — Development provenance does not become a product dependency
 
 - **Binds:** FR4, FR60-FR68, NFR35-NFR37.
-- **Prevents:** Premature native clones and incompatible project artifacts.
-- **Rule:** Detect versions and health, invoke canonical commands and parse schema-bound results. A native successor requires measured use cases, parity, migration and rollback while retaining the external path.
+- **Prevents:** Maintenance tooling, vendor names and external runtime assumptions leaking into installed Downstroke projects.
+- **Rule:** External tools may support work inside the maintenance repository, but release manifests exclude their configuration, commands, names and runtime assumptions. Native Downstroke capabilities own shipped contracts. Existing project artifacts are read only through source-attributed migration paths and never remain permanent fallbacks.
 
 ### AD-7 — Provider integrations expose capabilities, not shared credentials
 
@@ -101,6 +101,12 @@ flowchart LR
 - **Binds:** Project State and Workspace state.
 - **Prevents:** Partial writes, incompatible schema versions and concurrent command corruption.
 - **Rule:** Read state as `unknown`, validate its schema version, write through same-directory temporary files plus atomic replacement, and reject concurrent updates when the loaded revision is stale.
+
+### AD-12 — Product conflicts require an owned human decision
+
+- **Binds:** Planning, architecture, migration, security and all product-visible behavior.
+- **Prevents:** An LLM, importer or deterministic workflow silently selecting one contradictory source and laundering that choice into project truth.
+- **Rule:** When active sources disagree materially, record both sources and hashes, classify the decision owner, present options with consequences, and pause. Controlled mode persists the checkpoint and resumes only from an explicit decision. Deterministic merge is allowed only for non-semantic changes proven equivalent.
 
 ## Consistency Conventions
 
@@ -145,7 +151,7 @@ packages/presets/    # pure module composition
 | Git and multi-repo | `core`, `cli`, Project State | AD-2, AD-4, AD-5 |
 | Stack/provider guidance | capability Modules, `presets` | AD-1, AD-7 |
 | Design and localization | capability Modules | AD-8 |
-| Native successors/runtime/registry | deferred packages | AD-6 |
+| Native platform/runtime/registry | Downstroke-owned capability packages | AD-6 |
 | npm/public release | release scripts and manifests | AD-5, AD-9 |
 
 ## Deferred
@@ -153,6 +159,6 @@ packages/presets/    # pure module composition
 - Exact Project State schemas until their first implementing story.
 - Provider interfaces until a second real implementation shares an operation.
 - Database entities until a selected application workflow needs them.
-- Native replacement internals, agent runtime and registry protocols until evidence gates pass.
+- Agent runtime and registry protocols until normal functions and local modules prove insufficient.
 - Public-release branch mechanics until the private maintenance remote and license are selected.
 - Deployment topology for the future documentation site until that epic begins.

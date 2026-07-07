@@ -1,0 +1,8 @@
+interface:
+  display_name: "Downstroke Token Economy"
+  short_description: "Route tasks to spend fewer tokens safely."
+  brand_color: "#7C3AED"
+  default_prompt: "Use $downstroke-token-economy to classify this project task, assign a model tier, and create a token-efficient execution plan."
+policy:
+  allow_implicit_invocation: true
+

@@ -2,3 +2,4 @@ _bmad/config.user.toml
 .npm.keys
 node_modules/
 dist/
+.codegraph/daemon.pid

@@ -1,55 +1,55 @@
 # Downstroke Project Foundation
 
-## Idea Inicial
+## Initial Idea
 
-Construir un framework modular para iniciar, inspeccionar y fortalecer proyectos asistidos por IA con reglas, contexto, planificación y QA verificables.
+Build a modular framework to start, inspect, and strengthen AI-assisted projects with verifiable rules, context, planning, and QA.
 
-## Filosofía
+## Philosophy
 
-Downstroke debe ser rápido sin ser irresponsable, opinionado donde ahorra trabajo y conservador frente a archivos, datos y decisiones existentes. No reemplaza herramientas maduras hasta demostrar una alternativa mejor en proyectos reales.
+Downstroke must be fast without being irresponsible, opinionated where it saves work, and conservative with existing files, data, and decisions. It does not replace mature tools until it proves a better alternative in real projects.
 
-## Usuario Objetivo
+## Target User
 
-Developers y equipos que construyen productos React, Next.js, React Native, Node.js, PostgreSQL, .NET o Blazor con asistencia de LLMs.
+Developers and teams building React, Next.js, React Native, Node.js, PostgreSQL, .NET, or Blazor products with LLM assistance.
 
-## Problema
+## Problem
 
-Cada proyecto repite reglas de agentes, setup, specs, gates, análisis de herramientas y planificación. La repetición manual consume tokens, pierde decisiones y produce resultados inconsistentes.
+Every project repeats agent rules, setup, specs, gates, tool analysis, and planning. Manual repetition consumes tokens, loses decisions, and produces inconsistent results.
 
-## Alcance Inicial
+## Initial Scope
 
-- CLI `init` y `doctor`.
-- Módulos instalables de SPEC, agentes y gates.
-- Preset `lite`.
-- Inspección de repositorios existentes.
-- Breakdown Stack obligatorio y diagnosticable.
-- Instalación no destructiva.
+- CLI `init` and `doctor`.
+- Installable SPEC, agent, and gate modules.
+- `lite` preset.
+- Existing repository inspection.
+- Mandatory and diagnosable Breakdown Stack.
+- Non-destructive installation.
 
-## Fuera De Alcance Por Ahora
+## Out Of Scope For Now
 
-- Reemplazos nativos de CodeGraph, Caveman, Ponytail o BMAD.
-- Runtime de agentes.
-- Registry remoto de módulos.
-- Migraciones automáticas sin managed blocks y detección de conflictos.
+- Native replacements for CodeGraph, Caveman, Ponytail, or BMAD.
+- Agent runtime.
+- Remote module registry.
+- Automatic migrations without managed blocks and conflict detection.
 
-## Primeros Pasos
+## First Steps
 
-1. Preservar baseline y fuentes.
-2. Entregar monorepo mínimo y checks.
-3. Validar `init --preset lite` y `doctor`.
-4. Integrar instalación y diagnóstico completo del Breakdown Stack.
-5. Probar el framework en dos o tres proyectos antes de estabilizar módulos.
+1. Preserve baseline and sources.
+2. Deliver a minimal monorepo and checks.
+3. Validate `init --preset lite` and `doctor`.
+4. Integrate full Breakdown Stack installation and diagnosis.
+5. Test the framework in two or three projects before stabilizing modules.
 
-## Riesgos Iniciales
+## Initial Risks
 
-- Convertir reglas específicas de una aplicación en defaults globales.
-- Afirmar que un proyecto funciona basándose solo en archivos.
-- Sobrescribir personalizaciones durante instalación o migración.
-- Añadir tooling y abstracciones antes de que el uso real los justifique.
+- Turning application-specific rules into global defaults.
+- Claiming that a project works based only on files.
+- Overwriting customizations during installation or migration.
+- Adding tooling and abstractions before real usage justifies them.
 
-## Decisiones Pendientes
+## Pending Decisions
 
-- Formato final de manifests y managed blocks.
-- Estrategia de distribución npm y versionado de módulos.
-- Qué comprobaciones de ejecución habilitan el estado `verified`.
-- Cómo instalar cada bridge del Breakdown Stack de forma portable.
+- Final manifest and managed block format.
+- npm distribution strategy and module versioning.
+- Which execution checks enable the `verified` status.
+- How to install each Breakdown Stack bridge portably.
