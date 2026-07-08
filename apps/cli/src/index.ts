@@ -51,6 +51,28 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     allowPositionals: true,
   });
 
+  if (!command || command === "help" || command === "--help") {
+    const help = [
+      "Downstroke",
+      "Native project discipline for AI-assisted software delivery.",
+      "",
+      "Start",
+      "  downstroke init --preset lite --dry-run",
+      "  downstroke init --preset lite",
+      "  downstroke doctor --run-checks",
+      "",
+      "Native state",
+      "  downstroke cadence --review-mode one-at-a-time --yes",
+      "  downstroke experience init",
+      "  downstroke workflow resume",
+      "",
+      "Safety",
+      "  Preview first. Use --yes for authorized writes. Use --json for automation.",
+    ].join("\n");
+    console.log(help);
+    return 0;
+  }
+
   if (command === "init") {
     if (values.preset !== "lite") throw new Error(`Unknown preset: ${values.preset}`);
     const actions = await installFiles(cwd, liteFiles, values["dry-run"]);

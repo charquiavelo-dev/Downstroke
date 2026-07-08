@@ -26,6 +26,19 @@ test("lite init creates its canonical documents", async () => {
   assert.equal(await run(["doctor", "--json"], root), 0);
 });
 
+test("empty CLI entry shows native help without mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-help-"));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run([], root), 0);
+  } finally { console.log = originalLog; }
+  assert.match(output.join("\n"), /Downstroke/);
+  assert.match(output.join("\n"), /downstroke init --preset lite/);
+  assert.deepEqual(await readdir(root), []);
+});
+
 test("doctor JSON reports legacy artifacts as migration risks", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
   await mkdir(join(root, "docs"));
