@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, protectedCommunicationCategories, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -47,6 +47,9 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       approved: { type: "boolean", default: false },
       conflict: { type: "string" },
       rationale: { type: "string" },
+      mode: { type: "string" },
+      budget: { type: "string" },
+      preference: { type: "string" },
     },
     strict: true,
     allowPositionals: true,
@@ -64,6 +67,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "",
       "Native state",
       "  downstroke cadence --review-mode one-at-a-time --yes",
+      "  downstroke communication --mode compact --yes",
       "  downstroke experience init",
       "  downstroke workflow resume",
       "",
@@ -281,6 +285,58 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return 1;
   }
 
+  if (command === "communication") {
+    const budget = values.budget === undefined ? undefined : Number(values.budget);
+    if (values.mode !== undefined && !communicationModes.includes(values.mode as CommunicationMode)) {
+      const error = { status: "fail", error: "invalid-communication-mode", message: "--mode must be normal, compact, technical, audit or handoff" };
+      if (values.json) console.log(JSON.stringify(error, null, 2)); else console.error(error.message);
+      return 1;
+    }
+    if (values.mode === undefined && values.budget === undefined && values.preference === undefined) {
+      const current = await readCommunicationPolicy(cwd);
+      const report = {
+        current,
+        modes: communicationModes,
+        protectedCategories: protectedCommunicationCategories,
+        protection: protectedCommunicationCategories.map((category) => evaluateCommunicationProtection(current?.mode ?? "normal", category)),
+      };
+      if (values.json) console.log(JSON.stringify(report, null, 2));
+      else {
+        console.log(`COMMUNICATION ${current?.mode ?? "not-configured"}`);
+        console.log(`BUDGET ${current?.budgetTokens ?? "default"}`);
+        for (const category of protectedCommunicationCategories) console.log(`PROTECTED ${category}`);
+      }
+      return 0;
+    }
+    const plan = await planCommunicationPolicy(cwd, {
+      ...(values.mode ? { mode: values.mode } : {}),
+      ...(budget === undefined ? {} : { budgetTokens: budget }),
+      ...(values.preference ? { preference: values.preference } : {}),
+    });
+    const summary = {
+      status: plan.status,
+      action: plan.action,
+      mode: plan.policy?.mode ?? null,
+      budgetTokens: plan.policy?.budgetTokens ?? null,
+      preference: plan.preference ? { id: plan.preference.id, status: plan.preference.status, reason: plan.preference.reason } : null,
+      blockers: plan.blockers,
+    };
+    if (!values.yes || values["dry-run"] || plan.status === "blocked") {
+      if (values.json) console.log(JSON.stringify(summary, null, 2));
+      else {
+        console.log(`COMMUNICATION POLICY ${plan.status} ${plan.action} ${summary.mode ?? "invalid"}`);
+        if (summary.preference) console.log(`PREFERENCE ${summary.preference.status} ${summary.preference.reason}`);
+        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+        if (plan.status === "ready" && plan.action === "append") console.log("Run again with --yes to authorize this communication policy update.");
+      }
+      return plan.status === "blocked" ? 1 : 0;
+    }
+    const result = await applyCommunicationPolicy(cwd, plan);
+    if (values.json) console.log(JSON.stringify({ plan: summary, result }, null, 2));
+    else console.log(`${result.status.toUpperCase()} ${result.message} mode=${result.evidence ?? "unknown"}`);
+    return result.status === "ok" ? 0 : 1;
+  }
+
   if (command === "workflow") {
     const action = positionals[0];
     if (action === "resume") {
@@ -417,7 +473,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern|estimate|status|git-policy|experience|workflow> [options]");
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|communication|govern|estimate|status|git-policy|experience|workflow> [options]");
   return 1;
 }
 

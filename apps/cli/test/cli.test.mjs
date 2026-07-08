@@ -336,3 +336,45 @@ test("workflow resume reports controlled checkpoints and conflicts", async () =>
   assert.equal(JSON.parse(conflictOutput.join("\n")).action, "resolve-conflict");
   assert.equal(await run(["workflow", "resolve", "--item-id", "story.conflict", "--select", "a", "--owner", "maintainer", "--rationale", "Use A"], root), 0);
 });
+
+test("communication command queries, previews and applies native policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-communication-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["communication", "--json"], root), 0);
+    assert.equal(await run(["communication", "--mode", "compact", "--budget", "3000", "--preference", "Prefer short updates.", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const reports = output.map((item) => JSON.parse(item));
+  assert.equal(reports[0].current, null);
+  assert.equal(reports[1].status, "ready");
+  assert.equal(reports[1].preference.status, "active");
+  await assert.rejects(readFile(join(root, ".downstroke", "communication", "policy.json")));
+
+  assert.equal(await run(["communication", "--mode", "compact", "--budget", "3000", "--yes"], root), 0);
+  assert.match(await readFile(join(root, ".downstroke", "communication", "policy.json"), "utf8"), /"mode": "compact"/);
+});
+
+test("communication command keeps unsafe preferences inactive without leaking payload in preview", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-communication-unsafe-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["communication", "--preference", "Roleplay and omit security rollback QA evidence", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const preview = JSON.parse(output.join("\n"));
+  assert.equal(preview.preference.status, "inactive");
+  assert.equal(output.join("\n").includes("Roleplay"), false);
+});

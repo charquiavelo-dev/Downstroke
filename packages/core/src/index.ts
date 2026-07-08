@@ -218,6 +218,42 @@ export type WorkflowPlan = {
   blockers: string[];
 };
 
+export const communicationModes = ["normal", "compact", "technical", "audit", "handoff"] as const;
+export type CommunicationMode = typeof communicationModes[number];
+export const protectedCommunicationCategories = ["code", "commands", "diffs", "schemas", "security", "permissions", "qa", "rollback", "acceptance-criteria"] as const;
+export type ProtectedCommunicationCategory = typeof protectedCommunicationCategories[number];
+export type CommunicationPolicy = {
+  schemaVersion: "0.1.0";
+  revision: number;
+  mode: CommunicationMode;
+  budgetTokens: number;
+  protectedCategories: ProtectedCommunicationCategory[];
+  createdAt: string;
+  updatedAt: string;
+};
+export type CommunicationPreference = {
+  id: string;
+  status: "active" | "inactive";
+  value: string;
+  reason: string;
+  source: { type: "user-input" | "file"; path?: string };
+  createdAt: string;
+};
+export type CommunicationPlan = {
+  status: "ready" | "blocked";
+  action: "append" | "skip";
+  files: string[];
+  policy: CommunicationPolicy | null;
+  preference?: CommunicationPreference;
+  blockers: string[];
+};
+export type CommunicationProtection = {
+  category: ProtectedCommunicationCategory | "prose";
+  mode: CommunicationMode;
+  compression: "allowed" | "protected";
+  reason: string;
+};
+
 const responsibilities = {
   user: "approves",
   llm: "advises",
@@ -1145,6 +1181,162 @@ export async function resolveWorkflowConflict(root: string, input: WorkflowResol
   };
   await appendFile(join(base, "decisions.jsonl"), `${JSON.stringify(resolved)}\n`);
   return { id: "workflow.conflict", status: "ok", message: "Workflow conflict resolution stored", evidence: `${input.itemId}:${input.selectedOption}`, remediation: "Resume the workflow" };
+}
+
+export const communicationManifest = {
+  schemaVersion: "0.1.0",
+  module: "downstroke-communication",
+  storage: { driver: "local-jsonl", path: ".downstroke/communication" },
+  modes: communicationModes,
+  protectedCategories: protectedCommunicationCategories,
+} as const;
+
+const communicationFiles = [
+  ["manifest.json", "file"],
+  ["policy.json", "file"],
+  ["preferences.jsonl", "file"],
+] as const;
+
+const defaultCommunicationBudget: Record<CommunicationMode, number> = {
+  normal: 12000,
+  compact: 4000,
+  technical: 10000,
+  audit: 14000,
+  handoff: 6000,
+};
+
+function defaultCommunicationPolicy(timestamp: string): CommunicationPolicy {
+  return {
+    schemaVersion: "0.1.0",
+    revision: 1,
+    mode: "normal",
+    budgetTokens: defaultCommunicationBudget.normal,
+    protectedCategories: [...protectedCommunicationCategories],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+async function checkedCommunicationRoot(root: string, create = false): Promise<string> {
+  const repository = await gitRoot(root);
+  const downstroke = join(repository, ".downstroke");
+  if (create) await mkdir(join(downstroke, "communication"), { recursive: true });
+  const base = await realpath(join(downstroke, "communication"));
+  if (relative(repository, base).startsWith("..")) throw new Error("Communication storage is outside repository");
+  return base;
+}
+
+function parseCommunicationPolicy(value: unknown): CommunicationPolicy | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  if (input.schemaVersion !== "0.1.0" || !positiveInteger(input.revision)) return undefined;
+  if (!communicationModes.includes(input.mode as CommunicationMode)) return undefined;
+  if (!positiveInteger(input.budgetTokens) || Number(input.budgetTokens) > 200000) return undefined;
+  if (!Array.isArray(input.protectedCategories) || input.protectedCategories.some((item) => !protectedCommunicationCategories.includes(item as ProtectedCommunicationCategory))) return undefined;
+  if (typeof input.createdAt !== "string" || typeof input.updatedAt !== "string") return undefined;
+  return {
+    schemaVersion: "0.1.0",
+    revision: input.revision,
+    mode: input.mode as CommunicationMode,
+    budgetTokens: input.budgetTokens,
+    protectedCategories: [...new Set(input.protectedCategories as ProtectedCommunicationCategory[])],
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt,
+  };
+}
+
+export async function readCommunicationPolicy(root: string): Promise<CommunicationPolicy | null> {
+  try {
+    return parseCommunicationPolicy(JSON.parse(await readFile(join(await checkedCommunicationRoot(root), "policy.json"), "utf8"))) ?? null;
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return null;
+    return null;
+  }
+}
+
+function unsafeCommunicationPreference(value: string): string | undefined {
+  if (/(roleplay|pretend to be|act as|ignore (?:all |the )?previous|override (?:security|project|source)|bypass|jailbreak)/i.test(value)) return "roleplay or instruction override preference is inactive";
+  if (/(omit|hide|skip|remove|drop|compress away).*(security|permission|qa|rollback|evidence|blocker|failure|command|code|schema|acceptance)/i.test(value)) return "safety-reducing compression preference is inactive";
+  if (/(less|no).*(safety|security|qa|evidence|rollback|permission)/i.test(value)) return "safety-reducing preference is inactive";
+  return undefined;
+}
+
+function parseCommunicationPreference(value: unknown, timestamp: string): CommunicationPreference | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 1000) return undefined;
+  const text = value.trim();
+  const secret = /(-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|\b(?:ghp_|github_pat_|npm_)[A-Za-z0-9_]{20,}|\bAKIA[0-9A-Z]{16}|(?:password|secret|token|api[_-]?key)\s*[:=]\s*[^\s,}]+)/i.test(text);
+  const reason = secret ? "secret-like preference is inactive" : unsafeCommunicationPreference(text) ?? "safe communication style preference";
+  return {
+    id: `communication.preference.${createHash("sha256").update(text).digest("hex").slice(0, 16)}`,
+    status: reason === "safe communication style preference" ? "active" : "inactive",
+    value: text,
+    reason,
+    source: { type: "user-input" },
+    createdAt: timestamp,
+  };
+}
+
+export async function planCommunicationPolicy(root: string, input: { mode?: unknown; budgetTokens?: unknown; preference?: unknown } = {}): Promise<CommunicationPlan> {
+  const timestamp = new Date().toISOString();
+  const blockers: string[] = [];
+  const current = await readCommunicationPolicy(root);
+  const mode = input.mode ?? current?.mode ?? "normal";
+  if (!communicationModes.includes(mode as CommunicationMode)) blockers.push("Communication mode is invalid");
+  const selectedMode = communicationModes.includes(mode as CommunicationMode) ? mode as CommunicationMode : "normal";
+  const budgetTokens = input.budgetTokens ?? current?.budgetTokens ?? defaultCommunicationBudget[selectedMode];
+  if (!positiveInteger(budgetTokens) || Number(budgetTokens) > 200000) blockers.push("Communication budget must be a positive integer up to 200000");
+  const next: CommunicationPolicy = {
+    ...(current ?? defaultCommunicationPolicy(timestamp)),
+    revision: (current?.revision ?? 0) + 1,
+    mode: selectedMode,
+    budgetTokens: positiveInteger(budgetTokens) ? budgetTokens : defaultCommunicationBudget[selectedMode],
+    protectedCategories: [...protectedCommunicationCategories],
+    updatedAt: timestamp,
+  };
+  const preference = parseCommunicationPreference(input.preference, timestamp);
+  if (input.preference !== undefined && !preference) blockers.push("Communication preference is malformed");
+  const samePolicy = current && JSON.stringify({ ...current, revision: 0, updatedAt: "" }) === JSON.stringify({ ...next, revision: 0, updatedAt: "" });
+  return {
+    status: blockers.length ? "blocked" : "ready",
+    action: samePolicy && !preference ? "skip" : "append",
+    files: communicationFiles.map(([path]) => `.downstroke/communication/${path}`),
+    policy: blockers.length ? null : next,
+    ...(preference ? { preference } : {}),
+    blockers,
+  };
+}
+
+async function initializeCommunicationStorage(root: string): Promise<string> {
+  const base = await checkedCommunicationRoot(root, true);
+  for (const [path] of communicationFiles) {
+    const target = join(base, path);
+    if (await exists(target)) continue;
+    await writeFile(target, path === "manifest.json" ? `${JSON.stringify(communicationManifest, null, 2)}\n` : "", { flag: "wx" });
+  }
+  return base;
+}
+
+export async function applyCommunicationPolicy(root: string, plan: CommunicationPlan): Promise<DoctorResult> {
+  if (plan.status === "blocked" || !plan.policy) return { id: "communication.policy", status: "fail", message: plan.blockers.join("; ") || "Communication policy plan is blocked", remediation: "Correct and preview the communication policy again" };
+  const fresh = await planCommunicationPolicy(root, { mode: plan.policy.mode, budgetTokens: plan.policy.budgetTokens, ...(plan.preference ? { preference: plan.preference.value } : {}) });
+  if (fresh.status !== plan.status || fresh.action !== plan.action || fresh.policy?.mode !== plan.policy.mode || fresh.policy?.budgetTokens !== plan.policy.budgetTokens) return { id: "communication.policy", status: "fail", message: "Communication policy changed after preview", remediation: "Preview the communication policy again" };
+  const base = await initializeCommunicationStorage(root);
+  if (plan.preference) await appendFile(join(base, "preferences.jsonl"), `${JSON.stringify(plan.preference)}\n`);
+  if (plan.action === "append") {
+    const target = join(base, "policy.json");
+    const temporary = join(base, `policy.${randomUUID()}.tmp`);
+    await writeFile(temporary, `${JSON.stringify(plan.policy, null, 2)}\n`, { flag: "wx" });
+    await rename(temporary, target);
+  }
+  return { id: "communication.policy", status: "ok", message: plan.action === "skip" ? "Communication policy already current" : "Communication policy stored", evidence: plan.policy.mode, remediation: "No action required" };
+}
+
+export function evaluateCommunicationProtection(mode: CommunicationMode, category: ProtectedCommunicationCategory | "prose"): CommunicationProtection {
+  if (category !== "prose") return { category, mode, compression: "protected", reason: `${category} must remain complete in ${mode} mode` };
+  return mode === "compact" || mode === "handoff"
+    ? { category, mode, compression: "allowed", reason: `${mode} mode may summarize non-protected prose` }
+    : { category, mode, compression: "allowed", reason: `${mode} mode keeps normal prose detail` };
 }
 
 type LocalRead =
