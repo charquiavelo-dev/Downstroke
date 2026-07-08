@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, protectedCommunicationCategories, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, protectedCommunicationCategories, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -50,6 +50,15 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       mode: { type: "string" },
       budget: { type: "string" },
       preference: { type: "string" },
+      proposal: { type: "string" },
+      dependency: { type: "string", multiple: true },
+      abstraction: { type: "boolean", default: false },
+      rewrite: { type: "boolean", default: false },
+      "safety-exception": { type: "string" },
+      evidence: { type: "string" },
+      consumers: { type: "string", multiple: true },
+      impact: { type: "string" },
+      tests: { type: "string" },
     },
     strict: true,
     allowPositionals: true,
@@ -68,6 +77,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "Native state",
       "  downstroke cadence --review-mode one-at-a-time --yes",
       "  downstroke communication --mode compact --yes",
+      "  downstroke simplicity --proposal \"reuse existing helper\" --json",
       "  downstroke experience init",
       "  downstroke workflow resume",
       "",
@@ -337,6 +347,38 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
+  if (command === "simplicity") {
+    const dependencies = (values.dependency ?? []).map((item) => {
+      const splitAt = item.lastIndexOf("@");
+      const hasVersion = splitAt > 0;
+      return { name: hasVersion ? item.slice(0, splitAt) : item, ...(hasVersion ? { spec: item.slice(splitAt + 1) } : {}) };
+    });
+    const report = evaluateSimplicityGates({
+      ...(values.proposal ? { proposal: values.proposal } : {}),
+      ...(values.risk ? { risk: values.risk } : {}),
+      ...(dependencies.length ? { dependency: true, dependencies } : {}),
+      ...(values.abstraction ? { abstraction: true } : {}),
+      ...(values.rewrite ? { rewrite: true } : {}),
+      ...(values["safety-exception"] ? { safetyException: values["safety-exception"] } : {}),
+      ...(values.evidence ? { evidence: values.evidence } : {}),
+      ...(values.consumers ? { consumers: values.consumers } : {}),
+      ...(values.impact ? { impact: values.impact } : {}),
+      ...(values.owner ? { owner: values.owner } : {}),
+      ...(values.tests ? { tests: values.tests } : {}),
+      ...(values.rollback ? { rollback: values.rollback } : {}),
+      files: (values.path ?? []).map((path) => ({ path, generated: /(^|[\\/])(dist|build|generated|coverage|vendor)([\\/]|$)|\.min\.(js|css)$/i.test(path) })),
+    });
+    if (values.json) console.log(JSON.stringify(report, null, 2));
+    else {
+      console.log(`SIMPLICITY ${report.status}`);
+      for (const item of report.ladder) console.log(`LADDER ${item.step} ${item.considered ? "considered" : "missing"}`);
+      for (const finding of report.findings) console.log(`${finding.status.toUpperCase()} ${finding.id} ${finding.message} next=${finding.nextAction}`);
+      for (const risk of report.risks) console.log(`RISK ${risk.severity} ${risk.category} ${risk.evidence} next=${risk.nextAction}`);
+      for (const blocker of report.blockers) console.log(`BLOCKED ${blocker}`);
+    }
+    return report.status === "blocked" ? 1 : 0;
+  }
+
   if (command === "workflow") {
     const action = positionals[0];
     if (action === "resume") {
@@ -473,7 +515,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|communication|govern|estimate|status|git-policy|experience|workflow> [options]");
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|communication|simplicity|govern|estimate|status|git-policy|experience|workflow> [options]");
   return 1;
 }
 

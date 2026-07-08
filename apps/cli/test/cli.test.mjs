@@ -378,3 +378,52 @@ test("communication command keeps unsafe preferences inactive without leaking pa
   assert.equal(preview.preference.status, "inactive");
   assert.equal(output.join("\n").includes("Roleplay"), false);
 });
+
+test("simplicity command reports native gates without mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-simplicity-"));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["simplicity", "--proposal", "Reuse existing code and configure native behavior.", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+
+  const report = JSON.parse(output.join("\n"));
+  assert.equal(report.status, "ready");
+  assert.equal(report.ladder.find(({ step }) => step === "reuse").considered, true);
+  assert.deepEqual(await readdir(root), []);
+});
+
+test("simplicity command blocks unevidenced dependencies and reports safety exceptions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-simplicity-blocked-"));
+  const blockedOutput = [];
+  const originalLog = console.log;
+  console.log = (value) => blockedOutput.push(String(value));
+  try {
+    assert.equal(await run(["simplicity", "--dependency", "leftpad@latest", "--json"], root), 1);
+  } finally { console.log = originalLog; }
+  const blocked = JSON.parse(blockedOutput.join("\n"));
+  assert.equal(blocked.status, "blocked");
+  assert.equal(blocked.risks.some(({ category }) => category === "supply-chain"), true);
+
+  const safeOutput = [];
+  console.log = (value) => safeOutput.push(String(value));
+  try {
+    assert.equal(await run([
+      "simplicity",
+      "--abstraction",
+      "--safety-exception", "Production reliability requires a bounded adapter.",
+      "--evidence", "Two consumers share the same reliability path.",
+      "--consumers", "cli",
+      "--consumers", "core",
+      "--impact", "Validation path only.",
+      "--owner", "platform",
+      "--tests", "core unit",
+      "--rollback", "Inline adapter if no longer needed.",
+      "--json",
+    ], root), 0);
+  } finally { console.log = originalLog; }
+  const safe = JSON.parse(safeOutput.join("\n"));
+  assert.equal(safe.exception.active, true);
+  assert.equal(safe.status, "ready");
+});

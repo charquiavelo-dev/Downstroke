@@ -4,7 +4,7 @@ baseline_commit: 3332d17a567021f9f5584be71a86642c86a00640
 
 # Story 9.6: Add Native Simplicity Gates
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,27 +23,27 @@ so that minimal engineering remains auditable without permitting under-engineeri
 
 ## Tasks / Subtasks
 
-- [ ] Add native simplicity gate contracts in `packages/core/src/index.ts` (AC: 1-4)
-  - [ ] Define gate categories for deletion, reuse, configuration, platform, existing dependency, small local code, new dependency, abstraction and rewrite.
-  - [ ] Define proposal/risk inputs and machine-readable gate findings.
-  - [ ] Keep contracts serializable and repository-local; no external scanner dependency.
-- [ ] Add deterministic proposal evaluation in core (AC: 1-2, 4)
-  - [ ] Require the simpler-path ladder before allowing a dependency, abstraction, shared package or broad rewrite.
-  - [ ] Require evidence, consumers, impact, owner, tests and removal/rollback where applicable.
-  - [ ] Mark safety exceptions explicitly when security, data integrity, accessibility or production reliability beats minimal code.
-- [ ] Add native code-smell risk audit helpers in core (AC: 3)
-  - [ ] Detect unsafe execution patterns, likely secret leakage, path traversal, injection, ReDoS, supply-chain risk and risky generated artifacts from provided file/dependency metadata.
-  - [ ] Return severity, evidence and next safe action for each finding.
-  - [ ] Keep the first implementation bounded to deterministic string/path/package heuristics; Story 9.7 owns indexed structural analysis.
-- [ ] Add CLI surface in `apps/cli/src/index.ts` (AC: 1-4)
-  - [ ] Add `downstroke simplicity` preview output.
-  - [ ] Support `--proposal`, `--risk`, `--dependency`, `--abstraction`, `--rewrite`, `--safety-exception`, `--json`.
-  - [ ] Keep command read-only for this story; it reports gates and does not mutate repository state.
-- [ ] Add focused tests (AC: 1-4)
-  - [ ] Core tests for simple proposal pass, dependency/abstraction/rewrite blockers and safety exception precedence.
-  - [ ] Core tests for code-smell findings with severity/evidence/action.
-  - [ ] CLI tests for human and JSON output.
-- [ ] Run typecheck, tests and native-only distributed-surface scan.
+- [x] Add native simplicity gate contracts in `packages/core/src/index.ts` (AC: 1-4)
+  - [x] Define gate categories for deletion, reuse, configuration, platform, existing dependency, small local code, new dependency, abstraction and rewrite.
+  - [x] Define proposal/risk inputs and machine-readable gate findings.
+  - [x] Keep contracts serializable and repository-local; no external scanner dependency.
+- [x] Add deterministic proposal evaluation in core (AC: 1-2, 4)
+  - [x] Require the simpler-path ladder before allowing a dependency, abstraction, shared package or broad rewrite.
+  - [x] Require evidence, consumers, impact, owner, tests and removal/rollback where applicable.
+  - [x] Mark safety exceptions explicitly when security, data integrity, accessibility or production reliability beats minimal code.
+- [x] Add native code-smell risk audit helpers in core (AC: 3)
+  - [x] Detect unsafe execution patterns, likely secret leakage, path traversal, injection, ReDoS, supply-chain risk and risky generated artifacts from provided file/dependency metadata.
+  - [x] Return severity, evidence and next safe action for each finding.
+  - [x] Keep the first implementation bounded to deterministic string/path/package heuristics; Story 9.7 owns indexed structural analysis.
+- [x] Add CLI surface in `apps/cli/src/index.ts` (AC: 1-4)
+  - [x] Add `downstroke simplicity` preview output.
+  - [x] Support `--proposal`, `--risk`, `--dependency`, `--abstraction`, `--rewrite`, `--safety-exception`, `--json`.
+  - [x] Keep command read-only for this story; it reports gates and does not mutate repository state.
+- [x] Add focused tests (AC: 1-4)
+  - [x] Core tests for simple proposal pass, dependency/abstraction/rewrite blockers and safety exception precedence.
+  - [x] Core tests for code-smell findings with severity/evidence/action.
+  - [x] CLI tests for human and JSON output.
+- [x] Run typecheck, tests and native-only distributed-surface scan.
 
 ## Dev Notes
 
@@ -133,22 +133,34 @@ No external library/API research is required for implementation. This story inte
 
 ### Agent Model Used
 
-TBD
+GPT-5 Codex
 
 ### Debug Log References
 
-TBD
+- `npm.cmd run build` — passing.
+- `npm.cmd run typecheck` — passing.
+- `npm.cmd test` — passing, 63/63.
+- Native-only distributed-surface scan — passing.
 
 ### Completion Notes List
 
 - Created implementation-ready Story 9.6 context from the accepted Epic 9 contract, SPEC native readiness milestone and architecture AD-1/AD-2/AD-4/AD-6/AD-11/AD-12.
 - Bounded the implementation to native deterministic gates and code-smell heuristics; native code indexing remains Story 9.7.
+- Implemented native `evaluateSimplicityGates()` with the simplicity ladder, major-change evidence requirements and explicit safety exceptions.
+- Added deterministic risk findings for unsafe execution, secret leakage, path traversal, injection, ReDoS, supply-chain dependency risk and generated artifacts.
+- Added read-only `downstroke simplicity` CLI output for human and JSON workflows.
+- Added focused core and CLI tests for gate pass/block behavior, safety precedence and code-smell findings.
 
 ### File List
 
 - `_bmad-output/implementation-artifacts/9-6-add-native-simplicity-gates.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `apps/cli/src/index.ts`
+- `apps/cli/test/cli.test.mjs`
+- `packages/core/src/index.ts`
+- `packages/core/test/core.test.mjs`
 
 ## Change Log
 
 - 2026-07-08: Created implementation-ready Story 9.6 contract.
+- 2026-07-08: Implemented native simplicity gates and moved story to review.

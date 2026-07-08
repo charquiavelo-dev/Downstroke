@@ -253,6 +253,47 @@ export type CommunicationProtection = {
   compression: "allowed" | "protected";
   reason: string;
 };
+export const simplicityGateSteps = ["delete", "reuse", "configure", "platform", "existing-dependency", "small-local-code", "new-dependency", "abstraction", "rewrite"] as const;
+export type SimplicityGateStep = typeof simplicityGateSteps[number];
+export type SimplicityRiskSeverity = "low" | "medium" | "high";
+export type SimplicityRiskFinding = {
+  id: string;
+  severity: SimplicityRiskSeverity;
+  category: "unsafe-execution" | "secret-leakage" | "path-traversal" | "injection" | "redos" | "supply-chain" | "generated-artifact";
+  evidence: string;
+  nextAction: string;
+};
+export type SimplicityGateFinding = {
+  id: string;
+  status: "ok" | "warn" | "blocked";
+  message: string;
+  evidence?: string;
+  nextAction: string;
+};
+export type SimplicityGateInput = {
+  proposal?: string;
+  risk?: string;
+  dependency?: boolean | string;
+  abstraction?: boolean | string;
+  rewrite?: boolean | string;
+  safetyException?: boolean | string;
+  evidence?: string;
+  consumers?: string | string[];
+  impact?: string;
+  owner?: string;
+  tests?: string;
+  rollback?: string;
+  files?: { path: string; content?: string; generated?: boolean }[];
+  dependencies?: { name: string; spec?: string; source?: string; hasInstallScript?: boolean }[];
+};
+export type SimplicityGateReport = {
+  status: "ready" | "blocked";
+  ladder: { step: SimplicityGateStep; considered: boolean; evidence: string }[];
+  findings: SimplicityGateFinding[];
+  risks: SimplicityRiskFinding[];
+  exception: { active: boolean; reason: string | null };
+  blockers: string[];
+};
 
 const responsibilities = {
   user: "approves",
@@ -1350,6 +1391,142 @@ export function evaluateCommunicationProtection(mode: CommunicationMode, categor
   return mode === "compact" || mode === "handoff"
     ? { category, mode, compression: "allowed", reason: `${mode} mode may summarize non-protected prose` }
     : { category, mode, compression: "allowed", reason: `${mode} mode keeps normal prose detail` };
+}
+
+function nonEmpty(value: unknown): boolean {
+  return typeof value === "string" ? value.trim().length > 0 : Array.isArray(value) ? value.length > 0 : Boolean(value);
+}
+
+function textSample(input: SimplicityGateInput): string {
+  return [
+    input.proposal,
+    input.risk,
+    input.evidence,
+    input.impact,
+    input.owner,
+    input.tests,
+    input.rollback,
+    ...(input.files ?? []).map((file) => `${file.path}\n${file.content ?? ""}`),
+    ...(input.dependencies ?? []).map((dependency) => `${dependency.name}@${dependency.spec ?? ""} ${dependency.source ?? ""}`),
+  ].filter((item): item is string => typeof item === "string").join("\n").slice(0, 20000);
+}
+
+function addRisk(risks: SimplicityRiskFinding[], finding: SimplicityRiskFinding): void {
+  if (!risks.some((item) => item.id === finding.id)) risks.push(finding);
+}
+
+function auditSimplicityRisks(input: SimplicityGateInput): SimplicityRiskFinding[] {
+  const risks: SimplicityRiskFinding[] = [];
+  const text = textSample(input);
+  if (/\b(eval|Function|exec|execSync|spawn|spawnSync)\s*\(/.test(text)) addRisk(risks, {
+    id: "risk.unsafe-execution",
+    severity: "high",
+    category: "unsafe-execution",
+    evidence: "Dynamic code or process execution pattern detected",
+    nextAction: "Replace string-built execution with argument arrays, allowlists and explicit approval",
+  });
+  if (/\b(token|password|secret|api[_-]?key|private[_-]?key)\b\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i.test(text)) addRisk(risks, {
+    id: "risk.secret-leakage",
+    severity: "high",
+    category: "secret-leakage",
+    evidence: "Secret-like key/value pattern detected",
+    nextAction: "Remove the value, rotate it if real and store only non-secret configuration",
+  });
+  if (/(^|[\\/"'`\s])\.\.[\\/]/.test(text)) addRisk(risks, {
+    id: "risk.path-traversal",
+    severity: "high",
+    category: "path-traversal",
+    evidence: "Parent-directory path segment detected",
+    nextAction: "Resolve paths against the repository root and reject paths outside the allowed root",
+  });
+  if (/(SELECT|UPDATE|DELETE|INSERT)\b[\s\S]{0,120}\$\{|innerHTML\s*=|dangerouslySetInnerHTML|exec\s*\([\s\S]{0,80}\$\{/i.test(text)) addRisk(risks, {
+    id: "risk.injection",
+    severity: "high",
+    category: "injection",
+    evidence: "Interpolated sensitive sink detected",
+    nextAction: "Use parameterized APIs, escaping or structured arguments at the trust boundary",
+  });
+  if (/\([^)]*[+*][^)]*\)[+*]/.test(text)) addRisk(risks, {
+    id: "risk.redos",
+    severity: "medium",
+    category: "redos",
+    evidence: "Nested quantifier regex shape detected",
+    nextAction: "Replace with a bounded parser, anchored regex or input length limit",
+  });
+  for (const dependency of input.dependencies ?? []) {
+    const spec = dependency.spec ?? "";
+    if (dependency.hasInstallScript || /^(git\+|https?:|github:|file:|\*|latest$)/i.test(spec) || /^(git\+|https?:|github:|file:)/i.test(dependency.source ?? "")) addRisk(risks, {
+      id: `risk.supply-chain.${dependency.name}`,
+      severity: "medium",
+      category: "supply-chain",
+      evidence: `${dependency.name}@${spec || dependency.source || "unknown"}`,
+      nextAction: "Pin the dependency, review provenance and document why native/platform code is insufficient",
+    });
+  }
+  for (const file of input.files ?? []) {
+    if (file.generated || /(^|[\\/])(dist|build|generated|coverage|vendor)([\\/]|$)|\.min\.(js|css)$/i.test(file.path)) addRisk(risks, {
+      id: `risk.generated-artifact.${file.path}`,
+      severity: "low",
+      category: "generated-artifact",
+      evidence: file.path,
+      nextAction: "Exclude generated output or attach review evidence explaining why it is source-controlled",
+    });
+  }
+  return risks;
+}
+
+export function evaluateSimplicityGates(input: SimplicityGateInput = {}): SimplicityGateReport {
+  const sample = textSample(input).toLowerCase();
+  const majorChange = Boolean(input.dependency || input.abstraction || input.rewrite);
+  const safetyException = Boolean(input.safetyException);
+  const ladder = simplicityGateSteps.map((step) => {
+    const aliases: Record<SimplicityGateStep, string[]> = {
+      delete: ["delete", "remove", "unnecessary"],
+      reuse: ["reuse", "existing code"],
+      configure: ["configure", "config"],
+      platform: ["platform", "stdlib", "standard library", "native"],
+      "existing-dependency": ["existing dependency", "installed dependency"],
+      "small-local-code": ["small local", "local code"],
+      "new-dependency": ["new dependency", "package"],
+      abstraction: ["abstraction", "interface", "shared"],
+      rewrite: ["rewrite", "replace"],
+    };
+    const baselineStep = ["delete", "reuse", "configure", "platform", "existing-dependency", "small-local-code"].includes(step);
+    const considered = !sample || aliases[step].some((alias) => sample.includes(alias)) || (majorChange && baselineStep);
+    return { step, considered, evidence: considered ? "considered" : "not-evidenced" };
+  });
+  const required = ["evidence", "consumers", "impact", "owner", "tests", "rollback"] as const;
+  const findings: SimplicityGateFinding[] = [];
+  if (majorChange) {
+    const missing = required.filter((field) => !nonEmpty(input[field]));
+    const finding: SimplicityGateFinding = {
+      id: "gate.major-change-evidence",
+      status: missing.length ? "blocked" : "ok",
+      message: missing.length ? `Major change is missing ${missing.join(", ")}` : "Major change evidence is complete",
+      nextAction: missing.length ? "Provide the missing fields before adding dependency, abstraction, shared package or broad rewrite" : "Proceed with the reviewed minimal safe path",
+    };
+    if (!missing.length) finding.evidence = "evidence, consumers, impact, owner, tests and rollback provided";
+    findings.push(finding);
+  } else {
+    findings.push({ id: "gate.simplicity-ladder", status: "ok", message: "Simplicity ladder considered", evidence: ladder.map((item) => item.step).join(" > "), nextAction: "Prefer the first safe step that works" });
+  }
+  if (safetyException) findings.push({
+    id: "gate.safety-exception",
+    status: "warn",
+    message: "Safety exception recorded; safety takes precedence over minimality",
+    evidence: typeof input.safetyException === "string" ? input.safetyException : "safety exception requested",
+    nextAction: "Keep the extra complexity bounded and verify the safety requirement",
+  });
+  const risks = auditSimplicityRisks(input);
+  const blockers = findings.filter((finding) => finding.status === "blocked").map((finding) => finding.message);
+  return {
+    status: blockers.length ? "blocked" : "ready",
+    ladder,
+    findings,
+    risks,
+    exception: { active: safetyException, reason: safetyException ? String(input.safetyException === true ? "safety requirement" : input.safetyException) : null },
+    blockers,
+  };
 }
 
 type LocalRead =

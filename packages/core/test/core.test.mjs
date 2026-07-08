@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -635,4 +635,39 @@ test("communication policy blocks malformed state and manipulated preference pla
   assert.equal(plan.preference?.status, "inactive");
   const manipulated = { ...plan, preference: plan.preference ? { ...plan.preference, status: "active" } : undefined };
   assert.equal((await applyCommunicationPolicy(root, manipulated)).status, "fail");
+});
+
+test("simplicity gates pass simple proposals and block unevidenced major changes", () => {
+  const simple = evaluateSimplicityGates({ proposal: "Delete unnecessary code, reuse existing code and configure native behavior." });
+  assert.equal(simple.status, "ready");
+  assert.equal(simple.ladder.find(({ step }) => step === "delete")?.considered, true);
+
+  const blocked = evaluateSimplicityGates({ dependency: true, proposal: "Add a new dependency." });
+  assert.equal(blocked.status, "blocked");
+  assert.match(blocked.blockers.join(" "), /evidence/);
+
+  const reviewed = evaluateSimplicityGates({
+    abstraction: true,
+    safetyException: "Production reliability requires a bounded adapter.",
+    evidence: "Two callers share the same reliability check.",
+    consumers: ["cli", "core"],
+    impact: "Shared validation path only.",
+    owner: "platform",
+    tests: "core unit test",
+    rollback: "Inline the adapter if it grows in the wrong direction.",
+  });
+  assert.equal(reviewed.status, "ready");
+  assert.equal(reviewed.exception.active, true);
+  assert.ok(reviewed.findings.some(({ id }) => id === "gate.safety-exception"));
+});
+
+test("simplicity risk audit reports native code smells with safe next actions", () => {
+  const report = evaluateSimplicityGates({
+    risk: "exec(`git ${branch}`); const token = 'ghp_123456789012345678901234567890'; path='../secret'; db.query(`SELECT * FROM users WHERE id=${id}`); const r = /(a+)+$/;",
+    dependencies: [{ name: "leftpad", spec: "github:owner/repo" }],
+    files: [{ path: "dist/generated-client.js", generated: true }],
+  });
+  const categories = report.risks.map(({ category }) => category).sort();
+  assert.deepEqual(categories, ["generated-artifact", "injection", "path-traversal", "redos", "secret-leakage", "supply-chain", "unsafe-execution"]);
+  assert.ok(report.risks.every(({ evidence, nextAction }) => evidence && nextAction));
 });
