@@ -274,6 +274,7 @@ export type SimplicityGateInput = {
   proposal?: string;
   risk?: string;
   dependency?: boolean | string;
+  sharedPackage?: boolean | string;
   abstraction?: boolean | string;
   rewrite?: boolean | string;
   safetyException?: boolean | string;
@@ -1432,11 +1433,18 @@ function auditSimplicityRisks(input: SimplicityGateInput): SimplicityRiskFinding
     evidence: "Secret-like key/value pattern detected",
     nextAction: "Remove the value, rotate it if real and store only non-secret configuration",
   });
-  if (/(^|[\\/"'`\s])\.\.[\\/]/.test(text)) addRisk(risks, {
+  if (/\b(ghp_|github_pat_|npm_|AKIA)[A-Za-z0-9_=-]{12,}|-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/.test(text)) addRisk(risks, {
+    id: "risk.secret-leakage",
+    severity: "high",
+    category: "secret-leakage",
+    evidence: "Credential-shaped token detected",
+    nextAction: "Remove the value, rotate it if real and store only non-secret configuration",
+  });
+  if (/\.\.[\\/]/.test(text) || /(^|[\s="'`])([A-Za-z]:[\\/]|\/(?:etc|var|home|root|Users)\b)/.test(text)) addRisk(risks, {
     id: "risk.path-traversal",
     severity: "high",
     category: "path-traversal",
-    evidence: "Parent-directory path segment detected",
+    evidence: "Unsafe relative or absolute path detected",
     nextAction: "Resolve paths against the repository root and reject paths outside the allowed root",
   });
   if (/(SELECT|UPDATE|DELETE|INSERT)\b[\s\S]{0,120}\$\{|innerHTML\s*=|dangerouslySetInnerHTML|exec\s*\([\s\S]{0,80}\$\{/i.test(text)) addRisk(risks, {
@@ -1446,16 +1454,16 @@ function auditSimplicityRisks(input: SimplicityGateInput): SimplicityRiskFinding
     evidence: "Interpolated sensitive sink detected",
     nextAction: "Use parameterized APIs, escaping or structured arguments at the trust boundary",
   });
-  if (/\([^)]*[+*][^)]*\)[+*]/.test(text)) addRisk(risks, {
+  if (/\([^)]*[+*][^)]*\)(?:[+*]|\{\d+,?\d*\})|\((\w+)\|\1\w+\)[+*]/.test(text)) addRisk(risks, {
     id: "risk.redos",
     severity: "medium",
     category: "redos",
-    evidence: "Nested quantifier regex shape detected",
+    evidence: "Catastrophic regex shape detected",
     nextAction: "Replace with a bounded parser, anchored regex or input length limit",
   });
   for (const dependency of input.dependencies ?? []) {
     const spec = dependency.spec ?? "";
-    if (dependency.hasInstallScript || /^(git\+|https?:|github:|file:|\*|latest$)/i.test(spec) || /^(git\+|https?:|github:|file:)/i.test(dependency.source ?? "")) addRisk(risks, {
+    if (!spec || dependency.hasInstallScript || /^(git\+|https?:|github:|file:|\*|latest$|[\^~]|[<>]=?)/i.test(spec) || /^(git\+|https?:|github:|file:)/i.test(dependency.source ?? "")) addRisk(risks, {
       id: `risk.supply-chain.${dependency.name}`,
       severity: "medium",
       category: "supply-chain",
@@ -1477,26 +1485,33 @@ function auditSimplicityRisks(input: SimplicityGateInput): SimplicityRiskFinding
 
 export function evaluateSimplicityGates(input: SimplicityGateInput = {}): SimplicityGateReport {
   const sample = textSample(input).toLowerCase();
-  const majorChange = Boolean(input.dependency || input.abstraction || input.rewrite);
+  const majorChange = Boolean(input.dependency || input.sharedPackage || input.abstraction || input.rewrite);
   const safetyException = Boolean(input.safetyException);
+  const aliases: Record<SimplicityGateStep, string[]> = {
+    delete: ["delete", "remove", "unnecessary"],
+    reuse: ["reuse", "existing code"],
+    configure: ["configure", "config"],
+    platform: ["platform", "stdlib", "standard library", "native"],
+    "existing-dependency": ["existing dependency", "installed dependency"],
+    "small-local-code": ["small local", "local code"],
+    "new-dependency": ["new dependency", "package"],
+    abstraction: ["abstraction", "interface", "shared"],
+    rewrite: ["rewrite", "replace"],
+  };
   const ladder = simplicityGateSteps.map((step) => {
-    const aliases: Record<SimplicityGateStep, string[]> = {
-      delete: ["delete", "remove", "unnecessary"],
-      reuse: ["reuse", "existing code"],
-      configure: ["configure", "config"],
-      platform: ["platform", "stdlib", "standard library", "native"],
-      "existing-dependency": ["existing dependency", "installed dependency"],
-      "small-local-code": ["small local", "local code"],
-      "new-dependency": ["new dependency", "package"],
-      abstraction: ["abstraction", "interface", "shared"],
-      rewrite: ["rewrite", "replace"],
-    };
     const baselineStep = ["delete", "reuse", "configure", "platform", "existing-dependency", "small-local-code"].includes(step);
-    const considered = !sample || aliases[step].some((alias) => sample.includes(alias)) || (majorChange && baselineStep);
+    const considered = baselineStep && !majorChange || aliases[step].some((alias) => sample.includes(alias)) || step === "new-dependency" && Boolean(input.dependency) || step === "abstraction" && Boolean(input.abstraction || input.sharedPackage) || step === "rewrite" && Boolean(input.rewrite);
     return { step, considered, evidence: considered ? "considered" : "not-evidenced" };
   });
   const required = ["evidence", "consumers", "impact", "owner", "tests", "rollback"] as const;
   const findings: SimplicityGateFinding[] = [];
+  const missingBaseline = ladder.filter((item) => ["delete", "reuse", "configure", "platform", "existing-dependency", "small-local-code"].includes(item.step) && !item.considered).map((item) => item.step);
+  if (majorChange && missingBaseline.length) findings.push({
+    id: "gate.simplicity-ladder",
+    status: "blocked",
+    message: `Major change is missing simpler-path evidence for ${missingBaseline.join(", ")}`,
+    nextAction: "Document why deletion, reuse, configuration, platform capability, existing dependency and small local code are insufficient",
+  });
   if (majorChange) {
     const missing = required.filter((field) => !nonEmpty(input[field]));
     const finding: SimplicityGateFinding = {

@@ -4,7 +4,7 @@ baseline_commit: 3332d17a567021f9f5584be71a86642c86a00640
 
 # Story 9.6: Add Native Simplicity Gates
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -44,6 +44,16 @@ so that minimal engineering remains auditable without permitting under-engineeri
   - [x] Core tests for code-smell findings with severity/evidence/action.
   - [x] CLI tests for human and JSON output.
 - [x] Run typecheck, tests and native-only distributed-surface scan.
+
+### Review Findings
+
+- [x] [Review][Patch] Major changes now require explicit simpler-path evidence before dependency, shared package, abstraction or rewrite approval.
+- [x] [Review][Patch] Shared package proposals are modeled as a first-class major-change gate.
+- [x] [Review][Patch] Supply-chain risk now reports unpinned ranges, missing specs and remote/file dependency specs.
+- [x] [Review][Patch] CLI human output for simplicity gates is covered by tests.
+- [x] [Review][Patch] Remote dependency strings without `@` now remain visible to supply-chain risk detection.
+- [x] [Review][Patch] Path traversal risk now detects common `=../` and unsafe absolute path patterns.
+- [x] [Review][Patch] Secret and ReDoS heuristics now catch bare provider tokens, private-key markers, counted nested quantifiers and simple ambiguous alternation.
 
 ## Dev Notes
 
@@ -139,7 +149,7 @@ GPT-5 Codex
 
 - `npm.cmd run build` — passing.
 - `npm.cmd run typecheck` — passing.
-- `npm.cmd test` — passing, 63/63.
+- `npm.cmd test` — passing, 64/64.
 - Native-only distributed-surface scan — passing.
 
 ### Completion Notes List
@@ -150,6 +160,7 @@ GPT-5 Codex
 - Added deterministic risk findings for unsafe execution, secret leakage, path traversal, injection, ReDoS, supply-chain dependency risk and generated artifacts.
 - Added read-only `downstroke simplicity` CLI output for human and JSON workflows.
 - Added focused core and CLI tests for gate pass/block behavior, safety precedence and code-smell findings.
+- Resolved code review findings for major-change ladder evidence, shared package proposals, supply-chain specs, human CLI output, path risk, secret risk and ReDoS false negatives.
 
 ### File List
 
@@ -164,3 +175,4 @@ GPT-5 Codex
 
 - 2026-07-08: Created implementation-ready Story 9.6 contract.
 - 2026-07-08: Implemented native simplicity gates and moved story to review.
+- 2026-07-08: Resolved code review findings and completed Story 9.6.

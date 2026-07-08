@@ -649,6 +649,7 @@ test("simplicity gates pass simple proposals and block unevidenced major changes
   const reviewed = evaluateSimplicityGates({
     abstraction: true,
     safetyException: "Production reliability requires a bounded adapter.",
+    proposal: "Delete, reuse, configure, platform, existing dependency and small local code were considered before adding this abstraction.",
     evidence: "Two callers share the same reliability check.",
     consumers: ["cli", "core"],
     impact: "Shared validation path only.",
@@ -663,8 +664,8 @@ test("simplicity gates pass simple proposals and block unevidenced major changes
 
 test("simplicity risk audit reports native code smells with safe next actions", () => {
   const report = evaluateSimplicityGates({
-    risk: "exec(`git ${branch}`); const token = 'ghp_123456789012345678901234567890'; path='../secret'; db.query(`SELECT * FROM users WHERE id=${id}`); const r = /(a+)+$/;",
-    dependencies: [{ name: "leftpad", spec: "github:owner/repo" }],
+    risk: "exec(`git ${branch}`); ghp_123456789012345678901234567890; path=../secret; /etc/passwd; db.query(`SELECT * FROM users WHERE id=${id}`); const r = /(a+){2,}$/;",
+    dependencies: [{ name: "leftpad", spec: "^1.0.0" }],
     files: [{ path: "dist/generated-client.js", generated: true }],
   });
   const categories = report.risks.map(({ category }) => category).sort();

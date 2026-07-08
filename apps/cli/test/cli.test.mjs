@@ -400,7 +400,7 @@ test("simplicity command blocks unevidenced dependencies and reports safety exce
   const originalLog = console.log;
   console.log = (value) => blockedOutput.push(String(value));
   try {
-    assert.equal(await run(["simplicity", "--dependency", "leftpad@latest", "--json"], root), 1);
+    assert.equal(await run(["simplicity", "--dependency", "github:owner/repo", "--json"], root), 1);
   } finally { console.log = originalLog; }
   const blocked = JSON.parse(blockedOutput.join("\n"));
   assert.equal(blocked.status, "blocked");
@@ -413,6 +413,7 @@ test("simplicity command blocks unevidenced dependencies and reports safety exce
       "simplicity",
       "--abstraction",
       "--safety-exception", "Production reliability requires a bounded adapter.",
+      "--proposal", "Delete, reuse, configure, platform, existing dependency and small local code were considered before adding this abstraction.",
       "--evidence", "Two consumers share the same reliability path.",
       "--consumers", "cli",
       "--consumers", "core",
@@ -426,4 +427,17 @@ test("simplicity command blocks unevidenced dependencies and reports safety exce
   const safe = JSON.parse(safeOutput.join("\n"));
   assert.equal(safe.exception.active, true);
   assert.equal(safe.status, "ready");
+});
+
+test("simplicity command human output reports blocked gates", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-simplicity-human-"));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["simplicity", "--shared-package"], root), 1);
+  } finally { console.log = originalLog; }
+
+  assert.match(output.join("\n"), /SIMPLICITY blocked/);
+  assert.match(output.join("\n"), /BLOCKED/);
 });
