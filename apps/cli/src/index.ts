@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, readPlanningCadence, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -46,6 +46,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       phase: { type: "string" },
       approved: { type: "boolean", default: false },
       conflict: { type: "string" },
+      rationale: { type: "string" },
     },
     strict: true,
     allowPositionals: true,
@@ -288,6 +289,17 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       else console.log(`WORKFLOW NEXT ${result.status} ${result.itemId ?? "none"} ${result.action} ${result.reason}`);
       return result.status === "blocked" ? 1 : 0;
     }
+    if (action === "resolve") {
+      const result = await resolveWorkflowConflict(cwd, {
+        itemId: values["item-id"] ?? "",
+        selectedOption: values.select ?? "",
+        owner: values.owner ?? "",
+        rationale: values.rationale ?? "",
+      });
+      if (values.json) console.log(JSON.stringify(result, null, 2));
+      else console.log(`${result.status.toUpperCase()} ${result.message}`);
+      return result.status === "ok" ? 0 : 1;
+    }
     if (action === "add" && values.item) {
       if (values.phase !== undefined && !workflowPhases.includes(values.phase as WorkflowPhase)) {
         const error = { status: "fail", error: "invalid-workflow-phase", message: "--phase must be plan, review, implementation or verification" };
@@ -316,7 +328,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
         action: plan.action,
         item: plan.item ? { id: plan.item.id, type: plan.item.type, status: plan.item.status, risk: plan.item.risk, review: plan.item.review } : null,
         checkpoint: plan.checkpoint ? { itemId: plan.checkpoint.itemId, phase: plan.checkpoint.phase, status: plan.checkpoint.status } : null,
-        conflict: plan.conflict ? { id: plan.conflict.id, itemId: plan.conflict.itemId, owner: plan.conflict.owner, sources: plan.conflict.sources.length, options: plan.conflict.options.length, status: plan.conflict.status } : null,
+        conflict: plan.conflict ? { id: plan.conflict.id, itemId: plan.conflict.itemId, owner: plan.conflict.owner, sources: plan.conflict.sources, options: plan.conflict.options, consequences: plan.conflict.consequences, status: plan.conflict.status } : null,
         nextAction: plan.nextAction,
         blockers: plan.blockers,
       };
@@ -326,6 +338,12 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
         else {
           console.log(`WORKFLOW ${plan.status} ${plan.action} ${summary.item?.id ?? "invalid"}`);
           if (summary.nextAction) console.log(`NEXT ${summary.nextAction.action} ${summary.nextAction.reason}`);
+          if (summary.conflict) {
+            console.log(`CONFLICT owner=${summary.conflict.owner}`);
+            for (const source of summary.conflict.sources) console.log(`SOURCE ${source.path} ${source.hash}`);
+            for (const option of summary.conflict.options) console.log(`OPTION ${option.id} ${option.consequence}`);
+            for (const consequence of summary.conflict.consequences) console.log(`CONSEQUENCE ${consequence}`);
+          }
           for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
           if (plan.status === "ready") console.log("Run again with --yes to authorize this workflow update.");
         }
@@ -336,8 +354,8 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       else console.log(`${result.status.toUpperCase()} ${result.message} id=${result.evidence ?? "unknown"}`);
       return result.status === "ok" ? 0 : 1;
     }
-    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-workflow-command", message: "Use workflow add --item <json> or workflow resume [--item-id <id>]" }, null, 2));
-    else console.error("Usage: downstroke workflow <add|resume> [--item <json>] [--item-id <id>] [--controlled] [--phase <phase>] [--approved] [--conflict <json>] [--yes] [--json]");
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-workflow-command", message: "Use workflow add --item <json>, workflow resume [--item-id <id>], or workflow resolve --item-id <id> --select <option> --owner <owner> --rationale <text>" }, null, 2));
+    else console.error("Usage: downstroke workflow <add|resume|resolve> [--item <json>] [--item-id <id>] [--controlled] [--phase <phase>] [--approved] [--conflict <json>] [--select <option>] [--owner <owner>] [--rationale <text>] [--yes] [--json]");
     return 1;
   }
 

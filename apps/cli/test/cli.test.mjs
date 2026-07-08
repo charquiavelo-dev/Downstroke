@@ -291,7 +291,9 @@ test("workflow add previews and applies native workflow items", async () => {
   await assert.rejects(readFile(join(root, ".downstroke", "workflows", "items.jsonl")));
 
   assert.equal(await run(["workflow", "add", "--item", item, "--yes"], root), 0);
+  assert.equal(await run(["workflow", "add", "--item", item, "--yes"], root), 0);
   assert.match(await readFile(join(root, ".downstroke", "workflows", "items.jsonl"), "utf8"), /story\.9\.4/);
+  assert.equal((await readFile(join(root, ".downstroke", "workflows", "items.jsonl"), "utf8")).trim().split("\n").length, 1);
 });
 
 test("workflow resume reports controlled checkpoints and conflicts", async () => {
@@ -318,10 +320,19 @@ test("workflow resume reports controlled checkpoints and conflicts", async () =>
     consequences: ["Pause"],
   });
   assert.equal(await run(["workflow", "add", "--item", JSON.stringify({ id: "story.conflict", type: "story", title: "Conflict", status: "blocked" }), "--conflict", conflict, "--yes"], root), 1);
+  const humanOutput = [];
+  console.log = (value) => humanOutput.push(String(value));
+  try {
+    assert.equal(await run(["workflow", "add", "--item", JSON.stringify({ id: "story.conflict2", type: "story", title: "Conflict", status: "blocked" }), "--conflict", conflict], root), 1);
+  } finally { console.log = originalLog; }
+  assert.match(humanOutput.join("\n"), /SOURCE a\.md/);
+  assert.match(humanOutput.join("\n"), /OPTION a Keep A/);
+  assert.match(humanOutput.join("\n"), /CONSEQUENCE Pause/);
   const conflictOutput = [];
   console.log = (value) => conflictOutput.push(String(value));
   try {
     assert.equal(await run(["workflow", "resume", "--item-id", "story.conflict", "--json"], root), 1);
   } finally { console.log = originalLog; }
   assert.equal(JSON.parse(conflictOutput.join("\n")).action, "resolve-conflict");
+  assert.equal(await run(["workflow", "resolve", "--item-id", "story.conflict", "--select", "a", "--owner", "maintainer", "--rationale", "Use A"], root), 0);
 });

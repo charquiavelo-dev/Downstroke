@@ -165,6 +165,8 @@ export type WorkflowItem = {
   review: "cadence" | "individual";
   acceptanceCriteria: string[];
   tasks: string[];
+  evidence: string[];
+  deferredWork: string[];
   source?: Pick<ExperienceFact["source"], "type" | "path" | "hash">;
   createdAt: string;
   updatedAt: string;
@@ -186,6 +188,10 @@ export type WorkflowConflict = {
   consequences: string[];
   status: "pending" | "resolved";
   createdAt: string;
+  selectedOption?: string;
+  rationale?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
 };
 export type WorkflowNextAction = {
   status: "ready" | "blocked";
@@ -200,6 +206,7 @@ export type WorkflowItemInput = {
   approved?: boolean;
   conflict?: unknown;
 };
+export type WorkflowResolveInput = { itemId: string; selectedOption: string; owner: string; rationale: string };
 export type WorkflowPlan = {
   status: "ready" | "blocked";
   action: "append" | "skip";
@@ -913,6 +920,8 @@ function parseWorkflowItem(value: unknown, timestamp: string): WorkflowItem | un
     review: risk === "high" ? "individual" : "cadence",
     acceptanceCriteria: strings(input.acceptanceCriteria),
     tasks: strings(input.tasks),
+    evidence: strings(input.evidence),
+    deferredWork: strings(input.deferredWork),
     ...(source ? { source } : {}),
     createdAt: typeof input.createdAt === "string" ? input.createdAt : timestamp,
     updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : timestamp,
@@ -985,18 +994,64 @@ function controlledAction(phase: WorkflowPhase): WorkflowNextAction["action"] {
   return `approve-${phase}` as WorkflowNextAction["action"];
 }
 
+function workflowIdentity(item: WorkflowItem): unknown {
+  const { createdAt: _createdAt, updatedAt: _updatedAt, ...stable } = item;
+  return normalizeJson(stable);
+}
+
+function latestCheckpointsByPhase(checkpoints: WorkflowCheckpoint[], itemId: string): Map<WorkflowPhase, WorkflowCheckpoint> {
+  const latest = new Map<WorkflowPhase, WorkflowCheckpoint>();
+  for (const checkpoint of checkpoints.filter((item) => item.itemId === itemId)) latest.set(checkpoint.phase, checkpoint);
+  return latest;
+}
+
+function unresolvedConflicts(conflicts: WorkflowConflict[], itemId: string): WorkflowConflict[] {
+  const latest = new Map<string, WorkflowConflict>();
+  for (const conflict of conflicts.filter((item) => item.itemId === itemId)) latest.set(conflict.id, conflict);
+  return [...latest.values()].filter((conflict) => conflict.status === "pending");
+}
+
+function controlledNext(item: WorkflowItem, checkpoints: WorkflowCheckpoint[]): WorkflowNextAction | undefined {
+  const latest = latestCheckpointsByPhase(checkpoints, item.id);
+  for (const phase of workflowPhases) {
+    const checkpoint = latest.get(phase);
+    if (!checkpoint) return undefined;
+    if (checkpoint.status === "pending") return { status: "ready", itemId: item.id, action: controlledAction(phase), reason: "Controlled checkpoint requires approval" };
+  }
+  return undefined;
+}
+
+async function validateControlledPhase(root: string, itemId: string, phase: WorkflowPhase, approved: boolean): Promise<string[]> {
+  let checkpoints: WorkflowCheckpoint[] = [];
+  try { checkpoints = await readWorkflowCheckpoints(root); }
+  catch { checkpoints = []; }
+  const latest = latestCheckpointsByPhase(checkpoints, itemId);
+  const phaseIndex = workflowPhases.indexOf(phase);
+  const current = latest.get(phase);
+  if (approved) {
+    if (current?.status !== "pending") return [`Controlled ${phase} approval requires a pending ${phase} checkpoint`];
+    return [];
+  }
+  for (const previous of workflowPhases.slice(0, phaseIndex)) {
+    if (latest.get(previous)?.status !== "approved") return [`Controlled ${phase} checkpoint requires approved ${previous}`];
+  }
+  if (current?.status === "pending") return [`Controlled ${phase} checkpoint is already pending`];
+  if (current?.status === "approved") return [`Controlled ${phase} checkpoint is already approved`];
+  return [];
+}
+
 export async function resolveWorkflowNextAction(root: string, itemId?: string): Promise<WorkflowNextAction> {
   try {
     const items = await readWorkflowItems(root);
     const item = itemId ? lastMatching(items, (candidate) => candidate.id === itemId) : items[items.length - 1];
     if (!item) return nextFromItem(undefined);
     const conflicts = await readWorkflowConflicts(root);
-    if (conflicts.some((conflict) => conflict.itemId === item.id && conflict.status === "pending")) {
+    if (unresolvedConflicts(conflicts, item.id).length > 0) {
       return { status: "blocked", itemId: item.id, action: "resolve-conflict", reason: "Material conflict requires owner decision" };
     }
     const checkpoints = await readWorkflowCheckpoints(root);
-    const pending = lastMatching(checkpoints, (checkpoint) => checkpoint.itemId === item.id && checkpoint.status === "pending");
-    if (pending) return { status: "ready", itemId: item.id, action: controlledAction(pending.phase), reason: "Controlled checkpoint requires approval" };
+    const controlled = controlledNext(item, checkpoints);
+    if (controlled) return controlled;
     return nextFromItem(item);
   } catch {
     return { status: "blocked", itemId: itemId ?? null, action: "plan", reason: "Workflow state cannot be inspected safely" };
@@ -1013,6 +1068,7 @@ export async function planWorkflowItem(root: string, input: WorkflowItemInput | 
   if (!workflowPhases.includes(phase)) blockers.push("Controlled phase is invalid");
   let checkpoint: WorkflowCheckpoint | undefined;
   if (normalized.controlled) {
+    blockers.push(...await validateControlledPhase(root, item.id, phase, normalized.approved === true));
     checkpoint = {
       id: `checkpoint.${item.id}.${phase}.${createHash("sha256").update(`${item.id}:${phase}:${timestamp}`).digest("hex").slice(0, 12)}`,
       itemId: item.id,
@@ -1028,7 +1084,7 @@ export async function planWorkflowItem(root: string, input: WorkflowItemInput | 
   let existing: WorkflowItem[] = [];
   try { existing = await readWorkflowItems(root); }
   catch { /* missing workflow storage is valid during preview */ }
-  const duplicate = existing.find((candidate) => candidate.id === item.id && JSON.stringify(normalizeJson(candidate)) === JSON.stringify(normalizeJson(item)));
+  const duplicate = existing.find((candidate) => candidate.id === item.id && JSON.stringify(workflowIdentity(candidate)) === JSON.stringify(workflowIdentity(item)));
   const nextAction = conflict
     ? { status: "blocked", itemId: item.id, action: "resolve-conflict", reason: "Material conflict requires owner decision" } satisfies WorkflowNextAction
     : checkpoint && checkpoint.status === "pending"
@@ -1062,12 +1118,33 @@ export async function applyWorkflowItem(root: string, plan: WorkflowPlan): Promi
   const fresh = await planWorkflowItem(root, { item: plan.item, ...(plan.checkpoint ? { controlled: true, phase: plan.checkpoint.phase, approved: plan.checkpoint.status === "approved" } : {}), ...(plan.conflict ? { conflict: plan.conflict } : {}) });
   if (fresh.status !== plan.status || fresh.action !== plan.action || JSON.stringify(normalizeJson(fresh.item)) !== JSON.stringify(normalizeJson(plan.item))) return { id: "workflow.item", status: "fail", message: "Workflow state changed after preview", remediation: "Preview the workflow item again" };
   const base = await initializeWorkflowStorage(root);
-  if (plan.action === "append") await appendFile(join(base, "items.jsonl"), `${JSON.stringify(plan.item)}\n`);
   if (plan.checkpoint) await appendFile(join(base, "checkpoints.jsonl"), `${JSON.stringify(plan.checkpoint)}\n`);
   if (plan.conflict) await appendFile(join(base, "decisions.jsonl"), `${JSON.stringify(plan.conflict)}\n`);
+  if (plan.action === "append") await appendFile(join(base, "items.jsonl"), `${JSON.stringify(plan.item)}\n`);
   return conflictOnly
     ? { id: "workflow.item", status: "warn", message: "Workflow conflict retained; human resolution required", evidence: plan.item.id, remediation: "Resolve the reported material conflict" }
     : { id: "workflow.item", status: "ok", message: plan.action === "skip" ? "Workflow item already exists" : "Workflow item stored", evidence: plan.item.id, remediation: "No action required" };
+}
+
+export async function resolveWorkflowConflict(root: string, input: WorkflowResolveInput): Promise<DoctorResult> {
+  if (!input.itemId || !input.selectedOption || !input.owner || !input.rationale) return { id: "workflow.conflict", status: "fail", message: "Conflict resolution requires itemId, selectedOption, owner and rationale", remediation: "Provide complete resolution details" };
+  let conflicts: WorkflowConflict[];
+  try { conflicts = await readWorkflowConflicts(root); }
+  catch { return { id: "workflow.conflict", status: "fail", message: "Workflow decisions cannot be inspected safely", remediation: "Inspect workflow storage" }; }
+  const conflict = lastMatching(conflicts, (item) => item.itemId === input.itemId && item.status === "pending");
+  if (!conflict) return { id: "workflow.conflict", status: "fail", message: "No pending workflow conflict found", remediation: "Run workflow resume and resolve the reported item" };
+  if (!conflict.options.some((option) => option.id === input.selectedOption)) return { id: "workflow.conflict", status: "fail", message: "Selected option is not declared", remediation: "Choose one of the recorded conflict options" };
+  const base = await initializeWorkflowStorage(root);
+  const resolved: WorkflowConflict = {
+    ...conflict,
+    status: "resolved",
+    selectedOption: input.selectedOption,
+    rationale: input.rationale,
+    resolvedBy: input.owner,
+    resolvedAt: new Date().toISOString(),
+  };
+  await appendFile(join(base, "decisions.jsonl"), `${JSON.stringify(resolved)}\n`);
+  return { id: "workflow.conflict", status: "ok", message: "Workflow conflict resolution stored", evidence: `${input.itemId}:${input.selectedOption}`, remediation: "Resume the workflow" };
 }
 
 type LocalRead =

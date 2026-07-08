@@ -4,7 +4,7 @@ baseline_commit: cb19297
 
 # Story 9.4: Add Native Planning and Delivery Workflows
 
-Status: review
+Status: done
 
 ## Story
 
@@ -44,6 +44,14 @@ so that Downstroke owns its delivery workflow end to end.
   - [x] Core tests for state validation, deterministic resume, high-risk review, controlled phase progression and conflict pause.
   - [x] CLI tests for preview/no mutation, authorized apply, JSON output and resume.
 - [x] Run build, typecheck, tests and native-only distributed-surface scan.
+
+### Review Findings
+
+- [x] [Review][Patch] Controlled checkpoint approvals now clear pending checkpoints by deriving the latest record per phase and enforce phase order.
+- [x] [Review][Patch] Material workflow conflicts can now be resolved through a persisted owner decision with selected option and rationale.
+- [x] [Review][Patch] CLI conflict output now shows source evidence, options, consequences and decision owner instead of only counts.
+- [x] [Review][Patch] Workflow items now persist native evidence and deferred-work fields.
+- [x] [Review][Patch] Repeated `workflow add` calls now skip equivalent items even when timestamps are generated.
 
 ## Dev Notes
 
@@ -121,7 +129,7 @@ GPT-5 Codex
 ### Debug Log References
 
 - `npm run typecheck` — passing.
-- `npm test` — 51/51 passing.
+- `npm test` — 52/52 passing.
 - Native-only distributed-surface scan — passing.
 - `git diff --check` — passing.
 
@@ -134,6 +142,7 @@ GPT-5 Codex
 - Added deterministic resume behavior from persisted state only, including controlled-mode checkpoint resume and material-conflict pauses.
 - Added `downstroke workflow add` and `downstroke workflow resume` with JSON and human output.
 - Added core and CLI coverage for preview/no mutation, authorized apply, high-risk individual review, controlled checkpointing and conflict pause.
+- Resolved formal review findings for controlled-mode ordering, conflict resolution persistence, detailed conflict display, native evidence/deferred-work fields and idempotent workflow item adds.
 
 ### File List
 
@@ -150,3 +159,4 @@ GPT-5 Codex
 
 - 2026-07-07: Created implementation-ready Story 9.4 contract.
 - 2026-07-07: Implemented native planning and delivery workflow state; moved story to review.
+- 2026-07-07: Resolved review findings and completed Story 9.4.

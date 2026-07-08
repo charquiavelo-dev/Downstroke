@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -510,7 +510,7 @@ test("workflow apply persists state and resolves next action from records only",
   });
 
   assert.equal((await applyWorkflowItem(root, plan)).status, "ok");
-  assert.equal((await planWorkflowItem(root, plan.item)).action, "skip");
+  assert.equal((await planWorkflowItem(root, { item: { id: "story.9.4", type: "story", title: "Native workflows", status: "in-progress", source: { type: "file", path: "docs/story.md", hash: "a".repeat(64) } } })).action, "skip");
   assert.deepEqual(await resolveWorkflowNextAction(root, "story.9.4"), { status: "ready", itemId: "story.9.4", action: "verify", reason: "Item is in progress" });
 });
 
@@ -537,10 +537,26 @@ test("workflow controlled mode advances through persisted checkpoints", async ()
   assert.equal((await applyWorkflowItem(root, first)).status, "ok");
   assert.deepEqual(await resolveWorkflowNextAction(root, "story.controlled"), { status: "ready", itemId: "story.controlled", action: "approve-plan", reason: "Controlled checkpoint requires approval" });
 
-  const second = await planWorkflowItem(root, {
+  const skipped = await planWorkflowItem(root, {
     controlled: true,
     phase: "review",
     approved: true,
+    item: { id: "story.controlled", type: "story", title: "Controlled story", status: "ready-for-dev" },
+  });
+  assert.equal(skipped.status, "blocked");
+
+  const approvedPlan = await planWorkflowItem(root, {
+    controlled: true,
+    phase: "plan",
+    approved: true,
+    item: { id: "story.controlled", type: "story", title: "Controlled story", status: "ready-for-dev" },
+  });
+  assert.equal((await applyWorkflowItem(root, approvedPlan)).status, "ok");
+  assert.deepEqual(await resolveWorkflowNextAction(root, "story.controlled"), { status: "ready", itemId: "story.controlled", action: "implement", reason: "Item is ready for implementation" });
+
+  const second = await planWorkflowItem(root, {
+    controlled: true,
+    phase: "review",
     item: { id: "story.controlled", type: "story", title: "Controlled story", status: "ready-for-dev" },
   });
   assert.equal(second.status, "ready");
@@ -563,4 +579,6 @@ test("workflow material conflicts persist evidence and pause execution", async (
   assert.equal(plan.nextAction?.action, "resolve-conflict");
   assert.equal((await applyWorkflowItem(root, plan)).status, "warn");
   assert.deepEqual(await resolveWorkflowNextAction(root, "story.conflict"), { status: "blocked", itemId: "story.conflict", action: "resolve-conflict", reason: "Material conflict requires owner decision" });
+  assert.equal((await resolveWorkflowConflict(root, { itemId: "story.conflict", selectedOption: "a", owner: "maintainer", rationale: "Owner selected local contract" })).status, "ok");
+  assert.deepEqual(await resolveWorkflowNextAction(root, "story.conflict"), { status: "blocked", itemId: "story.conflict", action: "resolve-conflict", reason: "Item is blocked" });
 });
