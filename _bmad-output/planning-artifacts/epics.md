@@ -200,6 +200,16 @@ FR87: Downstroke provides native schema-bound workers for Planner, Repository In
 
 FR88: Workflow state supports migration-safe ownership, dependencies, priority, estimates, rollback references, deferred work and evidence links without an external workflow engine.
 
+FR89: Downstroke provides a native Knowledge Registry for scoped rules, decisions, preferences and stack packages with source evidence, trust, status, lifecycle and deterministic IDs.
+
+FR90: Downstroke detects local stack technologies and versions without executing arbitrary scripts, then stores those facts as observed knowledge until verified.
+
+FR91: Downstroke compiles bounded task-specific knowledge context from accepted records, detected stack, workflow state and experience facts while excluding stale, conflicted or quarantined authority.
+
+FR92: Downstroke audits project knowledge for stale stack packages, contradictory active rules, missing evidence, lifecycle failures and low-trust records.
+
+FR93: Downstroke can propose candidate knowledge from repeated observations, but never activates candidates without human approval and workflow evidence.
+
 ### Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -298,6 +308,10 @@ NFR47: Multi-worker orchestration is used only when deterministic or single-path
 
 NFR48: Worker outputs are claims until evidence policy validates them; no worker can create verified facts, complete checkpoints or grant release approval by assertion alone.
 
+NFR49: Knowledge storage remains local, inspectable and deterministic in the MVP; embeddings, vector databases and web crawlers are optional future indexes, not authorities.
+
+NFR50: Generated summaries, LLM memory and RAG snippets cannot become accepted knowledge without source evidence and review.
+
 ### Additional Requirements
 
 - Keep `core`, `spec`, `agents`, `gates`, `presets` and CLI as existing boundaries; do not create parallel Git, hosting, map or agent frameworks.
@@ -306,6 +320,8 @@ NFR48: Worker outputs are claims until evidence policy validates them; no worker
 - Provide the first native worker roles as Planner, Repository Inspector, Risk Auditor, Evidence Validator, Workflow Guardian, Context Compiler and Release Guardian.
 - Keep worker manifests explicit about input schema, output schema, allowed tools, mutation rights, budget, stop condition, evidence requirements and audit records.
 - Split Operational Experience internals into knowledge, evidence, import and trust/lifecycle responsibilities while preserving one user-facing experience command family.
+- Treat the Knowledge Engine as governance over project knowledge, not chat memory, generic RAG or a vector database feature.
+- Implement the Knowledge Engine MVP through local registry, lifecycle, audit, stack detection and context compilation before adding official-doc learning, PR mining or scoring.
 - Delegate deterministic operations to native Git and provider CLIs.
 - Treat authorization as explicit capabilities with scope and lifetime rather than an ambiguous boolean.
 - Require repository selection and the correct working directory before multi-repository mutations.
@@ -346,7 +362,7 @@ FR21-FR23, FR35: Epic 5 - Selectable map providers.
 FR32-FR34: Epic 6 - Safe managed-rule evolution.
 FR36-FR40: Epic 7 - Three-pass 2D and 3D interactive delivery.
 FR41-FR50: Epic 8 - Design system, brand and internationalization.
-FR60-FR68, FR82-FR88: Epic 9 - Evidence-gated native platform evolution.
+FR60-FR68, FR82-FR93: Epic 9 - Evidence-gated native platform evolution.
 FR72-FR81: Epic 10 - Package distribution, sanitized public release and documentation.
 
 ### Story Coverage Map
@@ -359,7 +375,7 @@ FR72-FR81: Epic 10 - Package distribution, sanitized public release and document
 - 6.1: FR32; 6.2: FR33; 6.3: FR34.
 - 7.1: FR38-FR40; 7.2: FR36, FR38-FR40; 7.3: FR37-FR40.
 - 8.1: FR42, FR45; 8.2: FR41; 8.3: FR46-FR47; 8.4: FR48-FR50; 8.5: FR43-FR44.
-- 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83, FR88; 9.5: FR63; 9.6: FR64, FR87; 9.7: FR62; 9.8: FR56-FR59; 9.9: FR63, FR82, FR87; 9.10: FR60-FR61, FR86; 9.11: FR66, FR84, FR87; 9.12: FR67; 9.13: FR68; 9.14: FR84, FR88; 9.15: FR85-FR86.
+- 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83, FR88; 9.5: FR63; 9.6: FR64, FR87; 9.7: FR62, FR90; 9.8: FR56-FR59; 9.9: FR63, FR82, FR87, FR91; 9.10: FR60-FR61, FR86, FR92; 9.11: FR66, FR84, FR87; 9.12: FR67; 9.13: FR68; 9.14: FR84, FR88; 9.15: FR85-FR86, FR89-FR93.
 - 10.1: FR72; 10.2: FR73-FR74; 10.3: FR75; 10.4: FR78; 10.5: FR77, FR79-FR81; 10.6: FR76.
 
 ## Epic List
@@ -1072,6 +1088,7 @@ As a developer, I want a repo-scoped incremental code index, So that structural 
 
 **Acceptance Criteria:**
 **Given** a TypeScript/JavaScript repository **When** indexed **Then** safe files, hashes, package ownership, imports, exports and top-level symbols are stored incrementally.
+**Given** local package and config files **When** stack detection runs **Then** technologies, versions, package manager and workspace ownership are reported as observed facts without executing arbitrary scripts.
 **Given** changed files **When** impact or task context is requested **Then** bounded relevant files are returned and stale indexes are explicit.
 **Given** ignored, generated, secret or external-root files **When** scanning **Then** they are excluded without executing builds or arbitrary scripts.
 
@@ -1088,6 +1105,7 @@ As a developer, I want deterministic task-specific context packs, So that agents
 
 **Acceptance Criteria:**
 **Given** experience records and a task **When** context compiles **Then** identity, active rules, relevant facts, evidence, risks, unknowns and blocked assumptions fit configured category budgets.
+**Given** accepted knowledge records and detected stack **When** context compiles **Then** matching rules, decisions, preferences and stack notes are included by ID and source reference.
 **Given** quarantine, secrets, conflicted or stale authority **When** encountered **Then** compilation excludes or labels it and fails on critical leakage.
 **Given** identical inputs **When** compiled repeatedly **Then** output is stable apart from explicitly volatile metadata.
 
@@ -1140,9 +1158,21 @@ As a developer, I want project knowledge to age, conflict and recover safely, So
 
 **Acceptance Criteria:**
 **Given** a fact with TTL or lifecycle policy **When** it expires or its source changes **Then** its status becomes stale until refreshed or invalidated with evidence.
+**Given** a repository knowledge record **When** it is added **Then** it includes kind, scope, status, trust, source evidence, lifecycle and deterministic ID.
+**Given** a stack package **When** the detected project dependency version changes **Then** the package becomes stale until reviewed or replaced.
 **Given** conflicting evidence **When** trust is evaluated **Then** both candidates remain visible and verified truth is withheld until human decision or stronger evidence policy resolves it.
+**Given** repeated observations **When** they cross a configured threshold **Then** Downstroke can create a proposed candidate, but cannot activate it without explicit approval.
 **Given** imported content **When** lifecycle rules run **Then** import provenance, quarantine state, evidence hash and trust transition are preserved.
 **Given** health analysis **When** repo readiness is requested **Then** Downstroke reports evidence gaps, stale facts, unresolved conflicts, lifecycle failures and release blockers in one native health view.
+
+**Implementation Tasks:**
+- Define the local `.downstroke/knowledge/` manifest and JSONL record layout.
+- Add statuses `proposed`, `accepted`, `stale`, `deprecated`, `invalidated` and `conflicted`.
+- Reuse Experience trust states `verified`, `observed` and `inferred`.
+- Add lifecycle evaluation for TTL and stack-version mismatch.
+- Add active-rule conflict detection.
+- Feed stale, conflicted and low-evidence knowledge into `downstroke health`.
+- Add `downstroke knowledge list`, `add`, `compile` and `audit` after the registry foundation exists.
 
 ## Epic 10: Package Distribution and Public Documentation
 

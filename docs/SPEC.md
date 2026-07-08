@@ -63,6 +63,7 @@ Number every rule so code, tests and Downstroke workflow items can reference it.
 | `BR-003` | Controlled development mode separates plan, review, implementation and verification, with explicit checkpoints before product-owned or high-risk decisions. | Native workflow state machine | Resume/checkpoint tests and workflow evidence |
 | `BR-004` | Durable project facts retain source, trust, scope, status, TTL and evidence; generated output cannot directly become verified truth. | Experience runtime validation and authorized JSONL writes | Experience trust/evidence tests |
 | `BR-005` | Native orchestration uses deterministic functions before worker orchestration; workers are schema-bound, permission-scoped and cannot bypass preview, evidence, workflow or human checkpoints. | Runtime manifest, workflow gate and audit records | Worker manifest tests and blocked mutation fixtures |
+| `BR-006` | Project knowledge is governed knowledge, not chat memory or generic RAG; accepted knowledge must be scoped, source-linked, lifecycle-managed, conflict-aware and reviewable. | Knowledge registry, compiler and health audit | Knowledge lifecycle and compiler tests |
 
 ## User Flows
 
@@ -112,6 +113,9 @@ Keep product domains isolated. Shared packages contain only contracts or primiti
 | Execution task | Repository | Planner, scheduler, executor, verifier and recorder state are explicit; deterministic execution is attempted before worker orchestration | Local workflow/execution ledger |
 | Native worker | Repository | Worker role, inputs, allowed tools, mutation rights, budget, stop condition and output schema are declared before execution | Local runtime manifest and audit events |
 | Knowledge lifecycle rule | Repository | Facts can expire, become stale, be invalidated or lose confidence only through explicit policy and evidence | Experience lifecycle records |
+| Knowledge record | Repository | Rules, decisions, preferences and stack notes include scope, status, trust, source evidence, lifecycle and deterministic ID | Local `.downstroke/knowledge/` records |
+| Stack package | Repository | Technology/version knowledge is version-bound, source-linked and stale when the detected project version changes | Local knowledge registry and health report |
+| Knowledge candidate | Repository | Observations can propose knowledge, but candidates never become active without human approval | Local candidate records plus workflow decision |
 
 - PostgreSQL constraints enforce important invariants.
 - Tenant-owned queries include tenant ownership server-side.
@@ -133,6 +137,11 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | `downstroke workflow resume` | Project developer | Optional workflow item ID | Computes next action only from persisted workflow records; invalid/conflicted state blocks instead of guessing | Core and CLI workflow resume tests |
 | `downstroke run` | Project developer | Execution task, mode and optional worker manifest; preview then explicit approval for mutation | Uses deterministic planner/scheduler/executor/verifier/recorder first; worker orchestration is rejected unless justified and scoped | Runtime and workflow orchestration tests |
 | `downstroke health` | Project developer | Repository scope and optional strict mode | Explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items without executing unsafe artifacts | Health engine tests and fixture reports |
+| `downstroke stack detect` | Project developer | Local repository package/config files | Reports observed technologies, versions and uncertainty without executing arbitrary scripts | Stack detection tests |
+| `downstroke knowledge list` | Project developer | Repository-local knowledge registry | Shows accepted, proposed, stale, deprecated, invalidated and conflicted records | Knowledge registry tests |
+| `downstroke knowledge add` | Project developer | Knowledge record JSON or guided fields; preview then `--yes` | Rejects missing evidence for verified records; conflicts pause for decision | Knowledge write and conflict tests |
+| `downstroke knowledge compile` | Project developer | Task type, optional stack/file scope and context budget | Produces deterministic bounded context with included/excluded knowledge IDs | Context compiler tests |
+| `downstroke knowledge audit` | Project developer | Repository-local registry and detected stack | Reports stale, conflicted, low-evidence and lifecycle-failed knowledge | Knowledge health tests |
 
 External integrations must define timeout, retry, rate-limit, fallback, secret ownership and observability behavior.
 

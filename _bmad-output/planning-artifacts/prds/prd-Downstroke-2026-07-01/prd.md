@@ -10,7 +10,7 @@ sourceRequirements: ../../epics.md
 
 ## 0. Document Purpose
 
-This PRD is the canonical product contract for Downstroke. It defines user outcomes and capabilities for maintainers, project developers and downstream planning workflows. Implementation mechanisms belong in the architecture or addendum. The approved FR1-FR81 and NFR1-NFR45 inventory in `../../epics.md` is the reconciliation source while this draft is completed.
+This PRD is the canonical product contract for Downstroke. It defines user outcomes and capabilities for maintainers, project developers and downstream planning workflows. Implementation mechanisms belong in the architecture or addendum. The approved FR1-FR93 and NFR1-NFR50 inventory in `../../epics.md` is the reconciliation source while this draft is completed.
 
 ## 1. Vision
 
@@ -75,7 +75,7 @@ The product helps developers move from a human product description to an appropr
 3. Supported stack and deployment guidance — FR17-FR35, FR51-FR55, FR69-FR71.
 4. Interactive and visual delivery — FR36-FR50.
 5. LLM usage visibility — FR56-FR59.
-6. Native platform and safe project-knowledge migration — FR60-FR68.
+6. Native platform, safe project-knowledge migration and governed Knowledge Engine foundation — FR60-FR68, FR82-FR93.
 7. Package distribution and public documentation — FR72-FR81.
 
 ## 7. Non-Goals
@@ -272,6 +272,26 @@ FR82: When active project sources conflict on product behavior, scope, safety, o
 
 FR83: Downstroke provides a controlled development mode with persisted plan, review, implementation and verification checkpoints, explicit decision ownership and safe resume behavior.
 
+FR84: Downstroke provides an explicit native execution engine that coordinates planner, scheduler, executor, verifier and recorder stages, with deterministic execution attempted before worker orchestration.
+
+FR85: Downstroke separates knowledge, evidence, import and trust lifecycle policies so facts can expire, become stale, be invalidated or lose confidence only through explicit evidence.
+
+FR86: Downstroke provides a native health engine that explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items.
+
+FR87: Downstroke provides native schema-bound workers for Planner, Repository Inspector, Risk Auditor, Evidence Validator, Workflow Guardian, Context Compiler and Release Guardian.
+
+FR88: Workflow state supports migration-safe ownership, dependencies, priority, estimates, rollback references, deferred work and evidence links without an external workflow engine.
+
+FR89: Downstroke provides a native Knowledge Registry for scoped rules, decisions, preferences and stack packages with source evidence, trust, status, lifecycle and deterministic IDs.
+
+FR90: Downstroke detects local stack technologies and versions without executing arbitrary scripts, then stores those facts as observed knowledge until verified.
+
+FR91: Downstroke compiles bounded task-specific knowledge context from accepted records, detected stack, workflow state and experience facts while excluding stale, conflicted or quarantined authority.
+
+FR92: Downstroke audits project knowledge for stale stack packages, contradictory active rules, missing evidence, lifecycle failures and low-trust records.
+
+FR93: Downstroke can propose candidate knowledge from repeated observations, but never activates candidates without human approval and workflow evidence.
+
 ## 11. Cross-Cutting Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -363,6 +383,16 @@ NFR43: The private maintenance repository must be readable and contain the expec
 NFR44: Public-history rewriting is never automatic, never runs during normal development and has a documented recovery path.
 
 NFR45: npm recovery keys and equivalent account-recovery material are never tracked, read, logged, packaged or copied; `.npm.keys` is ignored explicitly.
+
+NFR46: Native workers cannot mutate project state unless the execution task declares the capability, the worker manifest permits it and the required workflow approvals exist.
+
+NFR47: Multi-worker orchestration is used only when deterministic or single-path execution is insufficient; simple tasks remain single-path.
+
+NFR48: Worker outputs are claims until evidence policy validates them; no worker can create verified facts, complete checkpoints or grant release approval by assertion alone.
+
+NFR49: Knowledge storage remains local, inspectable and deterministic in the MVP; embeddings, vector databases and web crawlers are optional future indexes, not authorities.
+
+NFR50: Generated summaries, LLM memory and RAG snippets cannot become accepted knowledge without source evidence and review.
 
 ## 12. Success Metrics
 
