@@ -154,7 +154,7 @@ FR64: Downstroke provides native reuse, dependency, abstraction and broad-rewrit
 
 FR65: Downstroke provides native briefs, specs, epics, stories, cadence, checkpoints, QA evidence and resume behavior.
 
-FR66: Downstroke can later provide an agent runtime for explicit, schema-bound orchestration after normal functions prove insufficient.
+FR66: Downstroke can later provide a native worker runtime for explicit, schema-bound orchestration after deterministic functions and single-path execution prove insufficient.
 
 FR67: Downstroke can later provide a remote module registry with provenance, versions, integrity verification and safe installation.
 
@@ -189,6 +189,16 @@ FR81: Replacing public history or force-pushing the single-commit release requir
 FR82: Material conflicts between active project sources require evidence, options, decision ownership and a human checkpoint; Downstroke never chooses a semantic winner silently.
 
 FR83: Downstroke provides a controlled development mode with persisted plan, review, implementation and verification checkpoints and safe resume behavior.
+
+FR84: Downstroke provides an explicit native execution engine that coordinates planner, scheduler, executor, verifier and recorder stages, with deterministic execution attempted before worker orchestration.
+
+FR85: Downstroke separates knowledge, evidence, import and trust lifecycle policies so facts can expire, become stale, be invalidated or lose confidence only through explicit evidence.
+
+FR86: Downstroke provides a native health engine that explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items.
+
+FR87: Downstroke provides native schema-bound workers for Planner, Repository Inspector, Risk Auditor, Evidence Validator, Workflow Guardian, Context Compiler and Release Guardian.
+
+FR88: Workflow state supports migration-safe ownership, dependencies, priority, estimates, rollback references, deferred work and evidence links without an external workflow engine.
 
 ### Non-Functional Requirements
 
@@ -282,9 +292,20 @@ NFR44: Public-history rewriting is never automatic, never runs during normal dev
 
 NFR45: npm recovery keys and equivalent account-recovery material are never tracked, read, logged, packaged or copied; `.npm.keys` is ignored explicitly.
 
+NFR46: Native workers cannot mutate project state unless the execution task declares the capability, the worker manifest permits it and the required workflow approvals exist.
+
+NFR47: Multi-worker orchestration is used only when deterministic or single-path execution is insufficient; simple tasks remain single-path.
+
+NFR48: Worker outputs are claims until evidence policy validates them; no worker can create verified facts, complete checkpoints or grant release approval by assertion alone.
+
 ### Additional Requirements
 
 - Keep `core`, `spec`, `agents`, `gates`, `presets` and CLI as existing boundaries; do not create parallel Git, hosting, map or agent frameworks.
+- Treat native workers as product capabilities with typed contracts, not personalities, prompts or external agent-framework wrappers.
+- Model execution as Planner -> Scheduler -> Executor -> Verifier -> Recorder before adding any worker fan-out.
+- Provide the first native worker roles as Planner, Repository Inspector, Risk Auditor, Evidence Validator, Workflow Guardian, Context Compiler and Release Guardian.
+- Keep worker manifests explicit about input schema, output schema, allowed tools, mutation rights, budget, stop condition, evidence requirements and audit records.
+- Split Operational Experience internals into knowledge, evidence, import and trust/lifecycle responsibilities while preserving one user-facing experience command family.
 - Delegate deterministic operations to native Git and provider CLIs.
 - Treat authorization as explicit capabilities with scope and lifetime rather than an ambiguous boolean.
 - Require repository selection and the correct working directory before multi-repository mutations.
@@ -325,7 +346,7 @@ FR21-FR23, FR35: Epic 5 - Selectable map providers.
 FR32-FR34: Epic 6 - Safe managed-rule evolution.
 FR36-FR40: Epic 7 - Three-pass 2D and 3D interactive delivery.
 FR41-FR50: Epic 8 - Design system, brand and internationalization.
-FR60-FR68: Epic 9 - Evidence-gated native platform evolution.
+FR60-FR68, FR82-FR88: Epic 9 - Evidence-gated native platform evolution.
 FR72-FR81: Epic 10 - Package distribution, sanitized public release and documentation.
 
 ### Story Coverage Map
@@ -338,7 +359,7 @@ FR72-FR81: Epic 10 - Package distribution, sanitized public release and document
 - 6.1: FR32; 6.2: FR33; 6.3: FR34.
 - 7.1: FR38-FR40; 7.2: FR36, FR38-FR40; 7.3: FR37-FR40.
 - 8.1: FR42, FR45; 8.2: FR41; 8.3: FR46-FR47; 8.4: FR48-FR50; 8.5: FR43-FR44.
-- 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83; 9.5: FR63; 9.6: FR64; 9.7: FR62; 9.8: FR56-FR59; 9.9: FR63, FR82; 9.10: FR60-FR61; 9.11: FR66; 9.12: FR67; 9.13: FR68.
+- 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83, FR88; 9.5: FR63; 9.6: FR64, FR87; 9.7: FR62; 9.8: FR56-FR59; 9.9: FR63, FR82, FR87; 9.10: FR60-FR61, FR86; 9.11: FR66, FR84, FR87; 9.12: FR67; 9.13: FR68; 9.14: FR84, FR88; 9.15: FR85-FR86.
 - 10.1: FR72; 10.2: FR73-FR74; 10.3: FR75; 10.4: FR78; 10.5: FR77, FR79-FR81; 10.6: FR76.
 
 ## Epic List
@@ -376,8 +397,8 @@ Developers can create a consistent identity, install typography, generate neutra
 **FRs covered:** FR41-FR50.
 
 ### Epic 9: Evidence-Gated Native Platform Evolution
-Maintainers can graduate proven external workflows into native capabilities, an agent runtime, a remote registry and automatic managed migrations without losing interoperability or rollback.
-**FRs covered:** FR60-FR68.
+Maintainers can graduate proven external workflows into native capabilities, a worker runtime, a remote registry, native execution, health and automatic managed migrations without losing interoperability or rollback.
+**FRs covered:** FR60-FR68, FR82-FR88.
 
 ### Epic 10: Package Distribution and Public Documentation
 Developers can understand Downstroke from the README, install a verified npm package, inspect a sanitized one-commit public repository and later use an accurate React documentation and showcase site.
@@ -1077,13 +1098,18 @@ As a developer, I want native health and migration cleanup verified, So that old
 **Given** existing legacy artifacts **When** doctor runs **Then** they are classified as migration sources or conflicts, never healthy dependencies or installation recommendations.
 **Given** cleanup **When** previewed **Then** native parity, imported hashes, rewritten active docs, quarantine and archive targets are shown and `--yes` is required.
 **Given** strict native mode **When** active legacy instructions, missing parity, secret leakage or quarantine leakage remain **Then** doctor fails.
+**Given** a blocked repository **When** `downstroke health` runs **Then** it explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items with the next safe action.
 
-### Story 9.11: Add an Explicit Agent Runtime
-As a maintainer, I want schema-bound agent orchestration, So that multi-step work can run only where normal functions are insufficient.
+### Story 9.11: Add an Explicit Native Worker Runtime
+As a maintainer, I want schema-bound native worker orchestration, So that multi-step work can run only where deterministic functions or a single execution path are insufficient.
 
 **Acceptance Criteria:**
-**Given** an orchestration use case **When** runtime use is proposed **Then** tool schemas, permissions, budgets, stopping conditions and audit events are required.
-**Given** mutations **When** agents request them **Then** UI and ownership confirmation cannot be bypassed.
+**Given** an orchestration use case **When** runtime use is proposed **Then** Planner, Scheduler, Executor, Verifier and Recorder responsibilities are explicit.
+**Given** a simple deterministic task **When** worker orchestration is requested **Then** Downstroke rejects it and runs the simpler path.
+**Given** a native worker **When** registered **Then** its role, input schema, output schema, allowed tools, mutation rights, budget, stop condition, evidence requirements and audit records are declared.
+**Given** the initial worker set **When** listed **Then** Planner, Repository Inspector, Risk Auditor, Evidence Validator, Workflow Guardian, Context Compiler and Release Guardian exist as Downstroke-native roles.
+**Given** mutations **When** workers request them **Then** preview, workflow checkpoints, ownership confirmation and high-risk review cannot be bypassed.
+**Given** a worker output **When** it contains a claim **Then** the claim remains observed or inferred until evidence validation promotes it.
 
 ### Story 9.12: Add a Remote Module Registry
 As a developer, I want trusted remote modules, So that reusable capabilities can be discovered and installed safely.
@@ -1099,6 +1125,24 @@ As a developer, I want safe automatic managed migrations, So that routine upgrad
 **Given** valid managed blocks **When** migration is previewed **Then** ownership, diff, conflicts and rollback are computed.
 **Given** user-owned edits or ambiguous markers **When** detected **Then** automation stops for review.
 **Given** successful apply **When** rerun **Then** the result is idempotent.
+
+### Story 9.14: Add Native Execution Engine
+As a developer, I want explicit execution tasks, So that Downstroke can plan, run, verify and record work without hidden chat memory or external orchestration.
+
+**Acceptance Criteria:**
+**Given** a requested operation **When** `downstroke run` previews it **Then** the execution task shows objective, owner, dependencies, priority, estimate, risk, rollback reference, selected mode and required approvals.
+**Given** a task can run deterministically **When** execution starts **Then** Planner, Scheduler, Executor, Verifier and Recorder run without invoking worker fan-out.
+**Given** worker fan-out is needed **When** execution starts **Then** the selected worker manifest, budgets, stop conditions and evidence requirements are recorded before any worker runs.
+**Given** verification fails **When** the recorder writes state **Then** the task remains blocked or failed with evidence and the next safe action, never silently completed.
+
+### Story 9.15: Add Native Knowledge Lifecycle and Health Engine
+As a developer, I want project knowledge to age, conflict and recover safely, So that operational experience stays useful instead of becoming stale memory.
+
+**Acceptance Criteria:**
+**Given** a fact with TTL or lifecycle policy **When** it expires or its source changes **Then** its status becomes stale until refreshed or invalidated with evidence.
+**Given** conflicting evidence **When** trust is evaluated **Then** both candidates remain visible and verified truth is withheld until human decision or stronger evidence policy resolves it.
+**Given** imported content **When** lifecycle rules run **Then** import provenance, quarantine state, evidence hash and trust transition are preserved.
+**Given** health analysis **When** repo readiness is requested **Then** Downstroke reports evidence gaps, stale facts, unresolved conflicts, lifecycle failures and release blockers in one native health view.
 
 ## Epic 10: Package Distribution and Public Documentation
 

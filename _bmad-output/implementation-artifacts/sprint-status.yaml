@@ -1,12 +1,12 @@
 # generated: 2026-07-01
-# last_updated: 2026-07-07
+# last_updated: 2026-07-08
 # project: Downstroke
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: _bmad-output/implementation-artifacts
 
 generated: 2026-07-01
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 project: Downstroke
 project_key: NOKEY
 tracking_system: file-system
@@ -90,9 +90,11 @@ development_status:
   9-8-route-work-with-native-token-economy: backlog
   9-9-compile-safe-task-context: backlog
   9-10-enforce-strict-native-health-and-cleanup: backlog
-  9-11-add-an-explicit-agent-runtime: backlog
+  9-11-add-an-explicit-native-worker-runtime: backlog
   9-12-add-a-remote-module-registry: backlog
   9-13-automate-conflict-aware-managed-migrations: backlog
+  9-14-add-native-execution-engine: backlog
+  9-15-add-native-knowledge-lifecycle-and-health-engine: backlog
   epic-9-retrospective: optional
 
   epic-10: backlog

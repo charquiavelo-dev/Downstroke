@@ -44,7 +44,7 @@ A developer can safely initialize or inspect an existing project, install only t
 
 This milestone is reached only when:
 
-- Every planned product capability through Epics 1-9 is implemented, reviewed and verified, including Stories 9.11-9.13.
+- Every planned product capability through Epics 1-9 is implemented, reviewed and verified, including Stories 9.11-9.15.
 - README completion (Story 10.1), local npm package preparation (Story 10.2) and token calibration (Story 10.7) are done.
 - All runtime, templates, generated projects, CLI help and active public documentation are Downstroke-native; maintenance tools remain excluded from release output.
 - A clean local tarball installation passes init, doctor, help, build, typecheck, tests and native-only scans without unpublished workspace dependencies.
@@ -62,6 +62,7 @@ Number every rule so code, tests and Downstroke workflow items can reference it.
 | `BR-002` | When active sources conflict on product behavior, scope, safety, ownership or architecture, Downstroke presents the conflicting evidence and pauses for the responsible human; it never silently chooses a winner. | Workflow decision gate | Conflict fixture and approval record |
 | `BR-003` | Controlled development mode separates plan, review, implementation and verification, with explicit checkpoints before product-owned or high-risk decisions. | Native workflow state machine | Resume/checkpoint tests and workflow evidence |
 | `BR-004` | Durable project facts retain source, trust, scope, status, TTL and evidence; generated output cannot directly become verified truth. | Experience runtime validation and authorized JSONL writes | Experience trust/evidence tests |
+| `BR-005` | Native orchestration uses deterministic functions before worker orchestration; workers are schema-bound, permission-scoped and cannot bypass preview, evidence, workflow or human checkpoints. | Runtime manifest, workflow gate and audit records | Worker manifest tests and blocked mutation fixtures |
 
 ## User Flows
 
@@ -108,6 +109,9 @@ Keep product domains isolated. Shared packages contain only contracts or primiti
 | Experience fact | Repository | Valid provenance/trust; verified requires sanitized matching evidence; conflicting IDs fail | Local append-only JSONL plus deterministic ID index |
 | Workflow item | Repository | Versioned native item with status, ACs, tasks, risk, review mode, source and evidence references; high-risk review is always individual | Local `.downstroke/workflows/` JSON/JSONL records |
 | Workflow checkpoint | Repository | Controlled mode advances only through plan, review, implementation and verification checkpoints with explicit approval or pause | Local append-only checkpoint and decision records |
+| Execution task | Repository | Planner, scheduler, executor, verifier and recorder state are explicit; deterministic execution is attempted before worker orchestration | Local workflow/execution ledger |
+| Native worker | Repository | Worker role, inputs, allowed tools, mutation rights, budget, stop condition and output schema are declared before execution | Local runtime manifest and audit events |
+| Knowledge lifecycle rule | Repository | Facts can expire, become stale, be invalidated or lose confidence only through explicit policy and evidence | Experience lifecycle records |
 
 - PostgreSQL constraints enforce important invariants.
 - Tenant-owned queries include tenant ownership server-side.
@@ -127,6 +131,8 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | `downstroke experience import` | Project developer | Repeated repository-relative Markdown, YAML or JSON paths; optional explicit `claim: key=value` lines; preview then `--yes` | Bounded metadata-only classification; unsafe content is rejected/quarantined; contradictory claim values are retained as conflicted candidates and pause | Core and CLI import tests |
 | `downstroke workflow add` | Project developer | Valid native workflow item JSON; optional controlled checkpoint or material conflict JSON; preview then `--yes` | Payload-minimized summary; malformed state blocks; conflicts persist as pending decisions and pause | Core and CLI workflow tests |
 | `downstroke workflow resume` | Project developer | Optional workflow item ID | Computes next action only from persisted workflow records; invalid/conflicted state blocks instead of guessing | Core and CLI workflow resume tests |
+| `downstroke run` | Project developer | Execution task, mode and optional worker manifest; preview then explicit approval for mutation | Uses deterministic planner/scheduler/executor/verifier/recorder first; worker orchestration is rejected unless justified and scoped | Runtime and workflow orchestration tests |
+| `downstroke health` | Project developer | Repository scope and optional strict mode | Explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items without executing unsafe artifacts | Health engine tests and fixture reports |
 
 External integrations must define timeout, retry, rate-limit, fallback, secret ownership and observability behavior.
 

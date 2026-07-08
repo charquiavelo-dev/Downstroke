@@ -29,7 +29,7 @@ Ya existen capacidades funcionales:
 Validación reciente:
 
 - `npm run typecheck`: pasa.
-- `npm test`: pasa con 51 tests.
+- `npm test`: pasa con 52 tests.
 - Build: pasa dentro de `npm test`.
 - Native-only scan: pasa.
 - `git diff --check`: pasa.
@@ -281,16 +281,18 @@ Epic 9 es la plataforma nativa:
 - 9.1 Native-only boundary: done.
 - 9.2 Operational Experience foundation: done.
 - 9.3 Safe project knowledge import: done.
-- 9.4 Native planning and delivery workflows: review.
+- 9.4 Native planning and delivery workflows: done.
 - 9.5 Native communication policy: backlog.
 - 9.6 Native simplicity gates: backlog.
 - 9.7 Native code intelligence: backlog.
 - 9.8 Native token economy: backlog.
 - 9.9 Safe task context compiler: backlog.
 - 9.10 Strict native health and cleanup: backlog.
-- 9.11 Explicit agent runtime: backlog.
+- 9.11 Native worker runtime: backlog.
 - 9.12 Remote module registry: backlog.
 - 9.13 Conflict-aware managed migrations: backlog.
+- 9.14 Native execution engine: backlog.
+- 9.15 Native knowledge lifecycle and health engine: backlog.
 
 Epic 10 prepara release:
 
@@ -300,6 +302,45 @@ Epic 10 prepara release:
 - repo público sanitizado.
 - documentación/showcase.
 - calibración final de tokens.
+
+## Execution Engine y workers nativos
+
+El feedback externo sugirió que Downstroke necesita una pieza explícita que dirija el trabajo. Se aceptó esa mejora, pero con una restricción importante: no se agregará un framework externo de agentes al runtime final.
+
+La pieza se llama Native Execution Engine y se modela así:
+
+1. Planner;
+2. Scheduler;
+3. Executor;
+4. Verifier;
+5. Recorder.
+
+La regla de diseño es simple: si una función determinística puede resolver el trabajo, Downstroke usa esa ruta. Los workers solo entran cuando el trabajo realmente requiere separación de responsabilidades, revisión especializada o fan-out controlado.
+
+Los workers iniciales planeados son:
+
+- Planner: transforma un objetivo en una tarea ejecutable con riesgos, dependencias y evidencia esperada.
+- Repository Inspector: lee estructura, scripts, configuración, workspace y evidencia del repo.
+- Risk Auditor: detecta code smells peligrosos, secretos, ejecución insegura, injection, path traversal, dependencias riesgosas y peligros de release.
+- Evidence Validator: clasifica claims como verified, observed, inferred, stale, invalidated o conflicted.
+- Workflow Guardian: vigila checkpoints, cadencia, bloqueos, conflictos y approvals faltantes.
+- Context Compiler: produce el contexto mínimo seguro para una tarea.
+- Release Guardian: bloquea release si fallan package contents, native-only scan, tests, tarball, exports o publicación.
+
+Estos workers no son personalidades ni prompts sueltos. Son roles nativos con:
+
+- input schema;
+- output schema;
+- herramientas permitidas;
+- permisos de mutación;
+- presupuesto;
+- stop condition;
+- requisitos de evidencia;
+- audit trail.
+
+Ningún worker puede mutar archivos, completar checkpoints, aprobar release ni promover hechos a verdad verificada solo por afirmarlo. Todo debe pasar por preview, workflow state, evidencia y aprobación cuando aplique.
+
+Esto no impide probar Downstroke hoy. Las features actuales siguen funcionando por la ruta single-path. Lo que cambia es el milestone final: para declarar el framework completamente usable y nativo ahora también deben existir 9.14 y 9.15.
 
 ## Simplicity gates
 
@@ -346,7 +387,7 @@ El usuario quiere una celebración explícita cuando el framework sea completame
 
 El milestone actual en `docs/SPEC.md` dice que se alcanza solo cuando:
 
-- Epics 1-9 estén implementados, revisados y verificados, incluyendo 9.11-9.13.
+- Epics 1-9 estén implementados, revisados y verificados, incluyendo 9.11-9.15.
 - Story 10.1 README, Story 10.2 npm package preparation y Story 10.7 token calibration estén completas.
 - Runtime, templates, generated projects, CLI help y docs públicas sean nativas.
 - Un tarball local limpio pase init, doctor, help, build, typecheck, tests y native-only scan sin dependencias workspace no publicadas.
@@ -384,11 +425,22 @@ Hasta ese momento no debe anunciarse que está listo para npm.
    - Debe diferenciar warning de blocker.
    - No debe convertirse en un linter gigante ni depender de reglas externas en runtime.
 
-7. Agent runtime:
+7. Native worker runtime:
    - Story 9.11 debe evitar construir una plataforma de agentes prematura.
    - Solo debe existir para orquestación schema-bound donde funciones normales no basten.
+   - Los workers deben ser procesos especializados con contratos, no personajes.
+   - La ruta single-path debe seguir siendo la opción por defecto.
 
-8. Public release:
+8. Execution engine:
+   - Story 9.14 debe definir `downstroke run` y la secuencia Planner, Scheduler, Executor, Verifier, Recorder.
+   - Debe registrar owner, dependencias, prioridad, estimación, riesgo, rollback y approvals.
+   - Si verification falla, el recorder debe dejar el task bloqueado/fallido con evidencia.
+
+9. Knowledge lifecycle y health:
+   - Story 9.15 debe definir cuándo un hecho expira, queda stale, se invalida o pierde confianza.
+   - `downstroke health` debe poder explicar por qué el repo está bloqueado, qué evidencia falta y qué historia tiene mayor riesgo.
+
+10. Public release:
    - La sanitización de repo público debe ser allowlist-first.
    - La historia privada completa debe verificarse antes de cualquier clean public history.
    - Publicación npm debe requerir confirmación explícita.

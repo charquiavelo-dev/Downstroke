@@ -49,7 +49,7 @@ The product helps developers move from a human product description to an appropr
 ### Native Platform Expansion
 
 - Operational Experience, native workflows, communication policy, simplicity gates and code intelligence before public release.
-- Explicit agent runtime and remote registry only after normal functions and local modules prove insufficient.
+- Explicit native worker runtime and remote registry only after deterministic functions, single-path execution and local modules prove insufficient.
 
 ## 4. Glossary
 
@@ -82,7 +82,7 @@ The product helps developers move from a human product description to an appropr
 
 - Shipping external construction tools as product dependencies or public framework concepts.
 - Supporting additional language ecosystems before current stack paths are reliable.
-- Becoming a general-purpose agent runtime during the MVP.
+- Becoming a general-purpose agent runtime or depending on an external agent framework during the MVP.
 - Treating vector indexes, frontend state or generated content as an authority over source data.
 
 ## 8. Open Questions
@@ -236,7 +236,7 @@ FR64: Downstroke provides native reuse, dependency, abstraction and broad-rewrit
 
 FR65: Downstroke provides native briefs, specs, epics, stories, cadence, checkpoints, QA evidence and resume behavior.
 
-FR66: Downstroke can later provide an agent runtime for explicit, schema-bound orchestration after normal functions prove insufficient.
+FR66: Downstroke can later provide a native worker runtime for explicit, schema-bound orchestration after deterministic functions and single-path execution prove insufficient.
 
 FR67: Downstroke can later provide a remote module registry with provenance, versions, integrity verification and safe installation.
 
