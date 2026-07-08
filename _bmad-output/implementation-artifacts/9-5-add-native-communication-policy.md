@@ -4,7 +4,7 @@ baseline_commit: 374c9a7d24bc507120edbc58b641a7aa9b046b70
 
 # Story 9.5: Add Native Communication Policy
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -43,6 +43,11 @@ so that token savings never remove security, commands, schemas, evidence or acce
   - [x] Core tests for mode validation, protected categories, preview/no mutation, apply/idempotence and unsafe preference quarantine/inactivation.
   - [x] CLI tests for query, JSON preview, authorized apply and invalid preference behavior.
 - [x] Run typecheck, tests and native-only distributed-surface scan.
+
+### Review Findings
+
+- [x] [Review][Patch] Communication planning now blocks malformed existing policy state instead of silently treating it as missing.
+- [x] [Review][Patch] Communication apply now rejects manipulated preference plans that change inactive unsafe preferences into active preferences.
 
 ## Dev Notes
 
@@ -150,7 +155,7 @@ GPT-5 Codex
 
 - `npm.cmd run build` — passing.
 - `npm.cmd run typecheck` — passing.
-- `npm.cmd test` — passing, 58/58.
+- `npm.cmd test` — passing, 59/59.
 - Native-only distributed-surface scan — passing.
 
 ### Completion Notes List
@@ -162,6 +167,7 @@ GPT-5 Codex
 - Added imported preference handling that keeps roleplay, instruction override and safety-reducing preferences inactive while avoiding payload leakage in CLI preview.
 - Added `downstroke communication` query, preview and authorized apply support with human and JSON output.
 - Added focused core and CLI tests for policy validation, protected categories, preview/no mutation, idempotent apply and unsafe preference handling.
+- Resolved review findings for malformed communication state and manipulated unsafe preference plans.
 
 ### File List
 
@@ -176,3 +182,4 @@ GPT-5 Codex
 
 - 2026-07-08: Created implementation-ready Story 9.5 contract.
 - 2026-07-08: Implemented native communication policy and moved story to review.
+- 2026-07-08: Resolved code review findings and completed Story 9.5.

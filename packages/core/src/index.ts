@@ -1246,11 +1246,17 @@ function parseCommunicationPolicy(value: unknown): CommunicationPolicy | undefin
 }
 
 export async function readCommunicationPolicy(root: string): Promise<CommunicationPolicy | null> {
+  const state = await readCommunicationPolicyState(root);
+  return state.kind === "ready" ? state.policy : null;
+}
+
+async function readCommunicationPolicyState(root: string): Promise<{ kind: "ready"; policy: CommunicationPolicy } | { kind: "missing" } | { kind: "malformed" }> {
   try {
-    return parseCommunicationPolicy(JSON.parse(await readFile(join(await checkedCommunicationRoot(root), "policy.json"), "utf8"))) ?? null;
+    const parsed = parseCommunicationPolicy(JSON.parse(await readFile(join(await checkedCommunicationRoot(root), "policy.json"), "utf8")));
+    return parsed ? { kind: "ready", policy: parsed } : { kind: "malformed" };
   } catch (error: unknown) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return null;
-    return null;
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return { kind: "missing" };
+    return { kind: "malformed" };
   }
 }
 
@@ -1277,10 +1283,16 @@ function parseCommunicationPreference(value: unknown, timestamp: string): Commun
   };
 }
 
+function communicationPreferenceIdentity(value: CommunicationPreference | undefined): unknown {
+  return value ? { id: value.id, status: value.status, value: value.value, reason: value.reason, source: value.source } : null;
+}
+
 export async function planCommunicationPolicy(root: string, input: { mode?: unknown; budgetTokens?: unknown; preference?: unknown } = {}): Promise<CommunicationPlan> {
   const timestamp = new Date().toISOString();
   const blockers: string[] = [];
-  const current = await readCommunicationPolicy(root);
+  const state = await readCommunicationPolicyState(root);
+  if (state.kind === "malformed") blockers.push("Communication policy is malformed");
+  const current = state.kind === "ready" ? state.policy : null;
   const mode = input.mode ?? current?.mode ?? "normal";
   if (!communicationModes.includes(mode as CommunicationMode)) blockers.push("Communication mode is invalid");
   const selectedMode = communicationModes.includes(mode as CommunicationMode) ? mode as CommunicationMode : "normal";
@@ -1321,6 +1333,7 @@ export async function applyCommunicationPolicy(root: string, plan: Communication
   if (plan.status === "blocked" || !plan.policy) return { id: "communication.policy", status: "fail", message: plan.blockers.join("; ") || "Communication policy plan is blocked", remediation: "Correct and preview the communication policy again" };
   const fresh = await planCommunicationPolicy(root, { mode: plan.policy.mode, budgetTokens: plan.policy.budgetTokens, ...(plan.preference ? { preference: plan.preference.value } : {}) });
   if (fresh.status !== plan.status || fresh.action !== plan.action || fresh.policy?.mode !== plan.policy.mode || fresh.policy?.budgetTokens !== plan.policy.budgetTokens) return { id: "communication.policy", status: "fail", message: "Communication policy changed after preview", remediation: "Preview the communication policy again" };
+  if (JSON.stringify(communicationPreferenceIdentity(fresh.preference)) !== JSON.stringify(communicationPreferenceIdentity(plan.preference))) return { id: "communication.policy", status: "fail", message: "Communication preference changed after preview", remediation: "Preview the communication preference again" };
   const base = await initializeCommunicationStorage(root);
   if (plan.preference) await appendFile(join(base, "preferences.jsonl"), `${JSON.stringify(plan.preference)}\n`);
   if (plan.action === "append") {
