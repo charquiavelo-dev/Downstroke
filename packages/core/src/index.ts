@@ -1674,6 +1674,24 @@ function stackFromPackage(path: string, hash: string, dependencies: Record<strin
   return Object.entries(map).filter(([name]) => dependencies[name]).map(([name, technology]) => ({ technology, version: dependencies[name] ?? null, source: { path, hash }, status: "observed" as const }));
 }
 
+function stackFromConfig(path: string, hash: string): CodeStackObservation[] {
+  const name = basename(path);
+  const configTech: Record<string, string> = {
+    "tsconfig.json": "TypeScript",
+    "vite.config.ts": "Vite",
+    "vite.config.js": "Vite",
+    "next.config.js": "Next.js",
+    "next.config.mjs": "Next.js",
+    "tailwind.config.js": "Tailwind CSS",
+    "vitest.config.ts": "Vitest",
+    "playwright.config.ts": "Playwright",
+    "expo.json": "Expo",
+    "app.json": "Expo",
+  };
+  const technology = configTech[name];
+  return technology ? [{ technology, version: null, source: { path, hash }, status: "observed" }] : [];
+}
+
 async function readExistingCodeHashes(root: string): Promise<Map<string, string>> {
   const state = await readLocalFile(root, ".downstroke/code-intelligence/files.jsonl");
   if (state.kind !== "file") return new Map();
@@ -1709,7 +1727,8 @@ async function collectCodeCandidates(root: string, directory = root, prefix = ""
 async function readCodeIndex(root: string): Promise<CodeIndexedFile[]> {
   const state = await readLocalFile(await gitRoot(root), ".downstroke/code-intelligence/files.jsonl");
   if (state.kind !== "file") return [];
-  return state.content.toString("utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as CodeIndexedFile);
+  try { return state.content.toString("utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as CodeIndexedFile); }
+  catch { return []; }
 }
 
 export async function planCodeIntelligenceIndex(root: string): Promise<CodeIndexPlan> {
@@ -1727,27 +1746,31 @@ export async function planCodeIntelligenceIndex(root: string): Promise<CodeIndex
     exclusions = candidates.exclusions;
     const packageByDirectory = new Map<string, CodePackageRecord>();
     const pathSet = new Set(candidates.paths);
-    const orderedPaths = [...candidates.paths].sort((left, right) => Number(basename(right) === "package.json") - Number(basename(left) === "package.json") || left.localeCompare(right));
-    for (const path of orderedPaths) {
-      const absolute = join(resolved, ...path.split("/"));
-      const info = await lstat(absolute);
-      if (info.isSymbolicLink()) { exclusions.push({ path, reason: "symlink" }); continue; }
-      if (info.size > 256 * 1024) { exclusions.push({ path, reason: "oversized" }); continue; }
-      const content = await readFile(absolute);
-      if (content.includes(0)) { exclusions.push({ path, reason: "binary" }); continue; }
-      const text = content.toString("utf8");
-      if (secretLike(text)) { exclusions.push({ path, reason: "secret-like-content" }); continue; }
-      const hash = codeHash(content);
-      if (basename(path) === "package.json") {
-        try {
+    const safeFiles: { path: string; content: Buffer; text: string; hash: string }[] = [];
+    for (const path of candidates.paths) {
+      try {
+        const absolute = join(resolved, ...path.split("/"));
+        const info = await lstat(absolute);
+        if (info.isSymbolicLink()) { exclusions.push({ path, reason: "symlink" }); continue; }
+        if (info.size > 256 * 1024) { exclusions.push({ path, reason: "oversized" }); continue; }
+        const content = await readFile(absolute);
+        if (content.includes(0)) { exclusions.push({ path, reason: "binary" }); continue; }
+        const text = content.toString("utf8");
+        if (secretLike(text)) { exclusions.push({ path, reason: "secret-like-content" }); continue; }
+        const hash = codeHash(content);
+        safeFiles.push({ path, content, text, hash });
+        stack.push(...stackFromConfig(path, hash));
+        if (basename(path) === "package.json") {
           const parsed = JSON.parse(text) as Record<string, unknown>;
           const dependencies = packageDependencies(parsed);
           const packageRecord = { path, name: typeof parsed.name === "string" ? parsed.name : null, packageManager: packageManagerFromFiles(pathSet, parsed.packageManager), dependencies };
           packageByDirectory.set(dirname(path) === "." ? "" : dirname(path), packageRecord);
           packages.push(packageRecord);
           stack.push(...stackFromPackage(path, hash, dependencies));
-        } catch { exclusions.push({ path, reason: "malformed-package-json" }); }
-      }
+        }
+      } catch { exclusions.push({ path, reason: basename(path) === "package.json" ? "malformed-package-json" : "unreadable" }); }
+    }
+    for (const { path, content, text, hash } of safeFiles.sort((left, right) => left.path.localeCompare(right.path))) {
       let owner: string | null = null;
       for (let directory = dirname(path); directory !== "."; directory = dirname(directory)) if (packageByDirectory.has(directory)) { owner = packageByDirectory.get(directory)?.path ?? null; break; }
       if (!owner && packageByDirectory.has("")) owner = packageByDirectory.get("")?.path ?? null;
@@ -1758,11 +1781,20 @@ export async function planCodeIntelligenceIndex(root: string): Promise<CodeIndex
   return { status: blockers.length ? "blocked" : "ready", action: indexedFiles.every((file) => file.action === "skip") ? "skip" : "write", files: [...codeIntelligenceFiles], manifest: blockers.length ? null : manifest, indexedFiles, packages: packages.sort((left, right) => left.path.localeCompare(right.path)), stack: stack.sort((left, right) => left.technology.localeCompare(right.technology)), exclusions, blockers };
 }
 
+function codeIndexIdentity(plan: CodeIndexPlan): string {
+  return JSON.stringify({
+    indexedFiles: plan.indexedFiles.map(({ action: _action, ...file }) => file),
+    packages: plan.packages,
+    stack: plan.stack,
+    exclusions: plan.exclusions,
+  });
+}
+
 export async function applyCodeIntelligenceIndex(root: string, plan: CodeIndexPlan): Promise<DoctorResult> {
   if (plan.status === "blocked" || !plan.manifest) return { id: "code-intelligence.index", status: "fail", message: plan.blockers.join("; ") || "Code intelligence plan is blocked", remediation: "Correct and preview the index again" };
   const resolved = await gitRoot(root);
   const fresh = await planCodeIntelligenceIndex(resolved);
-  if (fresh.status !== "ready" || JSON.stringify(fresh.indexedFiles.map(({ path, hash }) => ({ path, hash }))) !== JSON.stringify(plan.indexedFiles.map(({ path, hash }) => ({ path, hash })))) return { id: "code-intelligence.index", status: "fail", message: "Code intelligence index changed after preview", remediation: "Preview the index again" };
+  if (fresh.status !== "ready" || codeIndexIdentity(fresh) !== codeIndexIdentity(plan)) return { id: "code-intelligence.index", status: "fail", message: "Code intelligence index changed after preview", remediation: "Preview the index again" };
   const base = join(resolved, ".downstroke", "code-intelligence");
   await mkdir(base, { recursive: true });
   await writeFile(join(base, "manifest.json"), `${JSON.stringify(plan.manifest, null, 2)}\n`);
@@ -1779,6 +1811,7 @@ export async function detectCodeStack(root: string): Promise<{ status: "ready" |
 
 export async function queryCodeContext(root: string, paths: readonly string[], mode: "impact" | "context" = "context"): Promise<CodeContextReport> {
   const requested = [...new Set(paths.map(posixPath))];
+  if (requested.length === 0) return { status: "stale", requested, files: [], stale: [], reason: "No paths requested" };
   const indexed = await readCodeIndex(root);
   if (!indexed.length) return { status: "missing-index", requested, files: [], stale: [], reason: "Code intelligence index is missing" };
   const resolved = await gitRoot(root);
@@ -1786,19 +1819,26 @@ export async function queryCodeContext(root: string, paths: readonly string[], m
   const selected = new Map<string, CodeIndexedFile>();
   for (const path of requested) {
     const direct = indexed.find((file) => file.path === path);
-    if (direct) {
-      selected.set(direct.path, direct);
-      const state = await readLocalFile(resolved, direct.path);
-      if (state.kind !== "file" || codeHash(state.content) !== direct.hash) stale.push(direct.path);
-    }
+    if (direct) selected.set(direct.path, direct);
+    else stale.push(path);
     if (mode === "impact") {
-      const stem = basename(path).replace(/\.[^.]+$/, "");
-      for (const file of indexed) if (file.imports.some((specifier) => specifier.includes(stem))) selected.set(file.path, file);
+      for (const file of indexed) if (file.imports.some((specifier) => importMayReference(file.path, specifier, path))) selected.set(file.path, file);
     } else if (direct?.packagePath) {
       for (const file of indexed) if (file.packagePath === direct.packagePath && selected.size < 12) selected.set(file.path, file);
     }
   }
+  for (const file of selected.values()) {
+    const state = await readLocalFile(resolved, file.path);
+    if ((state.kind !== "file" || codeHash(state.content) !== file.hash) && !stale.includes(file.path)) stale.push(file.path);
+  }
   return { status: stale.length ? "stale" : "ready", requested, files: [...selected.values()].slice(0, 20), stale, reason: stale.length ? "Indexed files changed after indexing" : "Context resolved from native index" };
+}
+
+function importMayReference(importerPath: string, specifier: string, requestedPath: string): boolean {
+  if (!specifier.startsWith(".")) return false;
+  const base = posixPath(join(dirname(importerPath), specifier));
+  const withoutExtension = requestedPath.replace(/\.[^.]+$/, "");
+  return base === withoutExtension || base === requestedPath || `${base}/index` === withoutExtension;
 }
 
 type LocalRead =

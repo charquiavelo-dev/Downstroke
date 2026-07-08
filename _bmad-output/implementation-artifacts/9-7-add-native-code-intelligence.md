@@ -4,7 +4,7 @@ baseline_commit: 65559cfa34286375d4a1210c1da012a71e53cbe6
 
 # Story 9.7: Add Native Code Intelligence
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -54,6 +54,17 @@ so that structural context is available without a daemon, external server or run
   - [x] Core tests for excluded/generated/secret/external-root files.
   - [x] CLI tests for index preview/apply, stack detect, impact and context JSON output.
 - [x] Run typecheck, tests and native-only distributed-surface scan.
+
+### Review Findings
+
+- [x] [Review][Patch] CLI path arguments are normalized before impact/context queries.
+- [x] [Review][Patch] Package ownership now uses complete package metadata before indexing source files.
+- [x] [Review][Patch] Stack detection now records relevant config-file observations.
+- [x] [Review][Patch] Missing, external-root or empty requested paths now produce explicit non-ready context results.
+- [x] [Review][Patch] Selected impact/context files are checked for stale hashes, not only directly requested files.
+- [x] [Review][Patch] Malformed or missing index state no longer crashes context queries.
+- [x] [Review][Patch] Index apply now rejects manipulated package, stack, exclusion or file metadata plans.
+- [x] [Review][Patch] Index planning records unreadable/raced files as exclusions instead of aborting.
 
 ## Dev Notes
 
@@ -179,6 +190,7 @@ GPT-5 Codex
 - Added bounded impact/context queries with missing/stale index status.
 - Added `downstroke code index`, `downstroke code impact`, `downstroke code context` and `downstroke stack detect` CLI surfaces.
 - Added focused core and CLI tests for index, stack, exclusions, stale context and no-mutation preview behavior.
+- Resolved code review findings for CLI path normalization, package ownership, config stack observations, missing path reporting, selected-file stale checks, malformed index handling and manipulated plan rejection.
 
 ### File List
 
@@ -193,3 +205,4 @@ GPT-5 Codex
 
 - 2026-07-08: Created implementation-ready Story 9.7 contract.
 - 2026-07-08: Implemented native code intelligence and moved story to review.
+- 2026-07-08: Resolved code review findings and completed Story 9.7.

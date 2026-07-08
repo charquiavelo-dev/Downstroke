@@ -404,14 +404,15 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       return result.status === "ok" ? 0 : 1;
     }
     if (action === "impact" || action === "context") {
-      const report = await queryCodeContext(cwd, values.path ?? [], action);
+      const requestedPaths = Array.isArray(values.path) ? values.path : values.path ? [values.path] : [];
+      const report = await queryCodeContext(cwd, requestedPaths, action);
       if (values.json) console.log(JSON.stringify(report, null, 2));
       else {
         console.log(`CODE ${action.toUpperCase()} ${report.status} files=${report.files.length}`);
         for (const file of report.files) console.log(`FILE ${file.path}`);
         for (const path of report.stale) console.log(`STALE ${path}`);
       }
-      return report.status === "missing-index" ? 1 : 0;
+      return report.status === "ready" ? 0 : 1;
     }
     if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-code-command", message: "Use code index, code impact --path <path>, or code context --path <path>" }, null, 2));
     else console.error("Usage: downstroke code <index|impact|context> [--path <path>] [--yes] [--json]");

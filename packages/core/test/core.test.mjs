@@ -698,6 +698,7 @@ test("code intelligence indexes safe JS and TS files incrementally", async () =>
   const context = await queryCodeContext(root, ["src/util.ts"], "impact");
   assert.equal(context.status, "stale");
   assert.ok(context.files.some(({ path }) => path === "src/app.ts"));
+  assert.ok(context.stale.includes("src/util.ts"));
 });
 
 test("code intelligence excludes generated secret and unsafe files", async () => {
@@ -711,12 +712,17 @@ test("code intelligence excludes generated secret and unsafe files", async () =>
   assert.ok(plan.indexedFiles.some(({ path }) => path === "src/safe.ts"));
   assert.ok(plan.exclusions.some(({ path, reason }) => path === "src/secret.ts" && reason === "secret-like-content"));
   assert.ok(plan.exclusions.some(({ path, reason }) => path === "dist" && reason === "excluded-directory"));
+  await applyCodeIntelligenceIndex(root, plan);
+  const external = await queryCodeContext(root, ["../outside.ts"], "context");
+  assert.equal(external.status, "stale");
+  assert.deepEqual(external.files, []);
 });
 
 test("code stack detection reports observed package technologies without scripts", async () => {
   const root = await gitFixture();
   await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { postinstall: "exit 1" }, dependencies: { vite: "7.0.0", zod: "4.0.0" } }));
+  await writeFile(join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true } }));
   const report = await detectCodeStack(root);
   assert.equal(report.status, "ready");
-  assert.deepEqual(report.stack.map(({ technology }) => technology).sort(), ["Vite", "Zod"]);
+  assert.deepEqual(report.stack.map(({ technology }) => technology).sort(), ["TypeScript", "Vite", "Zod"]);
 });

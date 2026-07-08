@@ -469,7 +469,9 @@ test("code intelligence CLI indexes stack and context without script execution",
   try {
     assert.equal(await run(["code", "impact", "--path", "src/util.ts", "--json"], root), 0);
     assert.equal(await run(["code", "context", "--path", "src/app.ts", "--json"], root), 0);
+    assert.equal(await run(["code", "impact", "--json"], root), 1);
   } finally { console.log = originalLog; }
   assert.equal(JSON.parse(contextOutput[0]).files.some(({ path }) => path === "src/app.ts"), true);
   assert.equal(JSON.parse(contextOutput[1]).files.some(({ path }) => path === "src/app.ts"), true);
+  assert.equal(JSON.parse(contextOutput[2]).reason, "No paths requested");
 });
