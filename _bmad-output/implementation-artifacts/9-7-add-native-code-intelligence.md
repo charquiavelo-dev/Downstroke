@@ -4,7 +4,7 @@ baseline_commit: 65559cfa34286375d4a1210c1da012a71e53cbe6
 
 # Story 9.7: Add Native Code Intelligence
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,37 +23,37 @@ so that structural context is available without a daemon, external server or run
 
 ## Tasks / Subtasks
 
-- [ ] Add native code intelligence contracts in `packages/core/src/index.ts` (AC: 1-4)
-  - [ ] Define index manifest, indexed file records, package ownership, imports, exports, symbols, stack observations and query results.
-  - [ ] Define stale-state and exclusion records with deterministic reasons.
-  - [ ] Keep all records serializable and repository-relative.
-- [ ] Add safe repository scanning in core (AC: 1, 4)
-  - [ ] Scan only allowlisted text source/config files under the resolved Git root.
-  - [ ] Exclude `.git`, `.downstroke`, `node_modules`, build output, coverage, generated/vendor folders, binary files, oversized files, secrets and paths outside the root.
-  - [ ] Hash files and skip unchanged files when an existing index is current.
-- [ ] Add lightweight JS/TS extraction in core (AC: 1)
-  - [ ] Extract static import specifiers, re-export specifiers, exported declarations and top-level function/class/type/interface/const names with deterministic heuristics.
-  - [ ] Store package ownership from nearest `package.json` without executing package scripts.
-  - [ ] Avoid claiming full AST accuracy; Story 9.7 should provide bounded native intelligence, not a replacement for compilers.
-- [ ] Add stack detection in core (AC: 2)
-  - [ ] Detect package manager from lockfiles and package managers fields.
-  - [ ] Detect technologies and versions from `package.json` dependencies/devDependencies and relevant config files.
-  - [ ] Report observations as `observed` with source path/hash and uncertainty where applicable.
-- [ ] Add impact/context query helpers in core (AC: 3)
-  - [ ] Given changed files, return bounded related files from import/export/package ownership relationships.
-  - [ ] Given task context request, return bounded relevant source/config files with stale index status.
-  - [ ] Make stale or missing index explicit instead of silently returning incomplete context.
-- [ ] Add CLI surface in `apps/cli/src/index.ts` (AC: 1-4)
-  - [ ] Add `downstroke code index` preview/apply with `--yes`, `--json` and safe default bounds.
-  - [ ] Add `downstroke stack detect` read-only output.
-  - [ ] Add `downstroke code impact --path <path>` and `downstroke code context --path <path>` read-only output.
-- [ ] Add focused tests (AC: 1-4)
-  - [ ] Core tests for index creation, unchanged-file skip and stale detection.
-  - [ ] Core tests for imports/exports/symbol extraction and package ownership.
-  - [ ] Core tests for stack detection without script execution.
-  - [ ] Core tests for excluded/generated/secret/external-root files.
-  - [ ] CLI tests for index preview/apply, stack detect, impact and context JSON output.
-- [ ] Run typecheck, tests and native-only distributed-surface scan.
+- [x] Add native code intelligence contracts in `packages/core/src/index.ts` (AC: 1-4)
+  - [x] Define index manifest, indexed file records, package ownership, imports, exports, symbols, stack observations and query results.
+  - [x] Define stale-state and exclusion records with deterministic reasons.
+  - [x] Keep all records serializable and repository-relative.
+- [x] Add safe repository scanning in core (AC: 1, 4)
+  - [x] Scan only allowlisted text source/config files under the resolved Git root.
+  - [x] Exclude `.git`, `.downstroke`, `node_modules`, build output, coverage, generated/vendor folders, binary files, oversized files, secrets and paths outside the root.
+  - [x] Hash files and skip unchanged files when an existing index is current.
+- [x] Add lightweight JS/TS extraction in core (AC: 1)
+  - [x] Extract static import specifiers, re-export specifiers, exported declarations and top-level function/class/type/interface/const names with deterministic heuristics.
+  - [x] Store package ownership from nearest `package.json` without executing package scripts.
+  - [x] Avoid claiming full AST accuracy; Story 9.7 should provide bounded native intelligence, not a replacement for compilers.
+- [x] Add stack detection in core (AC: 2)
+  - [x] Detect package manager from lockfiles and package managers fields.
+  - [x] Detect technologies and versions from `package.json` dependencies/devDependencies and relevant config files.
+  - [x] Report observations as `observed` with source path/hash and uncertainty where applicable.
+- [x] Add impact/context query helpers in core (AC: 3)
+  - [x] Given changed files, return bounded related files from import/export/package ownership relationships.
+  - [x] Given task context request, return bounded relevant source/config files with stale index status.
+  - [x] Make stale or missing index explicit instead of silently returning incomplete context.
+- [x] Add CLI surface in `apps/cli/src/index.ts` (AC: 1-4)
+  - [x] Add `downstroke code index` preview/apply with `--yes`, `--json` and safe default bounds.
+  - [x] Add `downstroke stack detect` read-only output.
+  - [x] Add `downstroke code impact --path <path>` and `downstroke code context --path <path>` read-only output.
+- [x] Add focused tests (AC: 1-4)
+  - [x] Core tests for index creation, unchanged-file skip and stale detection.
+  - [x] Core tests for imports/exports/symbol extraction and package ownership.
+  - [x] Core tests for stack detection without script execution.
+  - [x] Core tests for excluded/generated/secret/external-root files.
+  - [x] CLI tests for index preview/apply, stack detect, impact and context JSON output.
+- [x] Run typecheck, tests and native-only distributed-surface scan.
 
 ## Dev Notes
 
@@ -160,22 +160,36 @@ No external library/API research is required for implementation. This story inte
 
 ### Agent Model Used
 
-TBD
+GPT-5 Codex
 
 ### Debug Log References
 
-TBD
+- `npm.cmd run build` — passing.
+- `npm.cmd run typecheck` — passing.
+- `npm.cmd test` — passing, 68/68.
+- Native-only distributed-surface scan — passing.
 
 ### Completion Notes List
 
 - Created implementation-ready Story 9.7 context from the accepted Epic 9 contract, SPEC native readiness milestone and architecture AD-1/AD-2/AD-4/AD-6/AD-11/AD-12.
 - Bounded the story to native deterministic indexing and stack/context reporting; worker runtime and advanced context compilation remain later stories.
+- Implemented repository-local `.downstroke/code-intelligence/` index planning and authorized apply.
+- Added safe JS/TS/config scanning with exclusions for generated folders, unsafe content, binary/oversized files and secret-like content.
+- Added import/export/top-level symbol extraction, package ownership and observed stack detection without executing scripts.
+- Added bounded impact/context queries with missing/stale index status.
+- Added `downstroke code index`, `downstroke code impact`, `downstroke code context` and `downstroke stack detect` CLI surfaces.
+- Added focused core and CLI tests for index, stack, exclusions, stale context and no-mutation preview behavior.
 
 ### File List
 
 - `_bmad-output/implementation-artifacts/9-7-add-native-code-intelligence.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `apps/cli/src/index.ts`
+- `apps/cli/test/cli.test.mjs`
+- `packages/core/src/index.ts`
+- `packages/core/test/core.test.mjs`
 
 ## Change Log
 
 - 2026-07-08: Created implementation-ready Story 9.7 contract.
+- 2026-07-08: Implemented native code intelligence and moved story to review.

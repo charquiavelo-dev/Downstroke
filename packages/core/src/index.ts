@@ -1,6 +1,6 @@
 import { access, appendFile, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
-import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -294,6 +294,54 @@ export type SimplicityGateReport = {
   risks: SimplicityRiskFinding[];
   exception: { active: boolean; reason: string | null };
   blockers: string[];
+};
+export type CodeIndexManifest = {
+  schemaVersion: "0.1.0";
+  module: "downstroke-code-intelligence";
+  createdAt: string;
+  updatedAt: string;
+  files: number;
+};
+export type CodeIndexedFile = {
+  path: string;
+  hash: string;
+  bytes: number;
+  packagePath: string | null;
+  imports: string[];
+  exports: string[];
+  symbols: string[];
+  action: "index" | "skip";
+};
+export type CodePackageRecord = {
+  path: string;
+  name: string | null;
+  packageManager: string | null;
+  dependencies: Record<string, string>;
+};
+export type CodeStackObservation = {
+  technology: string;
+  version: string | null;
+  source: { path: string; hash: string };
+  status: "observed";
+};
+export type CodeIndexExclusion = { path: string; reason: string };
+export type CodeIndexPlan = {
+  status: "ready" | "blocked";
+  action: "write" | "skip";
+  files: string[];
+  manifest: CodeIndexManifest | null;
+  indexedFiles: CodeIndexedFile[];
+  packages: CodePackageRecord[];
+  stack: CodeStackObservation[];
+  exclusions: CodeIndexExclusion[];
+  blockers: string[];
+};
+export type CodeContextReport = {
+  status: "ready" | "stale" | "missing-index";
+  requested: string[];
+  files: CodeIndexedFile[];
+  stale: string[];
+  reason: string;
 };
 
 const responsibilities = {
@@ -1542,6 +1590,215 @@ export function evaluateSimplicityGates(input: SimplicityGateInput = {}): Simpli
     exception: { active: safetyException, reason: safetyException ? String(input.safetyException === true ? "safety requirement" : input.safetyException) : null },
     blockers,
   };
+}
+
+const codeIntelligenceManifestPath = ".downstroke/code-intelligence/manifest.json";
+const codeIntelligenceFiles = [
+  codeIntelligenceManifestPath,
+  ".downstroke/code-intelligence/files.jsonl",
+  ".downstroke/code-intelligence/packages.jsonl",
+  ".downstroke/code-intelligence/stack.jsonl",
+] as const;
+const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"]);
+const configNames = new Set(["package.json", "tsconfig.json", "vite.config.ts", "vite.config.js", "next.config.js", "next.config.mjs", "expo.json", "app.json", "eslint.config.js", "tailwind.config.js", "vitest.config.ts", "playwright.config.ts", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"]);
+const excludedDirectories = new Set([".git", ".downstroke", "node_modules", "dist", "build", "coverage", "generated", "vendor"]);
+
+function posixPath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+function codeHash(content: Buffer | string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function secretLike(content: string): boolean {
+  return /\b(token|password|secret|api[_-]?key|private[_-]?key)\b\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i.test(content)
+    || /\b(ghp_|github_pat_|npm_|AKIA)[A-Za-z0-9_=-]{12,}|-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/.test(content);
+}
+
+function allowedCodePath(path: string): boolean {
+  const name = basename(path);
+  return sourceExtensions.has(extname(path)) || configNames.has(name);
+}
+
+function extractSpecifiers(pattern: RegExp, content: string): string[] {
+  const found = new Set<string>();
+  for (const match of content.matchAll(pattern)) if (match[1]) found.add(match[1]);
+  return [...found].sort();
+}
+
+function extractCodeFacts(path: string, content: string): Pick<CodeIndexedFile, "imports" | "exports" | "symbols"> {
+  if (!sourceExtensions.has(extname(path))) return { imports: [], exports: [], symbols: [] };
+  const imports = extractSpecifiers(/\bimport\s+(?:[^'"]+\s+from\s+)?["']([^"']+)["']/g, content);
+  const reExports = extractSpecifiers(/\bexport\s+[^'"]*\s+from\s+["']([^"']+)["']/g, content);
+  const exports = [...content.matchAll(/\bexport\s+(?:async\s+)?(?:function|class|interface|type|const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map((match) => match[1]!).sort();
+  const symbols = [...content.matchAll(/^(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|const|let|var)\s+([A-Za-z_$][\w$]*)/gm)].map((match) => match[1]!).sort();
+  return { imports: [...new Set([...imports, ...reExports])].sort(), exports: [...new Set(exports)], symbols: [...new Set(symbols)] };
+}
+
+function packageDependencies(input: Record<string, unknown>): Record<string, string> {
+  const dependencies: Record<string, string> = {};
+  for (const key of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    const group = input[key];
+    if (typeof group !== "object" || group === null || Array.isArray(group)) continue;
+    for (const [name, version] of Object.entries(group)) if (typeof version === "string") dependencies[name] = version;
+  }
+  return Object.fromEntries(Object.entries(dependencies).sort());
+}
+
+function packageManagerFromFiles(paths: Set<string>, packageManager: unknown): string | null {
+  if (typeof packageManager === "string" && packageManager.trim()) return packageManager;
+  if (paths.has("pnpm-lock.yaml")) return "pnpm";
+  if (paths.has("yarn.lock")) return "yarn";
+  if (paths.has("package-lock.json") || paths.has("npm-shrinkwrap.json")) return "npm";
+  return null;
+}
+
+function stackFromPackage(path: string, hash: string, dependencies: Record<string, string>): CodeStackObservation[] {
+  const map: Record<string, string> = {
+    typescript: "TypeScript",
+    react: "React",
+    next: "Next.js",
+    expo: "Expo",
+    "react-native": "React Native",
+    vite: "Vite",
+    vitest: "Vitest",
+    playwright: "Playwright",
+    tailwindcss: "Tailwind CSS",
+    zod: "Zod",
+    drizzle: "Drizzle",
+    prisma: "Prisma",
+    "@nestjs/core": "NestJS",
+    express: "Express",
+  };
+  return Object.entries(map).filter(([name]) => dependencies[name]).map(([name, technology]) => ({ technology, version: dependencies[name] ?? null, source: { path, hash }, status: "observed" as const }));
+}
+
+async function readExistingCodeHashes(root: string): Promise<Map<string, string>> {
+  const state = await readLocalFile(root, ".downstroke/code-intelligence/files.jsonl");
+  if (state.kind !== "file") return new Map();
+  const hashes = new Map<string, string>();
+  for (const line of state.content.toString("utf8").split(/\r?\n/).filter(Boolean)) {
+    try {
+      const record = JSON.parse(line) as Partial<CodeIndexedFile>;
+      if (typeof record.path === "string" && typeof record.hash === "string") hashes.set(record.path, record.hash);
+    } catch { return new Map(); }
+  }
+  return hashes;
+}
+
+async function collectCodeCandidates(root: string, directory = root, prefix = ""): Promise<{ paths: string[]; exclusions: CodeIndexExclusion[] }> {
+  const paths: string[] = [];
+  const exclusions: CodeIndexExclusion[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const relativePath = posixPath(prefix ? `${prefix}/${entry.name}` : entry.name);
+    if (entry.isDirectory()) {
+      if (excludedDirectories.has(entry.name)) { exclusions.push({ path: relativePath, reason: "excluded-directory" }); continue; }
+      const child = await collectCodeCandidates(root, join(directory, entry.name), relativePath);
+      paths.push(...child.paths);
+      exclusions.push(...child.exclusions);
+      continue;
+    }
+    if (!entry.isFile()) { exclusions.push({ path: relativePath, reason: "not-regular-file" }); continue; }
+    if (!allowedCodePath(relativePath)) { exclusions.push({ path: relativePath, reason: "not-allowlisted" }); continue; }
+    paths.push(relativePath);
+  }
+  return { paths: paths.sort(), exclusions };
+}
+
+async function readCodeIndex(root: string): Promise<CodeIndexedFile[]> {
+  const state = await readLocalFile(await gitRoot(root), ".downstroke/code-intelligence/files.jsonl");
+  if (state.kind !== "file") return [];
+  return state.content.toString("utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as CodeIndexedFile);
+}
+
+export async function planCodeIntelligenceIndex(root: string): Promise<CodeIndexPlan> {
+  const blockers: string[] = [];
+  let resolved = root;
+  try { resolved = await gitRoot(root); } catch (error: unknown) { blockers.push(error instanceof Error ? error.message : "Git repository cannot be inspected"); }
+  const timestamp = new Date().toISOString();
+  const indexedFiles: CodeIndexedFile[] = [];
+  const packages: CodePackageRecord[] = [];
+  const stack: CodeStackObservation[] = [];
+  let exclusions: CodeIndexExclusion[] = [];
+  if (!blockers.length) {
+    const existing = await readExistingCodeHashes(resolved);
+    const candidates = await collectCodeCandidates(resolved);
+    exclusions = candidates.exclusions;
+    const packageByDirectory = new Map<string, CodePackageRecord>();
+    const pathSet = new Set(candidates.paths);
+    const orderedPaths = [...candidates.paths].sort((left, right) => Number(basename(right) === "package.json") - Number(basename(left) === "package.json") || left.localeCompare(right));
+    for (const path of orderedPaths) {
+      const absolute = join(resolved, ...path.split("/"));
+      const info = await lstat(absolute);
+      if (info.isSymbolicLink()) { exclusions.push({ path, reason: "symlink" }); continue; }
+      if (info.size > 256 * 1024) { exclusions.push({ path, reason: "oversized" }); continue; }
+      const content = await readFile(absolute);
+      if (content.includes(0)) { exclusions.push({ path, reason: "binary" }); continue; }
+      const text = content.toString("utf8");
+      if (secretLike(text)) { exclusions.push({ path, reason: "secret-like-content" }); continue; }
+      const hash = codeHash(content);
+      if (basename(path) === "package.json") {
+        try {
+          const parsed = JSON.parse(text) as Record<string, unknown>;
+          const dependencies = packageDependencies(parsed);
+          const packageRecord = { path, name: typeof parsed.name === "string" ? parsed.name : null, packageManager: packageManagerFromFiles(pathSet, parsed.packageManager), dependencies };
+          packageByDirectory.set(dirname(path) === "." ? "" : dirname(path), packageRecord);
+          packages.push(packageRecord);
+          stack.push(...stackFromPackage(path, hash, dependencies));
+        } catch { exclusions.push({ path, reason: "malformed-package-json" }); }
+      }
+      let owner: string | null = null;
+      for (let directory = dirname(path); directory !== "."; directory = dirname(directory)) if (packageByDirectory.has(directory)) { owner = packageByDirectory.get(directory)?.path ?? null; break; }
+      if (!owner && packageByDirectory.has("")) owner = packageByDirectory.get("")?.path ?? null;
+      indexedFiles.push({ path, hash, bytes: content.byteLength, packagePath: owner, ...extractCodeFacts(path, text), action: existing.get(path) === hash ? "skip" : "index" });
+    }
+  }
+  const manifest: CodeIndexManifest = { schemaVersion: "0.1.0", module: "downstroke-code-intelligence", createdAt: timestamp, updatedAt: timestamp, files: indexedFiles.length };
+  return { status: blockers.length ? "blocked" : "ready", action: indexedFiles.every((file) => file.action === "skip") ? "skip" : "write", files: [...codeIntelligenceFiles], manifest: blockers.length ? null : manifest, indexedFiles, packages: packages.sort((left, right) => left.path.localeCompare(right.path)), stack: stack.sort((left, right) => left.technology.localeCompare(right.technology)), exclusions, blockers };
+}
+
+export async function applyCodeIntelligenceIndex(root: string, plan: CodeIndexPlan): Promise<DoctorResult> {
+  if (plan.status === "blocked" || !plan.manifest) return { id: "code-intelligence.index", status: "fail", message: plan.blockers.join("; ") || "Code intelligence plan is blocked", remediation: "Correct and preview the index again" };
+  const resolved = await gitRoot(root);
+  const fresh = await planCodeIntelligenceIndex(resolved);
+  if (fresh.status !== "ready" || JSON.stringify(fresh.indexedFiles.map(({ path, hash }) => ({ path, hash }))) !== JSON.stringify(plan.indexedFiles.map(({ path, hash }) => ({ path, hash })))) return { id: "code-intelligence.index", status: "fail", message: "Code intelligence index changed after preview", remediation: "Preview the index again" };
+  const base = join(resolved, ".downstroke", "code-intelligence");
+  await mkdir(base, { recursive: true });
+  await writeFile(join(base, "manifest.json"), `${JSON.stringify(plan.manifest, null, 2)}\n`);
+  await writeFile(join(base, "files.jsonl"), plan.indexedFiles.map((record) => JSON.stringify({ ...record, action: "skip" })).join("\n") + (plan.indexedFiles.length ? "\n" : ""));
+  await writeFile(join(base, "packages.jsonl"), plan.packages.map((record) => JSON.stringify(record)).join("\n") + (plan.packages.length ? "\n" : ""));
+  await writeFile(join(base, "stack.jsonl"), plan.stack.map((record) => JSON.stringify(record)).join("\n") + (plan.stack.length ? "\n" : ""));
+  return { id: "code-intelligence.index", status: "ok", message: plan.action === "skip" ? "Code intelligence index already current" : "Code intelligence index stored", evidence: String(plan.indexedFiles.length), remediation: "No action required" };
+}
+
+export async function detectCodeStack(root: string): Promise<{ status: "ready" | "blocked"; stack: CodeStackObservation[]; packages: CodePackageRecord[]; blockers: string[] }> {
+  const plan = await planCodeIntelligenceIndex(root);
+  return { status: plan.status, stack: plan.stack, packages: plan.packages, blockers: plan.blockers };
+}
+
+export async function queryCodeContext(root: string, paths: readonly string[], mode: "impact" | "context" = "context"): Promise<CodeContextReport> {
+  const requested = [...new Set(paths.map(posixPath))];
+  const indexed = await readCodeIndex(root);
+  if (!indexed.length) return { status: "missing-index", requested, files: [], stale: [], reason: "Code intelligence index is missing" };
+  const resolved = await gitRoot(root);
+  const stale: string[] = [];
+  const selected = new Map<string, CodeIndexedFile>();
+  for (const path of requested) {
+    const direct = indexed.find((file) => file.path === path);
+    if (direct) {
+      selected.set(direct.path, direct);
+      const state = await readLocalFile(resolved, direct.path);
+      if (state.kind !== "file" || codeHash(state.content) !== direct.hash) stale.push(direct.path);
+    }
+    if (mode === "impact") {
+      const stem = basename(path).replace(/\.[^.]+$/, "");
+      for (const file of indexed) if (file.imports.some((specifier) => specifier.includes(stem))) selected.set(file.path, file);
+    } else if (direct?.packagePath) {
+      for (const file of indexed) if (file.packagePath === direct.packagePath && selected.size < 12) selected.set(file.path, file);
+    }
+  }
+  return { status: stale.length ? "stale" : "ready", requested, files: [...selected.values()].slice(0, 20), stale, reason: stale.length ? "Indexed files changed after indexing" : "Context resolved from native index" };
 }
 
 type LocalRead =

@@ -441,3 +441,35 @@ test("simplicity command human output reports blocked gates", async () => {
   assert.match(output.join("\n"), /SIMPLICITY blocked/);
   assert.match(output.join("\n"), /BLOCKED/);
 });
+
+test("code intelligence CLI indexes stack and context without script execution", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-code-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { postinstall: "exit 1" }, dependencies: { react: "19.0.0" } }));
+  await writeFile(join(root, "src", "util.ts"), "export const util = 1;\n");
+  await writeFile(join(root, "src", "app.ts"), "import { util } from './util';\nexport const app = util;\n");
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: add code"], { cwd: root });
+
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["code", "index", "--json"], root), 0);
+    assert.equal(await run(["stack", "detect", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.equal(JSON.parse(output[0]).status, "ready");
+  assert.equal(JSON.parse(output[1]).stack.some(({ technology }) => technology === "React"), true);
+  await assert.rejects(readFile(join(root, ".downstroke", "code-intelligence", "files.jsonl")));
+
+  assert.equal(await run(["code", "index", "--yes"], root), 0);
+  const contextOutput = [];
+  console.log = (value) => contextOutput.push(String(value));
+  try {
+    assert.equal(await run(["code", "impact", "--path", "src/util.ts", "--json"], root), 0);
+    assert.equal(await run(["code", "context", "--path", "src/app.ts", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.equal(JSON.parse(contextOutput[0]).files.some(({ path }) => path === "src/app.ts"), true);
+  assert.equal(JSON.parse(contextOutput[1]).files.some(({ path }) => path === "src/app.ts"), true);
+});

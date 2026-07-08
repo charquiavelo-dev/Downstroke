@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, protectedCommunicationCategories, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -79,6 +79,8 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "  downstroke cadence --review-mode one-at-a-time --yes",
       "  downstroke communication --mode compact --yes",
       "  downstroke simplicity --proposal \"reuse existing helper\" --json",
+      "  downstroke code index --yes",
+      "  downstroke stack detect --json",
       "  downstroke experience init",
       "  downstroke workflow resume",
       "",
@@ -381,6 +383,58 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return report.status === "blocked" ? 1 : 0;
   }
 
+  if (command === "code") {
+    const action = positionals[0];
+    if (action === "index") {
+      const plan = await planCodeIntelligenceIndex(cwd);
+      const summary = { status: plan.status, action: plan.action, files: plan.indexedFiles.length, packages: plan.packages.length, stack: plan.stack.length, exclusions: plan.exclusions, blockers: plan.blockers };
+      if (!values.yes || values["dry-run"] || plan.status === "blocked") {
+        if (values.json) console.log(JSON.stringify(summary, null, 2));
+        else {
+          console.log(`CODE INDEX ${plan.status} ${plan.action} files=${plan.indexedFiles.length}`);
+          for (const exclusion of plan.exclusions.slice(0, 20)) console.log(`EXCLUDED ${exclusion.path} ${exclusion.reason}`);
+          for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+          if (plan.status === "ready" && plan.action === "write") console.log("Run again with --yes to authorize this code index update.");
+        }
+        return plan.status === "blocked" ? 1 : 0;
+      }
+      const result = await applyCodeIntelligenceIndex(cwd, plan);
+      if (values.json) console.log(JSON.stringify({ plan: summary, result }, null, 2));
+      else console.log(`${result.status.toUpperCase()} ${result.message} files=${result.evidence ?? "0"}`);
+      return result.status === "ok" ? 0 : 1;
+    }
+    if (action === "impact" || action === "context") {
+      const report = await queryCodeContext(cwd, values.path ?? [], action);
+      if (values.json) console.log(JSON.stringify(report, null, 2));
+      else {
+        console.log(`CODE ${action.toUpperCase()} ${report.status} files=${report.files.length}`);
+        for (const file of report.files) console.log(`FILE ${file.path}`);
+        for (const path of report.stale) console.log(`STALE ${path}`);
+      }
+      return report.status === "missing-index" ? 1 : 0;
+    }
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-code-command", message: "Use code index, code impact --path <path>, or code context --path <path>" }, null, 2));
+    else console.error("Usage: downstroke code <index|impact|context> [--path <path>] [--yes] [--json]");
+    return 1;
+  }
+
+  if (command === "stack") {
+    const action = positionals[0];
+    if (action === "detect") {
+      const report = await detectCodeStack(cwd);
+      if (values.json) console.log(JSON.stringify(report, null, 2));
+      else {
+        console.log(`STACK DETECT ${report.status}`);
+        for (const item of report.stack) console.log(`TECH ${item.technology} ${item.version ?? "unknown"} source=${item.source.path}`);
+        for (const blocker of report.blockers) console.log(`BLOCKED ${blocker}`);
+      }
+      return report.status === "blocked" ? 1 : 0;
+    }
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-stack-command", message: "Use stack detect" }, null, 2));
+    else console.error("Usage: downstroke stack detect [--json]");
+    return 1;
+  }
+
   if (command === "workflow") {
     const action = positionals[0];
     if (action === "resume") {
@@ -517,7 +571,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|communication|simplicity|govern|estimate|status|git-policy|experience|workflow> [options]");
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|communication|simplicity|code|stack|govern|estimate|status|git-policy|experience|workflow> [options]");
   return 1;
 }
 

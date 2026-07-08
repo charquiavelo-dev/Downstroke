@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -671,4 +671,52 @@ test("simplicity risk audit reports native code smells with safe next actions", 
   const categories = report.risks.map(({ category }) => category).sort();
   assert.deepEqual(categories, ["generated-artifact", "injection", "path-traversal", "redos", "secret-leakage", "supply-chain", "unsafe-execution"]);
   assert.ok(report.risks.every(({ evidence, nextAction }) => evidence && nextAction));
+});
+
+test("code intelligence indexes safe JS and TS files incrementally", async () => {
+  const root = await gitFixture();
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "fixture", packageManager: "npm@10.0.0", dependencies: { react: "19.0.0", typescript: "5.8.0" } }));
+  await writeFile(join(root, "src", "util.ts"), "export function util() { return 1; }\n");
+  await writeFile(join(root, "src", "app.ts"), "import { util } from './util';\nexport const app = util();\n");
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: add source"], { cwd: root });
+
+  const preview = await planCodeIntelligenceIndex(root);
+  assert.equal(preview.status, "ready");
+  assert.ok(preview.indexedFiles.find(({ path }) => path === "src/app.ts")?.imports.includes("./util"));
+  assert.ok(preview.indexedFiles.find(({ path }) => path === "src/app.ts")?.exports.includes("app"));
+  assert.equal(preview.indexedFiles.find(({ path }) => path === "src/app.ts")?.packagePath, "package.json");
+  assert.ok(preview.stack.some(({ technology }) => technology === "React"));
+  await assert.rejects(readFile(join(root, ".downstroke", "code-intelligence", "files.jsonl")));
+
+  assert.equal((await applyCodeIntelligenceIndex(root, preview)).status, "ok");
+  const second = await planCodeIntelligenceIndex(root);
+  assert.equal(second.action, "skip");
+  assert.ok(second.indexedFiles.every(({ action }) => action === "skip"));
+  await writeFile(join(root, "src", "util.ts"), "export function util() { return 2; }\n");
+  const context = await queryCodeContext(root, ["src/util.ts"], "impact");
+  assert.equal(context.status, "stale");
+  assert.ok(context.files.some(({ path }) => path === "src/app.ts"));
+});
+
+test("code intelligence excludes generated secret and unsafe files", async () => {
+  const root = await gitFixture();
+  await mkdir(join(root, "src"));
+  await mkdir(join(root, "dist"));
+  await writeFile(join(root, "src", "safe.ts"), "export const safe = true;\n");
+  await writeFile(join(root, "src", "secret.ts"), "const token = 'ghp_123456789012345678901234567890';\n");
+  await writeFile(join(root, "dist", "bundle.js"), "export const generated = true;\n");
+  const plan = await planCodeIntelligenceIndex(root);
+  assert.ok(plan.indexedFiles.some(({ path }) => path === "src/safe.ts"));
+  assert.ok(plan.exclusions.some(({ path, reason }) => path === "src/secret.ts" && reason === "secret-like-content"));
+  assert.ok(plan.exclusions.some(({ path, reason }) => path === "dist" && reason === "excluded-directory"));
+});
+
+test("code stack detection reports observed package technologies without scripts", async () => {
+  const root = await gitFixture();
+  await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { postinstall: "exit 1" }, dependencies: { vite: "7.0.0", zod: "4.0.0" } }));
+  const report = await detectCodeStack(root);
+  assert.equal(report.status, "ready");
+  assert.deepEqual(report.stack.map(({ technology }) => technology).sort(), ["Vite", "Zod"]);
 });
