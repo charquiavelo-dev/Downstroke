@@ -231,7 +231,8 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
         records: plan.records.map(({ fact: _fact, ...record }) => record),
         blockers: plan.blockers,
       };
-      if (!values.yes || values["dry-run"] || plan.status === "blocked") {
+      const conflictOnly = plan.blockers.length > 0 && plan.blockers.every((blocker) => blocker.startsWith("Material source conflict"));
+      if (!values.yes || values["dry-run"] || plan.status === "blocked" && !conflictOnly) {
         if (values.json) console.log(JSON.stringify(summary, null, 2));
         else {
           console.log(`EXPERIENCE IMPORT ${plan.status}`);

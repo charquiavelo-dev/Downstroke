@@ -440,7 +440,8 @@ test("experience import pauses when an active source changes materially", async 
   const conflict = await planExperienceImport(root, ["docs/policy.md"]);
   assert.equal(conflict.status, "blocked");
   assert.equal(conflict.records[0].fact?.status, "conflicted");
-  assert.equal((await applyExperienceImport(root, conflict)).status, "fail");
+  assert.equal((await applyExperienceImport(root, conflict)).status, "warn");
+  assert.equal((await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8")).trim().split("\n").length, 2);
 });
 
 test("experience import rejects oversized and symlinked sources", async () => {
@@ -457,4 +458,35 @@ test("experience import rejects oversized and symlinked sources", async () => {
   } catch (error) {
     if (error?.code !== "EPERM") throw error;
   }
+});
+
+test("experience import retains explicit cross-source claim conflicts for human resolution", async () => {
+  const root = await gitFixture();
+  await initializeExperience(root);
+  await mkdir(join(root, "docs"));
+  await writeFile(join(root, "docs", "local.md"), "# Rule\nclaim: storage=local\n");
+  await writeFile(join(root, "docs", "remote.md"), "# Rule\nclaim: storage=remote\n");
+  const plan = await planExperienceImport(root, ["docs/local.md", "docs/remote.md"]);
+  assert.equal(plan.status, "blocked");
+  assert.equal(plan.records.filter(({ fact }) => fact?.status === "conflicted").length, 1);
+  assert.equal((await applyExperienceImport(root, plan)).status, "warn");
+  const facts = (await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(facts.length, 2);
+  assert.ok(facts.some(({ status }) => status === "conflicted"));
+});
+
+test("experience import canonicalizes paths, rejects malformed text and lowers generated trust", async () => {
+  const root = await gitFixture();
+  await initializeExperience(root);
+  await mkdir(join(root, "docs"));
+  await mkdir(join(root, "dist"));
+  await writeFile(join(root, "docs", "requirements.md"), "# Requirements\nThe build must pass its test.\n");
+  await writeFile(join(root, "docs", "invalid.md"), Buffer.from([0xc3, 0x28]));
+  await writeFile(join(root, "dist", "rules.json"), JSON.stringify({ rule: "local" }));
+  const plan = await planExperienceImport(root, ["./docs/requirements.md", "docs/requirements.md", "docs/invalid.md", "dist/rules.json"]);
+  assert.equal(plan.records.filter(({ path }) => path === "docs/requirements.md").length, 1);
+  assert.equal(plan.records.find(({ path }) => path === "docs/requirements.md")?.classification, "requirement");
+  assert.equal(plan.records.find(({ path }) => path === "docs/invalid.md")?.reason, "binary-content");
+  assert.equal(plan.records.find(({ path }) => path === "dist/rules.json")?.trust, "external");
+  assert.equal((await planExperienceImport(root, ["docs/bad\nname.md"])).status, "blocked");
 });

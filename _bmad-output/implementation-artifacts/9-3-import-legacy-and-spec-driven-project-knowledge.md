@@ -4,7 +4,7 @@ baseline_commit: 17fa165
 
 # Story 9.3: Import Legacy and SPEC-Driven Project Knowledge
 
-Status: review
+Status: done
 
 ## Story
 
@@ -37,6 +37,17 @@ so that migration preserves useful work without activating untrusted instruction
 - [x] Add focused core and CLI tests (AC: 1-8)
   - [x] Cover Markdown/YAML/JSON, hashes, traversal/symlink/binary/size rejection, secrets/injection, QA trust, conflicts, retry and output redaction.
 - [x] Run build, typecheck, tests and native-only scan.
+
+### Review Findings
+
+- [x] [Review][Patch] Add minimal normalized claims and retain cross-source conflict candidates — Owner selected native explicit claims without a semantic parser; contradictory values persist as conflicted candidates and pause execution [packages/core/src/index.ts:653]
+- [x] [Review][Patch] Bind inspection to one file handle and revalidate before append [packages/core/src/index.ts:706]
+- [x] [Review][Patch] Prioritize explicit requirement/rule signals over generic QA words [packages/core/src/index.ts:656]
+- [x] [Review][Patch] Reject malformed UTF-8 in addition to NUL-bearing binary content [packages/core/src/index.ts:719]
+- [x] [Review][Patch] Report appended and skipped records accurately [packages/core/src/index.ts:754]
+- [x] [Review][Patch] Treat generated output directories as external trust [packages/core/src/index.ts:664]
+- [x] [Review][Patch] Canonicalize and deduplicate source paths before deriving facts [packages/core/src/index.ts:700]
+- [x] [Review][Patch] Reject control characters and use segment-aware containment checks [packages/core/src/index.ts:441]
 
 ## Dev Notes
 
@@ -80,7 +91,7 @@ GPT-5 Codex
 
 ### Debug Log References
 
-- `npm test` — 41/41 passing.
+- `npm test` — 44/44 passing.
 - `npm run typecheck` — passing.
 - Native-only distributed-surface scan — passing.
 
@@ -90,6 +101,7 @@ GPT-5 Codex
 - Added deterministic, bounded and non-executing Markdown/YAML/JSON inspection with SHA-256 provenance.
 - Added preview-first CLI import with explicit authorization, rejection/quarantine and material-conflict pause behavior.
 - Routed imported facts through the Story 9.2 validation and index-repair boundary; retries remain idempotent.
+- Closed all formal review findings, including explicit cross-source claim conflicts, stable file-handle inspection and generated-output trust.
 
 ### File List
 
@@ -106,3 +118,4 @@ GPT-5 Codex
 
 - 2026-07-07: Created implementation-ready Story 9.3 contract.
 - 2026-07-07: Implemented and verified safe native project-knowledge import; moved story to review.
+- 2026-07-07: Resolved formal review findings and completed Story 9.3.

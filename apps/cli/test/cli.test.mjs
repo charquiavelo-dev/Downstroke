@@ -246,3 +246,15 @@ test("experience import previews payload-free metadata and writes only with auth
   assert.equal(await run(["experience", "import", "--path", "README.md", "--yes"], root), 0);
   assert.match(await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8"), /README\.md/);
 });
+
+test("experience import retains authorized conflict candidates and pauses", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-import-conflict-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "local.md"), "# Rule\nclaim: storage=local\n");
+  await writeFile(join(root, "remote.md"), "# Rule\nclaim: storage=remote\n");
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  await run(["experience", "init"], root);
+  assert.equal(await run(["experience", "import", "--path", "local.md", "--path", "remote.md", "--yes"], root), 1);
+  assert.equal((await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8")).trim().split("\n").length, 2);
+});
