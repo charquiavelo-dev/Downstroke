@@ -186,7 +186,7 @@ Record the answer here:
 - Gross capacity: `8 hours/day, 40 hours/week, 120 hours/sprint`
 - WIP limit: `3`
 - High-risk review: `individual`
-- Last reviewed artifact: `3-1-configure-project-gitflow-and-authorization`
+- Last reviewed artifact: `9-2-create-the-operational-experience-foundation`
 
 Rules:
 

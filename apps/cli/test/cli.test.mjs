@@ -209,3 +209,20 @@ test("experience init and authorized fact writes stay repository-local and secre
   assert.equal(await run(["experience", "add", "--fact", fact, "--yes"], root), 0);
   assert.match(await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8"), /fact\.repo\.ready/);
 });
+
+test("experience dry-run and JSON errors remain read-only and machine-readable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-experience-dry-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  assert.equal(await run(["experience", "init", "--dry-run", "--json"], root), 0);
+  await assert.rejects(readFile(join(root, ".downstroke", "experience", "manifest.json")));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try { assert.equal(await run(["experience", "add", "--fact", "{", "--json"], root), 1); }
+  finally { console.log = originalLog; }
+  assert.deepEqual(JSON.parse(output.join("\n")), { status: "fail", error: "invalid-fact-json", message: "--fact must be valid JSON" });
+  assert.equal(output.join("\n").includes(root), false);
+});

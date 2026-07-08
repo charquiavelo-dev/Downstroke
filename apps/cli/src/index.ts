@@ -191,7 +191,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
   if (command === "experience") {
     const action = positionals[0];
     if (action === "init") {
-      const result = await initializeExperience(cwd);
+      const result = await initializeExperience(cwd, values["dry-run"]);
       if (values.json) console.log(JSON.stringify(result, null, 2));
       else {
         console.log(`EXPERIENCE ${result.status}`);
@@ -203,7 +203,11 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     if (action === "add" && values.fact) {
       let input: unknown;
       try { input = JSON.parse(values.fact) as unknown; }
-      catch { console.error("--fact must be valid JSON"); return 1; }
+      catch {
+        const error = { status: "fail", error: "invalid-fact-json", message: "--fact must be valid JSON" };
+        if (values.json) console.log(JSON.stringify(error, null, 2)); else console.error(error.message);
+        return 1;
+      }
       const plan = await planExperienceFact(cwd, input);
       const summary = { status: plan.status, action: plan.action, id: plan.fact?.id ?? null, blockers: plan.blockers };
       if (!values.yes || values["dry-run"] || plan.status === "blocked") {
@@ -220,7 +224,8 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       else console.log(`${result.status.toUpperCase()} ${result.message} id=${result.evidence ?? "unknown"}`);
       return result.status === "ok" ? 0 : 1;
     }
-    console.error("Usage: downstroke experience <init|add> [--fact <json>] [--yes] [--json]");
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-experience-command", message: "Use experience init or experience add --fact <json>" }, null, 2));
+    else console.error("Usage: downstroke experience <init|add> [--fact <json>] [--yes] [--json]");
     return 1;
   }
 

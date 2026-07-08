@@ -4,7 +4,7 @@ baseline_commit: cb192979f2c293494cfc005286cec63b2d3e1db0
 
 # Story 9.2: Create the Operational Experience Foundation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -41,6 +41,18 @@ so that project continuity is durable without trusting chat history or generated
   - [x] Cover first init, idempotent re-init, malformed/weakened manifest, safe paths, generated verification denial, evidence requirements, duplicate IDs, index updates and secret-free output.
   - [x] Preserve Git policy, cadence, governance, token, doctor, templates and native-only scan coverage.
 - [x] Run `npm run build`, `npm run typecheck`, `npm test` and the repository native-only scan.
+
+### Review Findings
+
+- [x] [Review][Patch] Perform a minimal native secret/instruction scan before direct fact persistence; Story 9.3 may extend import classification but cannot bypass this boundary [packages/core/src/index.ts:505]
+- [x] [Review][Patch] Make JSONL append and ID-index update recoverable; exact duplicate retries must repair and verify stale/missing indexes before returning success [packages/core/src/index.ts:523]
+- [x] [Review][Patch] Validate every storage child with `lstat`/`realpath`, reject wrong object types and symlink escapes before any creation or write [packages/core/src/index.ts:471]
+- [x] [Review][Patch] Harden fact validation for prototype keys, JSON-safe bounded values, source-specific provenance, chronology, duplicate records and canonical nested ordering [packages/core/src/index.ts:436]
+- [x] [Review][Patch] Validate evidence with an exact schema, unique IDs and fact-kind eligibility rather than generic matching fields [packages/core/src/index.ts:515]
+- [x] [Review][Patch] Add owner metadata and safe stale-lock recovery so a crashed writer cannot permanently block facts [packages/core/src/index.ts:535]
+- [x] [Review][Patch] Make `experience init --dry-run` read-only and return the planned create/skip operations [apps/cli/src/index.ts:191]
+- [x] [Review][Patch] Sanitize filesystem failures and emit stable JSON error envelopes for all `--json` experience failures [apps/cli/src/index.ts:195]
+- [x] [Review][Patch] Add adversarial tests for index recovery, symlink/type containment, reserved IDs, malformed evidence, stale locks, dry-run and path-free failures [packages/core/test/core.test.mjs:300]
 
 ## Dev Notes
 
@@ -107,7 +119,7 @@ GPT-5 Codex
 ### Debug Log References
 
 - Red: core tests failed because Experience exports did not exist.
-- Green: build and strict typecheck pass; all 33 Node tests pass.
+- Green: build and strict typecheck pass; all 36 Node tests pass.
 - Manual: repository native-only scan returns `ok`; fact preview output omits stored values.
 
 ### Completion Notes List
@@ -117,6 +129,7 @@ GPT-5 Codex
 - Added idempotent `experience init` plus preview/authorize/apply fact writes, duplicate protection and deterministic indexing.
 - Added sanitized evidence enforcement: generated output cannot self-verify and technical facts require passed, secret-free matching evidence.
 - Kept preview read-only and all persisted/output paths repository-relative.
+- Resolved all review findings with recoverable indexes, contained paths, strict evidence, stale-lock recovery and native security scanning.
 
 ### File List
 
@@ -132,3 +145,4 @@ GPT-5 Codex
 
 - 2026-07-07: Created implementation-ready Story 9.2 contract.
 - 2026-07-07: Implemented the Operational Experience foundation and moved the story to review.
+- 2026-07-07: Addressed nine code-review findings and completed Story 9.2.

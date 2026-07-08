@@ -344,7 +344,47 @@ test("experience fact previews do not initialize storage and verified facts requ
   assert.equal((await planExperienceFact(root, fact)).status, "blocked");
   await assert.rejects(readFile(join(root, ".downstroke", "experience", "manifest.json")));
   await initializeExperience(root);
-  await writeFile(join(root, ".downstroke", "experience", "evidence.jsonl"), `${JSON.stringify({ id: "evidence.build", type: "build_report", result: { status: "passed" }, security: { sanitized: true, containsSecrets: false, secretScan: "passed" } })}\n`);
+  await writeFile(join(root, ".downstroke", "experience", "evidence.jsonl"), `${JSON.stringify({ id: "evidence.build", type: "build_report", createdAt: "2026-07-07T00:00:00.000Z", source: { path: "build.log" }, result: { status: "passed" }, security: { sanitized: true, containsSecrets: false, secretScan: "passed" } })}\n`);
   assert.equal((await planExperienceFact(root, fact)).status, "ready");
   assert.equal((await planExperienceFact(root, { ...fact, evidence: { type: "manual_approval", ref: "evidence.build" } })).status, "blocked");
+});
+
+test("experience validation blocks unsafe facts and invalid storage objects", async () => {
+  const root = await gitFixture();
+  const preview = await initializeExperience(root, true);
+  assert.equal(preview.status, "ok");
+  await assert.rejects(readFile(join(root, ".downstroke", "experience", "manifest.json")));
+  await initializeExperience(root);
+  const base = {
+    id: "fact.safe", kind: "repo", scope: "repo", status: "observed", value: { ok: true },
+    source: { type: "manifest", path: "package.json" }, confidence: 1,
+    createdAt: "2026-07-07T00:00:00.000Z", updatedAt: "2026-07-07T00:00:00.000Z",
+    security: { trustLevel: "project", secretScan: "not_run", injectionScan: "not_run" },
+  };
+  assert.equal((await planExperienceFact(root, { ...base, id: "__proto__" })).status, "blocked");
+  assert.equal((await planExperienceFact(root, { ...base, value: { token: "ghp_123456789012345678901234567890" } })).status, "blocked");
+  assert.equal((await planExperienceFact(root, { ...base, source: { type: "manifest" } })).status, "blocked");
+  assert.equal((await planExperienceFact(root, { ...base, updatedAt: "2026-07-06T00:00:00.000Z" })).status, "blocked");
+  await rm(join(root, ".downstroke", "experience", "indexes"), { recursive: true });
+  await writeFile(join(root, ".downstroke", "experience", "indexes"), "wrong type");
+  assert.equal((await initializeExperience(root)).status, "fail");
+});
+
+test("experience retries repair stale indexes and stale writer locks", async () => {
+  const root = await gitFixture();
+  await initializeExperience(root);
+  const fact = {
+    id: "fact.repair", kind: "repo", scope: "repo", status: "observed", value: { b: 2, a: 1 },
+    source: { type: "manifest", path: "package.json" }, confidence: 1,
+    createdAt: "2026-07-07T00:00:00.000Z", updatedAt: "2026-07-07T00:00:00.000Z",
+    security: { trustLevel: "project", secretScan: "not_run", injectionScan: "not_run" },
+  };
+  assert.equal((await applyExperienceFact(root, await planExperienceFact(root, fact))).status, "ok");
+  await writeFile(join(root, ".downstroke", "experience", "indexes", "facts-by-id.json"), "{}");
+  const replay = await planExperienceFact(root, { ...fact, value: { a: 1, b: 2 } });
+  assert.equal(replay.status, "ready");
+  assert.equal(replay.action, "skip");
+  await writeFile(join(root, ".downstroke", "experience", "facts.lock"), JSON.stringify({ pid: 2147483647, createdAt: "2000-01-01T00:00:00.000Z" }));
+  assert.equal((await applyExperienceFact(root, replay)).status, "ok");
+  assert.deepEqual(JSON.parse(await readFile(join(root, ".downstroke", "experience", "indexes", "facts-by-id.json"), "utf8")), { "fact.repair": 1 });
 });

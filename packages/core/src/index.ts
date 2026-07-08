@@ -1,4 +1,4 @@
-import { access, appendFile, copyFile, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { access, appendFile, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -428,106 +428,194 @@ const experienceFiles = [
   ["evidence", "directory"], ["quarantine", "directory"], ["indexes", "directory"],
   ["manifest.json", "file"], ["facts.jsonl", "file"], ["evidence.jsonl", "file"], ["indexes/facts-by-id.json", "file"],
 ] as const;
+const maxExperienceBytes = 10 * 1024 * 1024;
 
 function safeExperiencePath(path: string): boolean {
   return path.length > 0 && !path.includes("\\") && !isAbsolute(path) && !path.split("/").includes("..");
 }
 
-function parseExperienceFact(value: unknown): ExperienceFact | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+function normalizeJson(value: unknown, depth = 0): unknown {
+  if (depth > 20) throw new Error("Experience value is too deeply nested");
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) return value.map((item) => normalizeJson(item, depth + 1));
+  if (typeof value !== "object") throw new Error("Experience value must be valid JSON");
   const input = value as Record<string, unknown>;
-  const allowed = ["id", "kind", "scope", "status", "value", "source", "confidence", "createdAt", "updatedAt", "expiresAt", "evidence", "security"];
-  if (Object.keys(input).some((key) => !allowed.includes(key))) return undefined;
-  const kinds = ["stack", "dependency", "rule", "decision", "risk", "gate", "script", "integration", "repo", "qa", "security"];
-  const scopes = ["repo", "workspace", "module", "file", "org"];
-  const statuses = ["unknown", "observed", "inferred", "verified", "stale", "conflicted", "quarantined", "rejected"];
-  if (typeof input.id !== "string" || !/^[A-Za-z0-9._:-]+$/.test(input.id) || !kinds.includes(String(input.kind)) || !scopes.includes(String(input.scope)) || !statuses.includes(String(input.status))) return undefined;
-  if (typeof input.confidence !== "number" || !Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1) return undefined;
-  const validDate = (date: unknown) => typeof date === "string" && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString() === date;
-  if (!validDate(input.createdAt) || !validDate(input.updatedAt) || (input.expiresAt !== undefined && (!validDate(input.expiresAt) || Date.parse(input.expiresAt as string) <= Date.parse(input.updatedAt as string)))) return undefined;
-  if (typeof input.source !== "object" || input.source === null || typeof input.security !== "object" || input.security === null) return undefined;
-  const source = input.source as Record<string, unknown>;
-  const sourceTypes = ["file", "command", "git", "manifest", "managed-block", "user-input", "llm-output", "external-tool", "bridge"];
-  if (Object.keys(source).some((key) => !["type", "path", "command", "hash", "bridgeId"].includes(key)) || !sourceTypes.includes(String(source.type))) return undefined;
-  if (source.path !== undefined && (typeof source.path !== "string" || !safeExperiencePath(source.path))) return undefined;
-  for (const key of ["command", "hash", "bridgeId"] as const) if (source[key] !== undefined && typeof source[key] !== "string") return undefined;
-  const security = input.security as Record<string, unknown>;
-  if (Object.keys(security).some((key) => !["trustLevel", "secretScan", "injectionScan"].includes(key)) || !["trusted", "project", "generated", "external", "untrusted"].includes(String(security.trustLevel))
-    || !["passed", "failed", "not_run"].includes(String(security.secretScan)) || !["passed", "failed", "not_run"].includes(String(security.injectionScan))) return undefined;
-  let evidence: ExperienceFact["evidence"];
-  if (input.evidence !== undefined) {
-    if (typeof input.evidence !== "object" || input.evidence === null) return undefined;
-    const item = input.evidence as Record<string, unknown>;
-    if (Object.keys(item).some((key) => !["type", "ref"].includes(key)) || !experienceManifest.verification.acceptedEvidenceTypes.includes(item.type as never) || typeof item.ref !== "string" || !/^[A-Za-z0-9._:-]+$/.test(item.ref)) return undefined;
-    evidence = { type: item.type as NonNullable<ExperienceFact["evidence"]>["type"], ref: item.ref };
-  }
-  return {
-    id: input.id, kind: input.kind as ExperienceFact["kind"], scope: input.scope as ExperienceFact["scope"], status: input.status as ExperienceFact["status"], value: input.value,
-    source: { type: source.type as ExperienceFact["source"]["type"], ...(source.path === undefined ? {} : { path: source.path as string }), ...(source.command === undefined ? {} : { command: source.command as string }), ...(source.hash === undefined ? {} : { hash: source.hash as string }), ...(source.bridgeId === undefined ? {} : { bridgeId: source.bridgeId as string }) },
-    confidence: input.confidence, createdAt: input.createdAt as string, updatedAt: input.updatedAt as string, ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt as string }), ...(evidence ? { evidence } : {}), security: security as ExperienceFact["security"],
-  };
+  return Object.fromEntries(Object.keys(input).sort().map((key) => [key, normalizeJson(input[key], depth + 1)]));
 }
 
-async function experienceRoot(root: string, create = false): Promise<string> {
+function parseExperienceFact(value: unknown): ExperienceFact | undefined {
+  try {
+    if (typeof value !== "object" || value === null) return undefined;
+    const input = value as Record<string, unknown>;
+    const allowed = ["id", "kind", "scope", "status", "value", "source", "confidence", "createdAt", "updatedAt", "expiresAt", "evidence", "security"];
+    if (Object.keys(input).some((key) => !allowed.includes(key))) return undefined;
+    const kinds = ["stack", "dependency", "rule", "decision", "risk", "gate", "script", "integration", "repo", "qa", "security"];
+    const scopes = ["repo", "workspace", "module", "file", "org"];
+    const statuses = ["unknown", "observed", "inferred", "verified", "stale", "conflicted", "quarantined", "rejected"];
+    if (typeof input.id !== "string" || !/^[A-Za-z0-9._:-]{1,200}$/.test(input.id) || ["__proto__", "prototype", "constructor"].includes(input.id) || !kinds.includes(String(input.kind)) || !scopes.includes(String(input.scope)) || !statuses.includes(String(input.status))) return undefined;
+    if (typeof input.confidence !== "number" || !Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1) return undefined;
+    const validDate = (date: unknown) => typeof date === "string" && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString() === date;
+    if (!validDate(input.createdAt) || !validDate(input.updatedAt) || Date.parse(input.updatedAt as string) < Date.parse(input.createdAt as string)
+      || (input.expiresAt !== undefined && (!validDate(input.expiresAt) || Date.parse(input.expiresAt as string) <= Date.parse(input.updatedAt as string)))) return undefined;
+    if (typeof input.source !== "object" || input.source === null || typeof input.security !== "object" || input.security === null) return undefined;
+    const source = input.source as Record<string, unknown>;
+    const sourceTypes = ["file", "command", "git", "manifest", "managed-block", "user-input", "llm-output", "external-tool", "bridge"];
+    if (Object.keys(source).some((key) => !["type", "path", "command", "hash", "bridgeId"].includes(key)) || !sourceTypes.includes(String(source.type))) return undefined;
+    if (source.path !== undefined && (typeof source.path !== "string" || !safeExperiencePath(source.path))) return undefined;
+    for (const key of ["command", "hash", "bridgeId"] as const) if (source[key] !== undefined && typeof source[key] !== "string") return undefined;
+    if (["file", "manifest", "managed-block"].includes(String(source.type)) && source.path === undefined) return undefined;
+    if (source.type === "command" && source.command === undefined || source.type === "git" && source.hash === undefined || source.type === "bridge" && source.bridgeId === undefined) return undefined;
+    if (source.type === "external-tool" && source.path === undefined && source.command === undefined && source.bridgeId === undefined) return undefined;
+    const security = input.security as Record<string, unknown>;
+    if (Object.keys(security).some((key) => !["trustLevel", "secretScan", "injectionScan"].includes(key)) || !["trusted", "project", "generated", "external", "untrusted"].includes(String(security.trustLevel))) return undefined;
+    if (source.type === "llm-output" && !["generated", "untrusted"].includes(String(security.trustLevel)) || ["external-tool", "bridge"].includes(String(source.type)) && !["external", "untrusted"].includes(String(security.trustLevel))) return undefined;
+    let evidence: ExperienceFact["evidence"];
+    if (input.evidence !== undefined) {
+      if (typeof input.evidence !== "object" || input.evidence === null) return undefined;
+      const item = input.evidence as Record<string, unknown>;
+      if (Object.keys(item).some((key) => !["type", "ref"].includes(key)) || !experienceManifest.verification.acceptedEvidenceTypes.includes(item.type as never) || typeof item.ref !== "string" || !/^[A-Za-z0-9._:-]+$/.test(item.ref)) return undefined;
+      evidence = { type: item.type as NonNullable<ExperienceFact["evidence"]>["type"], ref: item.ref };
+    }
+    const normalizedValue = normalizeJson(input.value);
+    if (Buffer.byteLength(JSON.stringify(normalizedValue)) > 64 * 1024) return undefined;
+    return {
+      id: input.id, kind: input.kind as ExperienceFact["kind"], scope: input.scope as ExperienceFact["scope"], status: input.status as ExperienceFact["status"], value: normalizedValue,
+      source: { type: source.type as ExperienceFact["source"]["type"], ...(source.path === undefined ? {} : { path: source.path as string }), ...(source.command === undefined ? {} : { command: source.command as string }), ...(source.hash === undefined ? {} : { hash: source.hash as string }), ...(source.bridgeId === undefined ? {} : { bridgeId: source.bridgeId as string }) },
+      confidence: input.confidence, createdAt: input.createdAt as string, updatedAt: input.updatedAt as string, ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt as string }), ...(evidence ? { evidence } : {}),
+      security: { trustLevel: security.trustLevel as ExperienceFact["security"]["trustLevel"], secretScan: "not_run", injectionScan: "not_run" },
+    };
+  } catch { return undefined; }
+}
+
+async function checkedExperienceRoot(root: string, create = false): Promise<string> {
   const resolved = await gitRoot(root);
-  const base = join(resolved, ".downstroke", "experience");
-  if (create) await mkdir(base, { recursive: true });
-  const actual = await realpath(base);
-  const location = relative(resolved, actual);
+  const downstroke = join(resolved, ".downstroke");
+  if (await exists(downstroke) && (await lstat(downstroke)).isSymbolicLink()) throw new Error("Experience storage parent cannot be a symbolic link");
+  if (create) await mkdir(join(downstroke, "experience"), { recursive: true });
+  const base = await realpath(join(downstroke, "experience"));
+  const location = relative(resolved, base);
   if (location.startsWith("..") || isAbsolute(location)) throw new Error("Experience storage resolves outside the repository");
-  return actual;
+  return base;
 }
 
-export async function initializeExperience(root: string): Promise<{ status: "ok" | "fail"; actions: { path: string; action: "create" | "skip" }[]; message: string }> {
+async function validateExperienceEntry(base: string, path: string, kind: "file" | "directory"): Promise<boolean> {
+  const target = join(base, ...path.split("/"));
+  try {
+    const info = await lstat(target);
+    if (info.isSymbolicLink() || kind === "file" && !info.isFile() || kind === "directory" && !info.isDirectory()) throw new Error(`Invalid experience storage entry: ${path}`);
+    return true;
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+export async function initializeExperience(root: string, dryRun = false): Promise<{ status: "ok" | "fail"; actions: { path: string; action: "create" | "skip" }[]; message: string }> {
   try {
     const resolved = await gitRoot(root);
-    const base = await experienceRoot(resolved, true);
+    const downstrokePath = join(resolved, ".downstroke");
+    if (await exists(downstrokePath) && (await lstat(downstrokePath)).isSymbolicLink()) throw new Error("Experience storage parent cannot be a symbolic link");
+    const basePath = join(resolved, ".downstroke", "experience");
+    const base = dryRun && !(await exists(basePath)) ? basePath : await checkedExperienceRoot(resolved, true);
     const manifestPath = join(base, "manifest.json");
     if (await exists(manifestPath)) {
+      if (!(await validateExperienceEntry(base, "manifest.json", "file"))) throw new Error("Invalid experience manifest");
       const existing = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
       if (JSON.stringify(existing) !== JSON.stringify(experienceManifest)) return { status: "fail", actions: [], message: "Experience manifest is malformed or weakens lite security defaults" };
     }
     const actions: { path: string; action: "create" | "skip" }[] = [];
     for (const [path, kind] of experienceFiles) {
-      const target = join(base, ...path.split("/"));
+      const present = await validateExperienceEntry(base, path, kind).catch((error: unknown) => { if (dryRun && !(error instanceof Error && error.message.startsWith("Invalid"))) return false; throw error; });
       const display = `.downstroke/experience/${path}`;
-      if (await exists(target)) { actions.push({ path: display, action: "skip" }); continue; }
-      if (kind === "directory") await mkdir(target);
-      else await writeFile(target, path === "manifest.json" ? `${JSON.stringify(experienceManifest, null, 2)}\n` : path.endsWith(".json") ? "{}\n" : "", { flag: "wx" });
+      if (present) { actions.push({ path: display, action: "skip" }); continue; }
+      if (!dryRun) {
+        const target = join(base, ...path.split("/"));
+        if (kind === "directory") await mkdir(target);
+        else await writeFile(target, path === "manifest.json" ? `${JSON.stringify(experienceManifest, null, 2)}\n` : path.endsWith(".json") ? "{}\n" : "", { flag: "wx" });
+      }
       actions.push({ path: display, action: "create" });
     }
-    return { status: "ok", actions, message: "Experience storage is ready with lite security defaults" };
-  } catch (error: unknown) {
-    return { status: "fail", actions: [], message: error instanceof Error ? error.message : "Experience initialization failed" };
-  }
+    return { status: "ok", actions, message: dryRun ? "Experience initialization preview" : "Experience storage is ready with lite security defaults" };
+  } catch { return { status: "fail", actions: [], message: "Experience storage cannot be initialized safely" }; }
+}
+
+async function readExperienceLines(path: string): Promise<string[]> {
+  const content = await readFile(path);
+  if (content.byteLength > maxExperienceBytes) throw new Error("Experience store exceeds the lite size limit");
+  return content.toString("utf8").split(/\r?\n/).filter(Boolean);
+}
+
+function scanExperienceFact(fact: ExperienceFact): ExperienceFact {
+  const text = JSON.stringify({ value: fact.value, source: fact.source });
+  const secret = /(-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|\b(?:ghp_|github_pat_|npm_)[A-Za-z0-9_]{20,}|\bAKIA[0-9A-Z]{16}|(?:password|secret|token|api[_-]?key)\s*[:=]\s*[^\s,}]+)/i.test(text);
+  const injection = /(ignore (?:all |the )?previous|reveal (?:the )?system prompt|override (?:security |project )?policy|execute (?:this |the )?command)/i.test(text);
+  return { ...fact, security: { ...fact.security, secretScan: secret ? "failed" : "passed", injectionScan: injection ? "failed" : "passed" } };
+}
+
+function validEvidence(item: Record<string, unknown>, fact: ExperienceFact): boolean {
+  const keys = ["id", "type", "createdAt", "source", "result", "security"];
+  if (!fact.evidence || Object.keys(item).length !== keys.length || keys.some((key) => !(key in item)) || Object.keys(item).some((key) => !keys.includes(key)) || item.id !== fact.evidence.ref || item.type !== fact.evidence.type) return false;
+  if (typeof item.createdAt !== "string" || Number.isNaN(Date.parse(item.createdAt)) || typeof item.source !== "object" || item.source === null) return false;
+  const result = typeof item.result === "object" && item.result !== null ? item.result as Record<string, unknown> : {};
+  const security = typeof item.security === "object" && item.security !== null ? item.security as Record<string, unknown> : {};
+  if (result.status !== "passed" || security.sanitized !== true || security.containsSecrets !== false || security.secretScan !== "passed") return false;
+  if (fact.kind === "qa" && !["command_exit_code", "test_report", "typecheck_report", "build_report", "lint_report"].includes(String(item.type))) return false;
+  return item.type !== "manual_approval" || fact.kind === "decision";
 }
 
 export async function planExperienceFact(root: string, value: unknown): Promise<ExperienceFactPlan> {
   const blockers: string[] = [];
-  const fact = parseExperienceFact(value);
-  if (!fact) return { status: "blocked", action: "append", fact: null, blockers: ["Experience fact is malformed"] };
+  const parsed = parseExperienceFact(value);
+  if (!parsed) return { status: "blocked", action: "append", fact: null, blockers: ["Experience fact is malformed"] };
+  const fact = scanExperienceFact(parsed);
+  if (fact.security.secretScan === "failed") blockers.push("Facts containing likely secrets cannot be persisted");
+  if (fact.security.injectionScan === "failed" && !["quarantined", "rejected"].includes(fact.status)) blockers.push("Suspicious instructions require quarantined or rejected status");
   if (fact.status === "verified" && fact.source.type === "llm-output") blockers.push("LLM output cannot directly create a verified fact");
-  if ((fact.security.secretScan === "failed" || fact.security.injectionScan === "failed") && !["quarantined", "rejected"].includes(fact.status)) blockers.push("Failed security scans require quarantined or rejected status");
   if (fact.status === "verified" && !fact.evidence) blockers.push("Verified facts require evidence");
   try {
-    const base = await experienceRoot(root);
+    const base = await checkedExperienceRoot(root);
+    for (const [path, kind] of experienceFiles) if (!(await validateExperienceEntry(base, path, kind))) throw new Error("Experience storage is incomplete");
     if (JSON.stringify(JSON.parse(await readFile(join(base, "manifest.json"), "utf8"))) !== JSON.stringify(experienceManifest)) blockers.push("Experience manifest is malformed or weakens lite security defaults");
     if (fact.status === "verified" && fact.evidence) {
-      const evidence = (await readFile(join(base, "evidence.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
-      const item = evidence.find(({ id }) => id === fact.evidence?.ref);
-      const result = typeof item?.result === "object" && item.result !== null ? item.result as Record<string, unknown> : {};
-      const security = typeof item?.security === "object" && item.security !== null ? item.security as Record<string, unknown> : {};
-      if (!item || item.type !== fact.evidence.type || result.status !== "passed" || security.sanitized !== true || security.containsSecrets !== false || security.secretScan !== "passed") blockers.push("Verified fact evidence is missing, failed, unsanitized or the wrong type");
-      if (fact.evidence.type === "manual_approval" && fact.kind !== "decision") blockers.push("Manual approval can verify decisions only, not technical claims");
+      const evidence = (await readExperienceLines(join(base, "evidence.jsonl"))).map((line) => JSON.parse(line) as Record<string, unknown>);
+      const matches = evidence.filter(({ id }) => id === fact.evidence?.ref);
+      if (matches.length !== 1 || !validEvidence(matches[0]!, fact)) blockers.push("Verified fact evidence is missing, duplicated, invalid or ineligible");
     }
-    const records = (await readFile(join(base, "facts.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
-    const existing = records.find(({ id }) => id === fact.id);
-    if (existing) {
-      if (JSON.stringify(existing) !== JSON.stringify(fact)) blockers.push("Experience fact ID already exists with different content");
+    const records = (await readExperienceLines(join(base, "facts.jsonl"))).map((line) => JSON.parse(line) as Record<string, unknown>);
+    const matches = records.filter(({ id }) => id === fact.id);
+    if (matches.length > 1) blockers.push("Experience store contains duplicate fact IDs");
+    if (matches.length === 1) {
+      if (JSON.stringify(normalizeJson(matches[0])) !== JSON.stringify(normalizeJson(fact))) blockers.push("Experience fact ID already exists with different content");
       return { status: blockers.length ? "blocked" : "ready", action: "skip", fact, blockers };
     }
-  } catch (error: unknown) { blockers.push(error instanceof Error ? error.message : "Experience storage cannot be inspected"); }
+  } catch { blockers.push("Experience storage cannot be inspected safely"); }
   return { status: blockers.length ? "blocked" : "ready", action: "append", fact, blockers };
+}
+
+async function acquireExperienceLock(path: string): Promise<Awaited<ReturnType<typeof open>>> {
+  const create = async () => { const handle = await open(path, "wx"); await handle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })); return handle; };
+  try { return await create(); }
+  catch {
+    try {
+      const metadata = JSON.parse(await readFile(path, "utf8")) as { pid?: unknown; createdAt?: unknown };
+      const age = typeof metadata.createdAt === "string" ? Date.now() - Date.parse(metadata.createdAt) : 0;
+      let alive = true;
+      if (typeof metadata.pid === "number") try { process.kill(metadata.pid, 0); } catch (error: unknown) { alive = !(typeof error === "object" && error !== null && "code" in error && error.code === "ESRCH"); }
+      if (age > 300_000 && !alive) { await unlink(path); return create(); }
+    } catch { /* keep unknown locks fail-closed */ }
+    throw new Error("Another experience fact write is in progress");
+  }
+}
+
+async function rebuildFactIndex(base: string): Promise<void> {
+  const records = (await readExperienceLines(join(base, "facts.jsonl"))).map((line) => JSON.parse(line) as { id?: unknown });
+  const index = Object.create(null) as Record<string, number>;
+  records.forEach(({ id }, position) => { if (typeof id === "string") index[id] = position + 1; });
+  const indexPath = join(base, "indexes", "facts-by-id.json");
+  const temporary = `${indexPath}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(index, null, 2)}\n`, { flag: "wx" });
+  await rename(temporary, indexPath);
 }
 
 export async function applyExperienceFact(root: string, plan: ExperienceFactPlan): Promise<DoctorResult> {
@@ -535,24 +623,17 @@ export async function applyExperienceFact(root: string, plan: ExperienceFactPlan
   let lock: Awaited<ReturnType<typeof open>> | undefined;
   let lockPath = "";
   try {
-    const base = await experienceRoot(root);
+    const base = await checkedExperienceRoot(root);
     lockPath = join(base, "facts.lock");
-    lock = await open(lockPath, "wx");
+    lock = await acquireExperienceLock(lockPath);
     const fresh = await planExperienceFact(root, plan.fact);
     if (JSON.stringify(fresh) !== JSON.stringify(plan)) return { id: "experience.fact", status: "fail", message: "Experience facts changed after preview", remediation: "Preview the fact again" };
-    if (plan.action === "skip") return { id: "experience.fact", status: "ok", message: "Experience fact already exists", evidence: plan.fact.id, remediation: "No action required" };
-    const factsPath = join(base, "facts.jsonl");
-    const line = (await readFile(factsPath, "utf8")).split(/\r?\n/).filter(Boolean).length + 1;
-    await appendFile(factsPath, `${JSON.stringify(plan.fact)}\n`);
-    const indexPath = join(base, "indexes", "facts-by-id.json");
-    const index = JSON.parse(await readFile(indexPath, "utf8")) as Record<string, number>;
-    index[plan.fact.id] = line;
-    const temporary = `${indexPath}.${process.pid}.${randomUUID()}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(index, null, 2)}\n`, { flag: "wx" });
-    await rename(temporary, indexPath);
-    return { id: "experience.fact", status: "ok", message: "Experience fact stored", evidence: plan.fact.id, remediation: "No action required" };
+    if (plan.action === "append") await appendFile(join(base, "facts.jsonl"), `${JSON.stringify(plan.fact)}\n`);
+    await rebuildFactIndex(base);
+    return { id: "experience.fact", status: "ok", message: plan.action === "skip" ? "Experience fact and index already exist" : "Experience fact stored", evidence: plan.fact.id, remediation: "No action required" };
   } catch (error: unknown) {
-    return { id: "experience.fact", status: "fail", message: error instanceof Error ? error.message : "Experience fact write failed", remediation: "Inspect experience storage and preview again" };
+    const message = error instanceof Error && ["Another experience fact write is in progress", "Experience facts changed after preview"].includes(error.message) ? error.message : "Experience fact write failed safely";
+    return { id: "experience.fact", status: "fail", message, remediation: "Inspect repository-relative experience storage and preview again" };
   } finally {
     if (lock) { await lock.close().catch(() => undefined); await unlink(lockPath).catch(() => undefined); }
   }
