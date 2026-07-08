@@ -92,6 +92,43 @@ export type TokenRoutePlan = {
   blockers: string[];
 };
 
+export type KnowledgeRecord = {
+  id: string;
+  kind: "rule" | "decision" | "preference" | "stack-note";
+  status: "accepted" | "proposed" | "deprecated" | "stale" | "invalidated" | "conflicted" | "quarantined";
+  scope?: "repository" | "team" | "organization" | "global" | undefined;
+  stack?: string[] | undefined;
+  tags?: string[] | undefined;
+  summary: string;
+  source: { path: string; hash?: string; section?: string };
+};
+export type ContextCompileRequest = {
+  taskId: string;
+  paths: string[];
+  stack?: string[];
+  budget?: number;
+};
+export type ContextReference = {
+  id: string;
+  category: "identity" | "active-rules" | "relevant-facts" | "evidence" | "risks" | "unknowns" | "blocked-assumptions" | "stack-notes";
+  summary: string;
+  source?: { path?: string; hash?: string; section?: string } | undefined;
+};
+export type ContextExclusion = {
+  id: string;
+  reason: "budget" | "not-accepted" | "stale" | "conflicted" | "quarantined" | "secret-like-content" | "malformed" | "not-relevant";
+  source?: { path?: string; hash?: string; section?: string } | undefined;
+};
+export type CompiledTaskContext = {
+  status: "ready" | "blocked";
+  task: { id: string; paths: string[]; stack: string[]; budget: number };
+  sections: Record<ContextReference["category"], ContextReference[]>;
+  included: ContextReference[];
+  excluded: ContextExclusion[];
+  blockers: string[];
+  stableHash: string;
+};
+
 export type GitPermission = {
   enabled: boolean;
   scope: "repository";
@@ -513,6 +550,152 @@ export async function applyTokenEconomyRoute(root: string, plan: TokenRoutePlan)
   await appendFile(ledger, `${JSON.stringify(plan.record)}\n`, { encoding: "utf8", mode: 0o600 });
   await chmod(ledger, 0o600);
   return { id: "token-economy.route", status: "ok", message: "Token route recorded", evidence: plan.record.taskId, remediation: "Run verification required by the recorded gate" };
+}
+
+const contextCategories = ["identity", "active-rules", "relevant-facts", "evidence", "risks", "unknowns", "blocked-assumptions", "stack-notes"] as const;
+const knowledgeStatuses: KnowledgeRecord["status"][] = ["accepted", "proposed", "deprecated", "stale", "invalidated", "conflicted", "quarantined"];
+const knowledgeKinds: KnowledgeRecord["kind"][] = ["rule", "decision", "preference", "stack-note"];
+
+function emptyContextSections(): CompiledTaskContext["sections"] {
+  return Object.fromEntries(contextCategories.map((category) => [category, []])) as unknown as CompiledTaskContext["sections"];
+}
+
+async function readJsonLines(root: string, path: string): Promise<unknown[]> {
+  const file = await readLocalFile(await gitRoot(root), path);
+  if (file.kind === "missing") return [];
+  if (file.kind !== "file") throw new Error(`${path} cannot be inspected safely`);
+  return file.content.toString("utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as unknown);
+}
+
+function parseKnowledgeRecord(value: unknown): KnowledgeRecord | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  if (typeof input.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.id)) return undefined;
+  if (!knowledgeKinds.includes(input.kind as KnowledgeRecord["kind"]) || !knowledgeStatuses.includes(input.status as KnowledgeRecord["status"])) return undefined;
+  if (input.scope !== undefined && !["repository", "team", "organization", "global"].includes(String(input.scope))) return undefined;
+  if (input.stack !== undefined && (!Array.isArray(input.stack) || !input.stack.every((item) => typeof item === "string" && item.length <= 80))) return undefined;
+  if (input.tags !== undefined && (!Array.isArray(input.tags) || !input.tags.every((item) => typeof item === "string" && item.length <= 80))) return undefined;
+  if (typeof input.summary !== "string" || input.summary.trim().length === 0 || input.summary.length > 500 || secretLike(input.summary)) return undefined;
+  if (typeof input.source !== "object" || input.source === null) return undefined;
+  const source = input.source as Record<string, unknown>;
+  if (typeof source.path !== "string" || !safeExperiencePath(source.path)) return undefined;
+  if (source.hash !== undefined && (typeof source.hash !== "string" || !/^[a-f0-9]{64}$/i.test(source.hash))) return undefined;
+  if (source.section !== undefined && (typeof source.section !== "string" || source.section.length > 120)) return undefined;
+  return {
+    id: input.id,
+    kind: input.kind as KnowledgeRecord["kind"],
+    status: input.status as KnowledgeRecord["status"],
+    ...(input.scope === undefined ? {} : { scope: input.scope as KnowledgeRecord["scope"] }),
+    ...(input.stack === undefined ? {} : { stack: [...input.stack as string[]].sort() }),
+    ...(input.tags === undefined ? {} : { tags: [...input.tags as string[]].sort() }),
+    summary: input.summary.trim(),
+    source: { path: source.path, ...(typeof source.hash === "string" ? { hash: source.hash.toLowerCase() } : {}), ...(typeof source.section === "string" ? { section: source.section } : {}) },
+  };
+}
+
+function contextSource(source: { path?: string; hash?: string; section?: string } | undefined): ContextReference["source"] | undefined {
+  if (!source) return undefined;
+  return { ...(source.path ? { path: source.path } : {}), ...(source.hash ? { hash: source.hash } : {}), ...(source.section ? { section: source.section } : {}) };
+}
+
+function compactSummary(value: unknown): string {
+  const text = typeof value === "string" ? value : JSON.stringify(normalizeJson(value));
+  return text.replace(/\s+/g, " ").slice(0, 240);
+}
+
+function addContextReference(compiled: CompiledTaskContext, reference: ContextReference, categoryBudget: number): void {
+  const section = compiled.sections[reference.category];
+  if (section.length >= categoryBudget) {
+    compiled.excluded.push({ id: reference.id, reason: "budget", source: reference.source });
+    return;
+  }
+  section.push(reference);
+  compiled.included.push(reference);
+}
+
+function excludeContext(compiled: CompiledTaskContext, exclusion: ContextExclusion): void {
+  compiled.excluded.push(exclusion);
+}
+
+function knowledgeCategory(kind: KnowledgeRecord["kind"]): ContextReference["category"] {
+  if (kind === "rule") return "active-rules";
+  if (kind === "stack-note") return "stack-notes";
+  return "relevant-facts";
+}
+
+function knowledgeRelevant(record: KnowledgeRecord, request: ContextCompileRequest): boolean {
+  const requestedStack = new Set((request.stack ?? []).map((item) => item.toLowerCase()));
+  if (record.stack?.length && requestedStack.size) return record.stack.some((item) => requestedStack.has(item.toLowerCase()));
+  if (record.tags?.includes(request.taskId)) return true;
+  return !record.stack?.length;
+}
+
+export async function compileTaskContext(root: string, input: ContextCompileRequest): Promise<CompiledTaskContext> {
+  const paths = [...new Set(input.paths.map(posixPath))].sort();
+  const stack = [...new Set(input.stack ?? [])].sort();
+  const budget = input.budget ?? 24;
+  const compiled: CompiledTaskContext = { status: "ready", task: { id: input.taskId, paths, stack, budget }, sections: emptyContextSections(), included: [], excluded: [], blockers: [], stableHash: "" };
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.taskId)) compiled.blockers.push("taskId must be 1-128 safe identifier characters");
+  if (!Number.isInteger(budget) || budget < 1 || budget > 200) compiled.blockers.push("budget must be an integer from 1 to 200");
+  for (const path of paths) if (!safeExperiencePath(path)) compiled.blockers.push(`Unsafe context path: ${path}`);
+  const categoryBudget = Math.max(1, Math.floor(budget / contextCategories.length));
+  if (compiled.blockers.length) {
+    compiled.status = "blocked";
+    compiled.stableHash = createHash("sha256").update(JSON.stringify(normalizeJson(JSON.parse(JSON.stringify({ task: compiled.task, sections: compiled.sections, included: compiled.included, excluded: compiled.excluded, blockers: compiled.blockers })) as unknown))).digest("hex");
+    return compiled;
+  }
+
+  try {
+    const facts = (await readJsonLines(root, ".downstroke/experience/facts.jsonl")).map(parseExperienceFact);
+    for (const fact of facts.sort((left, right) => String(left?.id).localeCompare(String(right?.id)))) {
+      if (!fact) { excludeContext(compiled, { id: "experience.<malformed>", reason: "malformed" }); continue; }
+      const scanned = scanExperienceFact(fact);
+      const source = contextSource(scanned.source);
+      if (scanned.security.secretScan === "failed") { compiled.blockers.push(`Critical leakage in experience fact: ${scanned.id}`); excludeContext(compiled, { id: scanned.id, reason: "secret-like-content", source }); continue; }
+      if (scanned.status === "quarantined" || scanned.status === "rejected") { excludeContext(compiled, { id: scanned.id, reason: "quarantined", source }); continue; }
+      if (scanned.status === "conflicted") { excludeContext(compiled, { id: scanned.id, reason: "conflicted", source }); continue; }
+      if (scanned.status === "stale" || scanned.expiresAt && Date.parse(scanned.expiresAt) <= Date.now()) { excludeContext(compiled, { id: scanned.id, reason: "stale", source }); continue; }
+      const category: ContextReference["category"] = scanned.status === "unknown" ? "unknowns" : scanned.kind === "risk" || scanned.kind === "security" ? "risks" : scanned.kind === "rule" || scanned.kind === "gate" ? "active-rules" : "relevant-facts";
+      addContextReference(compiled, { id: scanned.id, category, summary: compactSummary(scanned.value), source }, categoryBudget);
+      if (scanned.evidence) addContextReference(compiled, { id: scanned.evidence.ref, category: "evidence", summary: scanned.evidence.type, source }, categoryBudget);
+    }
+  } catch { compiled.blockers.push("Experience state cannot be inspected safely"); }
+
+  try {
+    const items = (await readWorkflowItems(root)).sort((left, right) => left.id.localeCompare(right.id));
+    const matches = items.filter((item) => item.id === input.taskId || paths.some((path) => item.source?.path === path));
+    if (!matches.length) addContextReference(compiled, { id: `workflow.${input.taskId}.missing`, category: "unknowns", summary: "No matching workflow item found" }, categoryBudget);
+    for (const item of matches) {
+      addContextReference(compiled, { id: item.id, category: "identity", summary: `${item.type}:${item.status}:${item.title}`, source: contextSource(item.source) }, categoryBudget);
+      if (item.risk === "high") addContextReference(compiled, { id: `${item.id}.risk`, category: "risks", summary: "High-risk workflow item requires individual review", source: contextSource(item.source) }, categoryBudget);
+      for (const deferred of item.deferredWork) addContextReference(compiled, { id: `${item.id}.deferred.${createHash("sha256").update(deferred).digest("hex").slice(0, 8)}`, category: "blocked-assumptions", summary: deferred, source: contextSource(item.source) }, categoryBudget);
+      for (const evidenceItem of item.evidence) addContextReference(compiled, { id: `${item.id}.evidence.${createHash("sha256").update(evidenceItem).digest("hex").slice(0, 8)}`, category: "evidence", summary: evidenceItem, source: contextSource(item.source) }, categoryBudget);
+    }
+    for (const conflict of (await readWorkflowConflicts(root)).filter((item) => item.status === "pending" && (item.itemId === input.taskId || matches.some((match) => match.id === item.itemId)))) {
+      addContextReference(compiled, { id: conflict.id, category: "blocked-assumptions", summary: `Pending owner decision: ${conflict.consequences.join("; ")}`, source: conflict.sources[0] }, categoryBudget);
+    }
+  } catch { addContextReference(compiled, { id: "workflow.unavailable", category: "unknowns", summary: "Workflow state is unavailable" }, categoryBudget); }
+
+  try {
+    const code = await queryCodeContext(root, paths, "context");
+    for (const file of code.files.sort((left, right) => left.path.localeCompare(right.path))) addContextReference(compiled, { id: `code.${file.path}`, category: "identity", summary: `code symbols=${file.symbols.length} imports=${file.imports.length}`, source: { path: file.path, hash: file.hash } }, categoryBudget);
+    for (const stale of code.stale) excludeContext(compiled, { id: `code.${stale}`, reason: "stale", source: { path: stale } });
+  } catch { addContextReference(compiled, { id: "code.unavailable", category: "unknowns", summary: "Code intelligence state is unavailable" }, categoryBudget); }
+
+  try {
+    const records = (await readJsonLines(root, ".downstroke/knowledge/records.jsonl")).map(parseKnowledgeRecord);
+    for (const record of records.sort((left, right) => String(left?.id).localeCompare(String(right?.id)))) {
+      if (!record) { excludeContext(compiled, { id: "knowledge.<malformed>", reason: "malformed" }); continue; }
+      if (record.status !== "accepted") { excludeContext(compiled, { id: record.id, reason: record.status === "quarantined" ? "quarantined" : record.status === "conflicted" ? "conflicted" : record.status === "stale" || record.status === "deprecated" || record.status === "invalidated" ? "stale" : "not-accepted", source: record.source }); continue; }
+      if (!knowledgeRelevant(record, input)) { excludeContext(compiled, { id: record.id, reason: "not-relevant", source: record.source }); continue; }
+      addContextReference(compiled, { id: record.id, category: knowledgeCategory(record.kind), summary: `${record.kind}: ${record.summary}`, source: record.source }, categoryBudget);
+    }
+  } catch { compiled.blockers.push("Knowledge registry cannot be inspected safely"); }
+
+  compiled.status = compiled.blockers.length ? "blocked" : "ready";
+  const stableContent = { task: compiled.task, sections: compiled.sections, included: compiled.included, excluded: compiled.excluded, blockers: compiled.blockers };
+  compiled.stableHash = createHash("sha256").update(JSON.stringify(normalizeJson(JSON.parse(JSON.stringify(stableContent)) as unknown))).digest("hex");
+  return compiled;
 }
 
 const gitBranches = { main: "main", develop: "develop", feature: "feature/*", release: "release/*", hotfix: "hotfix/*" } as const;

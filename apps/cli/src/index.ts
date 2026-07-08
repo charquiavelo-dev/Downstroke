@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -62,6 +62,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       tests: { type: "string" },
       "task-id": { type: "string" },
       "task-class": { type: "string" },
+      stack: { type: "string", multiple: true },
       ambiguity: { type: "string" },
       "tool-proven": { type: "boolean", default: false },
       verification: { type: "string" },
@@ -86,6 +87,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "  downstroke simplicity --proposal \"reuse existing helper\" --json",
       "  downstroke code index --yes",
       "  downstroke route --task-id task.1 --task-class contextual --mode balanced",
+      "  downstroke knowledge compile --task-id task.1 --path src/index.ts --json",
       "  downstroke stack detect --json",
       "  downstroke experience init",
       "  downstroke workflow resume",
@@ -458,6 +460,30 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     const result = await applyTokenEconomyRoute(cwd, plan);
     if (values.json) console.log(JSON.stringify({ plan, result }, null, 2)); else console.log(`${result.status.toUpperCase()} ${result.message} task=${result.evidence ?? "unknown"}`);
     return result.status === "ok" ? 0 : 1;
+  }
+
+  if (command === "knowledge") {
+    const action = positionals[0];
+    if (action === "compile") {
+      const report = await compileTaskContext(cwd, {
+        taskId: values["task-id"] ?? "",
+        paths: values.path ?? [],
+        ...(values.stack ? { stack: values.stack } : {}),
+        ...(values.budget === undefined ? {} : { budget: Number(values.budget) }),
+      });
+      if (values.json) console.log(JSON.stringify(report, null, 2));
+      else {
+        console.log(`KNOWLEDGE COMPILE ${report.status} task=${report.task.id || "missing"} hash=${report.stableHash}`);
+        for (const category of Object.keys(report.sections)) console.log(`SECTION ${category} items=${report.sections[category as keyof typeof report.sections].length}`);
+        for (const item of report.included.slice(0, 20)) console.log(`INCLUDED ${item.category} ${item.id}`);
+        for (const item of report.excluded.slice(0, 20)) console.log(`EXCLUDED ${item.id} ${item.reason}`);
+        for (const blocker of report.blockers) console.log(`BLOCKED ${blocker}`);
+      }
+      return report.status === "blocked" ? 1 : 0;
+    }
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-knowledge-command", message: "Use knowledge compile --task-id <id> [--path <path>] [--stack <name>] [--budget <items>]" }, null, 2));
+    else console.error("Usage: downstroke knowledge compile --task-id <id> [--path <path>] [--stack <name>] [--budget <items>] [--json]");
+    return 1;
   }
 
   if (command === "stack") {

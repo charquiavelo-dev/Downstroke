@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -747,4 +747,35 @@ test("token economy routes the lowest sufficient tier and records escalations", 
   const manipulated = structuredClone(escalated);
   manipulated.record.contextBudget = 1;
   assert.equal((await applyTokenEconomyRoute(root, manipulated)).status, "fail");
+});
+
+test("context compiler includes safe accepted context and blocks leakage deterministically", async () => {
+  const root = await gitFixture();
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { typescript: "5.8.0" } }));
+  await writeFile(join(root, "src", "app.ts"), "export const app = 1;\n");
+  assert.equal((await applyCodeIntelligenceIndex(root, await planCodeIntelligenceIndex(root))).status, "ok");
+  await mkdir(join(root, ".downstroke", "experience"), { recursive: true });
+  await mkdir(join(root, ".downstroke", "workflows"), { recursive: true });
+  await mkdir(join(root, ".downstroke", "knowledge"), { recursive: true });
+  const stamp = "2026-07-08T00:00:00.000Z";
+  const fact = { id: "fact.rule.safe", kind: "rule", scope: "repo", status: "verified", value: { rule: "Use native context only" }, source: { type: "file", path: "docs/SPEC.md", hash: "a".repeat(64) }, confidence: 1, createdAt: stamp, updatedAt: stamp, evidence: { type: "file_hash", ref: "ev.safe" }, security: { trustLevel: "project", secretScan: "passed", injectionScan: "passed" } };
+  const secret = { ...fact, id: "fact.secret", status: "observed", value: { token: "api_key=\"abcdefghijklmnopqrstuvwxyz\"" } };
+  await writeFile(join(root, ".downstroke", "experience", "facts.jsonl"), `${JSON.stringify(fact)}\n${JSON.stringify(secret)}\n`);
+  await writeFile(join(root, ".downstroke", "workflows", "items.jsonl"), `${JSON.stringify({ id: "story.9.9", type: "story", title: "Compile context", status: "ready-for-dev", risk: "high", acceptanceCriteria: [], tasks: [], evidence: ["npm test"], deferredWork: ["Resolve unknown stack docs"], createdAt: stamp, updatedAt: stamp })}\n`);
+  await writeFile(join(root, ".downstroke", "workflows", "decisions.jsonl"), "");
+  await writeFile(join(root, ".downstroke", "workflows", "checkpoints.jsonl"), "");
+  await writeFile(join(root, ".downstroke", "knowledge", "records.jsonl"), [
+    { id: "kr.react", kind: "stack-note", status: "accepted", stack: ["TypeScript"], summary: "Prefer strict TypeScript boundaries", source: { path: "docs/SPEC.md", hash: "b".repeat(64) } },
+    { id: "kr.proposed", kind: "rule", status: "proposed", summary: "Draft rule", source: { path: "docs/SPEC.md" } },
+  ].map((item) => JSON.stringify(item)).join("\n"));
+
+  const first = await compileTaskContext(root, { taskId: "story.9.9", paths: ["src/app.ts"], stack: ["TypeScript"], budget: 16 });
+  const second = await compileTaskContext(root, { taskId: "story.9.9", paths: ["src/app.ts"], stack: ["TypeScript"], budget: 16 });
+  assert.equal(first.status, "blocked");
+  assert.equal(first.stableHash, second.stableHash);
+  assert.equal(first.included.some(({ id }) => id === "kr.react"), true);
+  assert.equal(first.excluded.some(({ id, reason }) => id === "kr.proposed" && reason === "not-accepted"), true);
+  assert.equal(first.excluded.some(({ id, reason }) => id === "fact.secret" && reason === "secret-like-content"), true);
+  assert.equal(JSON.stringify(first).includes("abcdefghijklmnopqrstuvwxyz"), false);
 });

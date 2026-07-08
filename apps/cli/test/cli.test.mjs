@@ -493,3 +493,19 @@ test("route command previews and records native token economy decisions", async 
   assert.equal(entry.outcome, "escalated");
   assert.equal(entry.verificationGate, "blocking");
 });
+
+test("knowledge compile is read-only and reports deterministic context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-context-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["knowledge", "compile", "--task-id", "task.1", "--path", "src/app.ts", "--budget", "8", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const report = JSON.parse(output.join("\n"));
+  assert.equal(report.status, "ready");
+  assert.equal(report.task.id, "task.1");
+  assert.match(report.stableHash, /^[a-f0-9]{64}$/);
+  await assert.rejects(readFile(join(root, ".downstroke", "knowledge", "compiled.json")));
+});
