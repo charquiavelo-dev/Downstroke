@@ -12,7 +12,26 @@ Downstroke = native workflows + operational experience + communication policy + 
 
 Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import and native workflow state.
 
-The public release milestone is intentionally strict. Downstroke is considered locally usable for acceptance only after Epics 1-9, README completion, npm package preparation and token calibration pass the repository gates.
+The CLI can be built, linked and exercised locally today. It is not published to the npm registry yet, and the framework has not reached its complete native acceptance milestone. Local testing is useful now for the implemented commands; it must not be mistaken for release readiness.
+
+The public release milestone is intentionally strict. Downstroke is considered complete for maintainer acceptance only after the native platform, package preparation, clean-install checks and final token calibration pass the repository gates.
+
+## Philosophy
+
+Downstroke treats AI-assisted delivery as engineering, not conversation. A useful result must survive the session that produced it. That requires durable state, explicit authority, inspectable evidence and deterministic checks wherever a model is unnecessary.
+
+Its operating principles are:
+
+- **Preview before mutation.** A plan should be inspectable before it changes a repository.
+- **Evidence before confidence.** Generated text is not proof. Claims retain their source, status and confidence.
+- **Contradictions stop execution.** Downstroke preserves conflicting facts and asks a human to decide when semantics materially disagree.
+- **Native at release.** External tools may assist development or migration, but distributed runtime behavior, templates and public documentation must be Downstroke-owned.
+- **The smallest sufficient mechanism wins.** Normal functions, repository files and platform APIs come before agents, services and dependencies.
+- **Risk controls the workflow.** Authentication, permissions, money, production, destructive data and migrations receive individual review regardless of normal cadence.
+- **State is resumable.** Workflows, checkpoints, decisions and evidence live in the project rather than depending on chat history.
+- **Humans retain authority.** Downstroke may classify, explain and recommend; it does not silently broaden permission or resolve material ambiguity.
+
+These rules reduce hidden state, make failures diagnosable and let a later developer reconstruct why a decision was made.
 
 ## What Downstroke does
 
@@ -28,20 +47,22 @@ The public release milestone is intentionally strict. Downstroke is considered l
 - Stores native workflow items, controlled checkpoints, decisions and deterministic resume state.
 - Keeps external construction artifacts as maintenance-only evidence, not product runtime dependencies.
 
-## Install and run locally
+## Install and run locally today
 
 Requirements:
 
 - Node.js 22 or newer.
 - npm.
 
-From this repository:
+Clone this repository, install the workspace and build every native package:
 
 ```bash
 npm install
 npm run build
 node apps/cli/dist/index.js
 ```
+
+The final command opens the Downstroke entry screen. No external agent framework, daemon or hosted service is required.
 
 Use the local CLI directly:
 
@@ -52,7 +73,20 @@ node apps/cli/dist/index.js doctor --run-checks
 node apps/cli/dist/index.js workflow resume
 ```
 
-During package development you can link the CLI globally from the CLI workspace:
+### Run the compiled CLI directly
+
+This is the most explicit development path:
+
+```bash
+node /absolute/path/to/Downstroke/apps/cli/dist/index.js doctor
+node /absolute/path/to/Downstroke/apps/cli/dist/index.js init --preset lite --dry-run
+```
+
+Run those commands from the project you want Downstroke to inspect. Downstroke uses the current working directory as the project root.
+
+### Link the command globally
+
+During package development, npm can expose the workspace binary as `downstroke`:
 
 ```bash
 npm run build
@@ -60,7 +94,65 @@ npm link -w downstroke-cli
 downstroke
 ```
 
-The final npm installation flow belongs to the release stories and will be documented after package preparation validates metadata, tarball contents, clean install, binary wiring and release provenance.
+After linking, move to a disposable project and verify the command:
+
+```bash
+cd /path/to/a/disposable-project
+downstroke doctor
+downstroke init --preset lite --dry-run
+downstroke init --preset lite
+downstroke doctor --run-checks
+```
+
+Remove the development link with `npm unlink -g downstroke-cli` when the test is complete.
+
+### Link only inside one test project
+
+```bash
+cd /path/to/a/disposable-project
+npm link /absolute/path/to/Downstroke/apps/cli
+npx downstroke doctor
+```
+
+Use a disposable project for the first write test. Preview commands first, inspect their output, and only then repeat with `--yes` where authorization is required.
+
+The public command `npm install -g downstroke` is **not available yet**. The release stories must first validate package naming, workspace dependency publication, metadata, tarball contents, clean installation, binary wiring and provenance. Until then, use one of the local development paths above.
+
+## First complete local walkthrough
+
+This sequence exercises the implemented framework without claiming unfinished release features:
+
+```bash
+# Inspect without writing
+downstroke doctor
+downstroke init --preset lite --dry-run
+
+# Initialize project discipline
+downstroke init --preset lite
+downstroke doctor --run-checks
+
+# Persist review policy and durable knowledge
+downstroke cadence --review-mode one-at-a-time --yes
+downstroke experience init
+downstroke experience import --path README.md
+downstroke experience import --path README.md --yes
+
+# Build native structural intelligence
+downstroke stack detect
+downstroke code index
+downstroke code index --yes
+downstroke code context --path src/index.ts
+downstroke code impact --path src/index.ts
+
+# Evaluate simplicity and create resumable work
+downstroke simplicity
+downstroke workflow add --item '{"id":"story.1","type":"story","title":"First controlled change","status":"ready-for-dev"}' --controlled --phase plan --yes
+downstroke workflow resume --item-id story.1
+```
+
+Replace `src/index.ts` with a file that exists in the test project. On PowerShell, JSON quoting may require escaped double quotes or a JSON value stored in a variable.
+
+The intended daily loop is: diagnose, preview, authorize the exact write, implement the smallest safe change, verify with the real project toolchain, attach evidence and resume from persisted state.
 
 ## CLI overview
 
@@ -183,6 +275,59 @@ Operational Experience stores facts with provenance, trust, scope, status and ev
 
 Unsafe imports are rejected or quarantined. Material conflicts are retained with evidence and require human resolution.
 
+### `communication`
+
+Inspect or persist the repository communication policy:
+
+```bash
+downstroke communication
+downstroke communication --yes
+downstroke communication --json
+```
+
+The policy keeps progress reporting proportional to risk and records assumptions, blockers, decisions, verification evidence and the next safe action. Invalid or manipulated state blocks instead of silently falling back.
+
+### `simplicity`
+
+Evaluate whether a proposed change has enough justification for its complexity and risk:
+
+```bash
+downstroke simplicity
+downstroke simplicity --json
+```
+
+The native gates cover shared packages, dependencies, abstractions and rewrites. Major changes need named consumers, impact, ownership, verification and rollback evidence. Safety findings include dangerous command execution, secret leakage, path traversal, injection, catastrophic regular-expression patterns, dependency supply-chain risk and generated artifacts.
+
+The gate is an early decision boundary, not a substitute for a compiler, security audit or human review. If a smaller existing mechanism works, use it; if risk is material, require evidence before implementation.
+
+### `stack` and `code`
+
+Detect the stack without executing package scripts:
+
+```bash
+downstroke stack detect
+downstroke stack detect --json
+```
+
+Preview and persist the native code index:
+
+```bash
+downstroke code index
+downstroke code index --yes
+downstroke code index --json
+```
+
+Query bounded structural context:
+
+```bash
+downstroke code context --path packages/core/src/index.ts
+downstroke code impact --path packages/core/src/index.ts
+```
+
+The index records safe JavaScript and TypeScript files, hashes, imports, re-exports, top-level symbols, package ownership and stack observations. It excludes external-root paths, binaries, oversized files, secret-like files and common generated or vendor directories. Queries report missing, stale or malformed state explicitly.
+
+This is intentionally heuristic code intelligence, not a compiler-grade semantic engine. Use the project compiler and tests as authority for correctness. Rebuild the index after relevant files change before trusting an impact report.
+
 ### `workflow`
 
 Create native workflow items and resume deterministic next actions:
@@ -232,6 +377,64 @@ Downstroke defaults to preview-first operations:
 - Secrets are not printed in reports.
 - Legacy construction artifacts are migration sources, not healthy runtime dependencies.
 - Material semantic conflicts pause for a human decision.
+
+## Practical operating advice
+
+- Start with `doctor`; it reports what the repository can actually prove.
+- Use `--json` in scripts. Do not parse decorated terminal output.
+- Treat `--yes` as authorization for the exact preview you inspected, not permanent consent.
+- Keep evidence small and direct: a command, file hash, test result or reviewed artifact is better than a generated summary.
+- Re-index before impact analysis after code changes. A stale report is a warning, not a best-effort answer.
+- Run the consuming project's own typecheck, tests and build. Downstroke coordinates evidence; it does not replace the toolchain.
+- Resolve material contradictions instead of selecting the newest statement automatically. Recency does not prove authority.
+- Add orchestration only when a deterministic function and one execution path are insufficient.
+- Test initialization in a disposable branch or repository first and review every planned write.
+
+## Files Downstroke creates
+
+Depending on the commands used, a consumer project can receive:
+
+```txt
+AGENTS.md and other lite preset documents
+docs/SPEC.md and project discipline guides
+.downstroke/planning.json
+.downstroke/experience/
+.downstroke/workflows/
+.downstroke/code-intelligence/
+```
+
+The exact plan is shown before managed writes. Existing unmanaged files are skipped rather than overwritten.
+
+## Troubleshooting local use
+
+### `downstroke` is not found
+
+Rebuild and link the CLI workspace with `npm run build` and `npm link -w downstroke-cli`. Open a new shell and retry. If the link remains unavailable, use `node /absolute/path/to/Downstroke/apps/cli/dist/index.js`.
+
+### The code index is stale
+
+Run `downstroke code index`, inspect the preview, then run `downstroke code index --yes`.
+
+### A write does not occur
+
+Read the preview and blockers. Commands that mutate governed state generally require `--yes`; blocked or changed plans must be previewed again.
+
+### `doctor --run-checks` reports failures
+
+Downstroke runs scripts exposed by the consumer project. Fix the underlying typecheck, test or build failure, then rerun doctor. A failing real check is evidence, not a framework error by default.
+
+### A conflict blocks progress
+
+Inspect both sources and their evidence. Downstroke intentionally does not select a winner for material semantic contradictions. Record the human decision in the governed workflow before continuing.
+
+## Current limits
+
+- No package is available from the public npm registry yet.
+- Local linking exercises implemented commands but is not a clean-install or tarball proof.
+- Token estimates remain heuristic until the final calibration story.
+- Context compilation, strict native cleanup, explicit worker orchestration, the execution engine and the complete knowledge lifecycle remain roadmap work.
+- Code intelligence is bounded and heuristic; the language toolchain remains authoritative.
+- Downstroke does not install or run external agent frameworks as product runtime dependencies.
 
 ## Native-only boundary
 
