@@ -122,6 +122,7 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | `<contract>` | `<role>` | `<schemas>` | `<errors/retry>` | `<test>` |
 | `downstroke experience init` | Project developer | Repository-local v0.1 lite manifest and stores | Never overwrites; malformed/weakened manifest fails | Core and CLI initialization tests |
 | `downstroke experience add` | Project developer | Valid fact JSON; preview then `--yes` | Secret-free summary; duplicate conflict blocks | Core and CLI fact-write tests |
+| `downstroke experience import` | Project developer | Repeated repository-relative Markdown, YAML or JSON paths; preview then `--yes` | Bounded metadata-only classification; unsafe content is rejected/quarantined and material conflicts pause | Core and CLI import tests |
 
 External integrations must define timeout, retry, rate-limit, fallback, secret ownership and observability behavior.
 

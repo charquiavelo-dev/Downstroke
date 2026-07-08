@@ -82,7 +82,7 @@ development_status:
   epic-9: in-progress
   9-1-enforce-the-native-only-product-boundary: done
   9-2-create-the-operational-experience-foundation: done
-  9-3-import-legacy-and-spec-driven-project-knowledge: ready-for-dev
+  9-3-import-legacy-and-spec-driven-project-knowledge: review
   9-4-add-native-planning-and-delivery-workflows: backlog
   9-5-add-native-communication-policy: backlog
   9-6-add-native-simplicity-gates: backlog

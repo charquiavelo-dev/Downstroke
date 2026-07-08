@@ -1,7 +1,7 @@
 import { access, appendFile, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export type FileOperation = {
   source: string;
@@ -137,6 +137,20 @@ export type ExperienceFact = {
 };
 
 export type ExperienceFactPlan = { status: "ready" | "blocked"; action: "append" | "skip"; fact: ExperienceFact | null; blockers: string[] };
+export type ExperienceImportRecord = {
+  path: string;
+  hash: string;
+  bytes: number;
+  format: "markdown" | "yaml" | "json" | "unsupported";
+  classification: "requirement" | "decision" | "rule" | "workflow" | "qa" | "unknown";
+  trust: "project" | "external" | "untrusted";
+  importability: "importable" | "quarantine" | "reject";
+  instructionRisk: "none" | "suspicious" | "active";
+  reason?: string;
+  action: "append" | "skip" | "none";
+  fact?: ExperienceFact;
+};
+export type ExperienceImportPlan = { status: "ready" | "blocked"; records: ExperienceImportRecord[]; blockers: string[] };
 
 const responsibilities = {
   user: "approves",
@@ -637,6 +651,107 @@ export async function applyExperienceFact(root: string, plan: ExperienceFactPlan
   } finally {
     if (lock) { await lock.close().catch(() => undefined); await unlink(lockPath).catch(() => undefined); }
   }
+}
+
+const maxImportBytes = 256 * 1024;
+
+function importClassification(path: string, text: string): ExperienceImportRecord["classification"] {
+  const sample = `${path}\n${text.slice(0, 8192)}`.toLowerCase();
+  if (/\b(qa|test|build|typecheck|lint|verification)\b/.test(sample)) return "qa";
+  if (/\b(decision|adr|chosen|rationale)\b/.test(sample)) return "decision";
+  if (/\b(workflow|story|task|sprint|epic|process)\b/.test(sample)) return "workflow";
+  if (/\b(requirement|acceptance criteria|\bmust\b|\bshall\b|specification)\b/.test(sample)) return "requirement";
+  if (/\b(rule|policy|standard|non-negotiable)\b/.test(sample)) return "rule";
+  return "unknown";
+}
+
+function importTrust(path: string): ExperienceImportRecord["trust"] {
+  if (/^(?:docs\/legacy|_bmad(?:-output)?|\.agents|\.codegraph)(?:\/|$)/.test(path)) return "external";
+  return path.startsWith(".") ? "untrusted" : "project";
+}
+
+function importFormat(path: string): ExperienceImportRecord["format"] {
+  const extension = extname(path).toLowerCase();
+  if ([".md", ".markdown"].includes(extension)) return "markdown";
+  if ([".yaml", ".yml"].includes(extension)) return "yaml";
+  if (extension === ".json") return "json";
+  return "unsupported";
+}
+
+function importFact(record: Omit<ExperienceImportRecord, "action" | "fact">, timestamp: string): ExperienceFact | undefined {
+  if (record.importability === "reject") return undefined;
+  const kinds: Record<ExperienceImportRecord["classification"], ExperienceFact["kind"]> = { requirement: "gate", decision: "decision", rule: "rule", workflow: "rule", qa: "qa", unknown: "risk" };
+  return {
+    id: `import.${record.hash.slice(0, 24)}.${record.classification}`,
+    kind: kinds[record.classification], scope: "repo", status: record.importability === "quarantine" ? "quarantined" : "observed",
+    value: { classification: record.classification, bytes: record.bytes, reason: record.reason ?? "classified-source" },
+    source: { type: "file", path: record.path, hash: record.hash }, confidence: record.trust === "project" ? 0.8 : 0.5,
+    createdAt: timestamp, updatedAt: timestamp,
+    security: { trustLevel: record.trust, secretScan: "not_run", injectionScan: "not_run" },
+  };
+}
+
+export async function planExperienceImport(root: string, requestedPaths: string[]): Promise<ExperienceImportPlan> {
+  const records: ExperienceImportRecord[] = [];
+  const blockers: string[] = [];
+  let repository: string;
+  try { repository = await gitRoot(root); }
+  catch { return { status: "blocked", records, blockers: ["Repository root cannot be resolved"] }; }
+  let existing: ExperienceFact[] = [];
+  try {
+    const base = await checkedExperienceRoot(repository);
+    existing = (await readExperienceLines(join(base, "facts.jsonl"))).map((line) => JSON.parse(line) as ExperienceFact);
+  } catch { blockers.push("Experience storage cannot be inspected safely"); }
+
+  for (const path of [...new Set(requestedPaths)].sort()) {
+    const format = importFormat(path);
+    const rejected = (reason: string, displayPath = path): ExperienceImportRecord => ({ path: displayPath, hash: "", bytes: 0, format, classification: "unknown", trust: "untrusted", importability: "reject", instructionRisk: "none", reason, action: "none" });
+    if (!safeExperiencePath(path)) { records.push(rejected("unsafe-path", "<unsafe-path>")); blockers.push("Unsafe import path requires correction"); continue; }
+    if (format === "unsupported") { records.push(rejected("unsupported-format")); continue; }
+    try {
+      const target = join(repository, ...path.split("/"));
+      const linkInfo = await lstat(target);
+      if (linkInfo.isSymbolicLink() || !linkInfo.isFile()) { records.push(rejected("not-contained-regular-file")); continue; }
+      if (linkInfo.size > maxImportBytes) { records.push({ ...rejected("oversized"), bytes: linkInfo.size }); continue; }
+      const resolved = await realpath(target);
+      const location = relative(repository, resolved);
+      if (location.startsWith("..") || isAbsolute(location)) { records.push(rejected("outside-repository")); continue; }
+      const content = await readFile(resolved);
+      const hash = createHash("sha256").update(content).digest("hex");
+      if (content.includes(0)) { records.push({ ...rejected("binary-content"), hash, bytes: content.byteLength }); continue; }
+      const text = content.toString("utf8");
+      const secret = /(-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|\b(?:ghp_|github_pat_|npm_)[A-Za-z0-9_]{20,}|\bAKIA[0-9A-Z]{16}|(?:password|secret|token|api[_-]?key)\s*[:=]\s*[^\s,}]+)/i.test(text);
+      const active = /(ignore (?:all |the )?previous|reveal (?:the )?system prompt|override (?:security |project )?policy|execute (?:this |the )?command)/i.test(text);
+      const classification = importClassification(path, text);
+      const trust = importTrust(path);
+      const importability: ExperienceImportRecord["importability"] = secret ? "reject" : active || classification === "unknown" ? "quarantine" : "importable";
+      const reason = secret ? "secret-like-content" : active ? "active-instruction" : classification === "unknown" ? "unknown-content" : undefined;
+      const baseRecord = { path, hash, bytes: content.byteLength, format, classification, trust, importability, instructionRisk: active ? "active" as const : "none" as const, ...(reason ? { reason } : {}) };
+      let fact = importFact(baseRecord, linkInfo.mtime.toISOString());
+      const conflict = existing.some((item) => item.source.path === path && item.source.hash !== hash && !["quarantined", "rejected", "stale"].includes(item.status));
+      if (conflict && fact) {
+        fact = { ...fact, status: "conflicted", value: { ...(fact.value as object), reason: "material-source-conflict" } };
+        blockers.push(`Material source conflict requires human resolution: ${path}`);
+      }
+      const factPlan = fact ? await planExperienceFact(repository, fact) : undefined;
+      records.push({ ...baseRecord, action: factPlan?.action ?? "none", ...(fact ? { fact } : {}) });
+      if (factPlan?.status === "blocked" && !conflict) blockers.push(...factPlan.blockers.map((item) => `${path}: ${item}`));
+    } catch { records.push(rejected("unreadable-source")); }
+  }
+  if (requestedPaths.length === 0) blockers.push("At least one repository-relative path is required");
+  return { status: blockers.length ? "blocked" : "ready", records, blockers: [...new Set(blockers)] };
+}
+
+export async function applyExperienceImport(root: string, plan: ExperienceImportPlan): Promise<DoctorResult> {
+  if (plan.status === "blocked") return { id: "experience.import", status: "fail", message: plan.blockers.join("; "), remediation: "Resolve blockers and preview the import again" };
+  const fresh = await planExperienceImport(root, plan.records.map(({ path }) => path));
+  if (JSON.stringify(fresh) !== JSON.stringify(plan)) return { id: "experience.import", status: "fail", message: "Import sources changed after preview", remediation: "Preview the import again" };
+  for (const record of plan.records) {
+    if (!record.fact) continue;
+    const result = await applyExperienceFact(root, await planExperienceFact(root, record.fact));
+    if (result.status !== "ok") return { id: "experience.import", status: "fail", message: "Import write failed safely", remediation: "Inspect experience storage and preview again" };
+  }
+  return { id: "experience.import", status: "ok", message: "Project knowledge import applied", evidence: String(plan.records.filter(({ fact }) => fact).length), remediation: "No action required" };
 }
 
 type LocalRead =

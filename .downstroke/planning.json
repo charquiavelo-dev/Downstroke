@@ -7,5 +7,5 @@
   "grossCapacityHoursPerSprint": 120,
   "wipLimit": 3,
   "highRiskReview": "individual",
-  "lastReviewedStory": "9-2-create-the-operational-experience-foundation"
+  "lastReviewedStory": "9-3-import-legacy-and-spec-driven-project-knowledge"
 }

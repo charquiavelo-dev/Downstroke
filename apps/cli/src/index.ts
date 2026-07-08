@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyExperienceFact, applyGitPolicy, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planGitPolicy, readGitPolicy, readPlanningCadence, runProjectChecks, tokenUsageStatus, type DecisionKind, type GitPolicy, type ReviewMode } from "@downstroke/core";
+import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, readGitPolicy, readPlanningCadence, runProjectChecks, tokenUsageStatus, type DecisionKind, type GitPolicy, type ReviewMode } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -224,8 +224,30 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       else console.log(`${result.status.toUpperCase()} ${result.message} id=${result.evidence ?? "unknown"}`);
       return result.status === "ok" ? 0 : 1;
     }
-    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-experience-command", message: "Use experience init or experience add --fact <json>" }, null, 2));
-    else console.error("Usage: downstroke experience <init|add> [--fact <json>] [--yes] [--json]");
+    if (action === "import") {
+      const plan = await planExperienceImport(cwd, values.path ?? []);
+      const summary = {
+        status: plan.status,
+        records: plan.records.map(({ fact: _fact, ...record }) => record),
+        blockers: plan.blockers,
+      };
+      if (!values.yes || values["dry-run"] || plan.status === "blocked") {
+        if (values.json) console.log(JSON.stringify(summary, null, 2));
+        else {
+          console.log(`EXPERIENCE IMPORT ${plan.status}`);
+          for (const record of summary.records) console.log(`${record.importability.toUpperCase()} ${record.path} ${record.hash || "no-hash"} ${record.classification}`);
+          for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+          if (plan.status === "ready") console.log("Run again with --yes to authorize this import.");
+        }
+        return plan.status === "blocked" ? 1 : 0;
+      }
+      const result = await applyExperienceImport(cwd, plan);
+      if (values.json) console.log(JSON.stringify({ plan: summary, result }, null, 2));
+      else console.log(`${result.status.toUpperCase()} ${result.message} imported=${result.evidence ?? "0"}`);
+      return result.status === "ok" ? 0 : 1;
+    }
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-experience-command", message: "Use experience init, experience add --fact <json>, or experience import --path <path>" }, null, 2));
+    else console.error("Usage: downstroke experience <init|add|import> [--path <path>] [--fact <json>] [--yes] [--json]");
     return 1;
   }
 

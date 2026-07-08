@@ -226,3 +226,23 @@ test("experience dry-run and JSON errors remain read-only and machine-readable",
   assert.deepEqual(JSON.parse(output.join("\n")), { status: "fail", error: "invalid-fact-json", message: "--fact must be valid JSON" });
   assert.equal(output.join("\n").includes(root), false);
 });
+
+test("experience import previews payload-free metadata and writes only with authorization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-import-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "# Requirements\nPRIVATE_PAYLOAD must remain hidden.\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  assert.equal(await run(["experience", "init"], root), 0);
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try { assert.equal(await run(["experience", "import", "--path", "README.md", "--json"], root), 0); }
+  finally { console.log = originalLog; }
+  const preview = output.join("\n");
+  assert.equal(preview.includes("PRIVATE_PAYLOAD"), false);
+  assert.equal(preview.includes(root), false);
+  assert.equal(await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8"), "");
+  assert.equal(await run(["experience", "import", "--path", "README.md", "--yes"], root), 0);
+  assert.match(await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8"), /README\.md/);
+});

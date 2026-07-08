@@ -4,7 +4,7 @@ baseline_commit: 17fa165
 
 # Story 9.3: Import Legacy and SPEC-Driven Project Knowledge
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -25,18 +25,18 @@ so that migration preserves useful work without activating untrusted instruction
 
 ## Tasks / Subtasks
 
-- [ ] Add safe source inspection and classification in `packages/core/src/index.ts` (AC: 1-5)
-  - [ ] Resolve repository-contained regular files without following symlink escapes; allow only `.md`, `.markdown`, `.yaml`, `.yml` and `.json` within bounded size.
-  - [ ] Compute SHA-256 and classify source kind/importability/trust/instruction risk without evaluating YAML, JSON instructions or code.
-  - [ ] Detect binary/null content, secret patterns, policy-override instructions and duplicate/conflicting source claims.
-- [ ] Add preview/authorize/apply import plans (AC: 2-7)
-  - [ ] Produce payload-free inventory records and deterministic derived facts with source path/hash and observed/inferred status.
-  - [ ] Route every write through Experience validation/index recovery; quarantine or reject unsafe records and pause material conflicts.
-- [ ] Add `downstroke experience import --path <path>` CLI handling (AC: 1-8)
-  - [ ] Support repeated paths, `--json`, `--dry-run` and `--yes`; preview by default and never print content.
-- [ ] Add focused core and CLI tests (AC: 1-8)
-  - [ ] Cover Markdown/YAML/JSON, hashes, traversal/symlink/binary/size rejection, secrets/injection, QA trust, conflicts, retry and output redaction.
-- [ ] Run build, typecheck, tests and native-only scan.
+- [x] Add safe source inspection and classification in `packages/core/src/index.ts` (AC: 1-5)
+  - [x] Resolve repository-contained regular files without following symlink escapes; allow only `.md`, `.markdown`, `.yaml`, `.yml` and `.json` within bounded size.
+  - [x] Compute SHA-256 and classify source kind/importability/trust/instruction risk without evaluating YAML, JSON instructions or code.
+  - [x] Detect binary/null content, secret patterns, policy-override instructions and duplicate/conflicting source claims.
+- [x] Add preview/authorize/apply import plans (AC: 2-7)
+  - [x] Produce payload-free inventory records and deterministic derived facts with source path/hash and observed/inferred status.
+  - [x] Route every write through Experience validation/index recovery; quarantine or reject unsafe records and pause material conflicts.
+- [x] Add `downstroke experience import --path <path>` CLI handling (AC: 1-8)
+  - [x] Support repeated paths, `--json`, `--dry-run` and `--yes`; preview by default and never print content.
+- [x] Add focused core and CLI tests (AC: 1-8)
+  - [x] Cover Markdown/YAML/JSON, hashes, traversal/symlink/binary/size rejection, secrets/injection, QA trust, conflicts, retry and output redaction.
+- [x] Run build, typecheck, tests and native-only scan.
 
 ## Dev Notes
 
@@ -80,12 +80,29 @@ GPT-5 Codex
 
 ### Debug Log References
 
+- `npm test` — 41/41 passing.
+- `npm run typecheck` — passing.
+- Native-only distributed-surface scan — passing.
+
 ### Completion Notes List
 
 - Comprehensive Story 9.3 context created from the accepted Epic 9 contract, preserved import specifications and Story 9.2 security review.
+- Added deterministic, bounded and non-executing Markdown/YAML/JSON inspection with SHA-256 provenance.
+- Added preview-first CLI import with explicit authorization, rejection/quarantine and material-conflict pause behavior.
+- Routed imported facts through the Story 9.2 validation and index-repair boundary; retries remain idempotent.
 
 ### File List
+
+- `.downstroke/planning.json`
+- `_bmad-output/implementation-artifacts/9-3-import-legacy-and-spec-driven-project-knowledge.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `apps/cli/src/index.ts`
+- `apps/cli/test/cli.test.mjs`
+- `docs/SPEC.md`
+- `packages/core/src/index.ts`
+- `packages/core/test/core.test.mjs`
 
 ## Change Log
 
 - 2026-07-07: Created implementation-ready Story 9.3 contract.
+- 2026-07-07: Implemented and verified safe native project-knowledge import; moved story to review.
