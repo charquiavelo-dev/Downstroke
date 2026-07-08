@@ -475,3 +475,21 @@ test("code intelligence CLI indexes stack and context without script execution",
   assert.equal(JSON.parse(contextOutput[1]).files.some(({ path }) => path === "src/app.ts"), true);
   assert.equal(JSON.parse(contextOutput[2]).reason, "No paths requested");
 });
+
+test("route command previews and records native token economy decisions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-route-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["route", "--task-id", "task.1", "--task-class", "deterministic", "--tool-proven", "--verification", "passed", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.equal(JSON.parse(output.join("\n")).record.outcome, "no-llm");
+  await assert.rejects(readFile(join(root, ".downstroke", "token-economy", "ledger.jsonl")));
+
+  assert.equal(await run(["route", "--task-id", "task.1", "--risk", "high", "--yes"], root), 0);
+  const entry = JSON.parse((await readFile(join(root, ".downstroke", "token-economy", "ledger.jsonl"), "utf8")).trim());
+  assert.equal(entry.outcome, "escalated");
+  assert.equal(entry.verificationGate, "blocking");
+});

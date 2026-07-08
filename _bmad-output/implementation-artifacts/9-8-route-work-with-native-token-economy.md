@@ -4,7 +4,7 @@ baseline_commit: 6c02b3882c13efd9cc7b9fbd16e855a93450bf1b
 
 # Story 9.8: Route Work with Native Token Economy
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -20,19 +20,24 @@ so that each task uses the lowest sufficient reasoning and context while preserv
 
 ## Tasks / Subtasks
 
-- [ ] Add native token-economy routing contracts and deterministic policy in `packages/core/src/index.ts` (AC: 1-3)
-  - [ ] Define bounded modes, task classes, risks, model tiers, cache strategies, verification states and a serializable route record.
-  - [ ] Route tool-proven deterministic work to the no-LLM tier.
-  - [ ] Escalate high risk, high ambiguity and failed verification without invoking a provider.
-- [ ] Add repository-local task ledger persistence (AC: 1, 3)
-  - [ ] Preview the exact route record before mutation.
-  - [ ] Append authorized outcomes under `.downstroke/token-economy/` with schema validation and repository-relative state only.
-  - [ ] Reject manipulated plans by recomputing policy before writing.
-- [ ] Add `downstroke route` CLI preview/apply and JSON output (AC: 1-3)
-  - [ ] Accept explicit task ID, task class, mode, risk, ambiguity, deterministic proof and verification outcome.
-  - [ ] Keep routing provider-neutral and make escalation reasons visible.
-- [ ] Add focused core and CLI tests for normal routing, no-LLM deterministic work, escalation, preview-only behavior and manipulated plans.
-- [ ] Run typecheck, tests and native-only distributed-surface scan.
+- [x] Add native token-economy routing contracts and deterministic policy in `packages/core/src/index.ts` (AC: 1-3)
+  - [x] Define bounded modes, task classes, risks, model tiers, cache strategies, verification states and a serializable route record.
+  - [x] Route tool-proven deterministic work to the no-LLM tier.
+  - [x] Escalate high risk, high ambiguity and failed verification without invoking a provider.
+- [x] Add repository-local task ledger persistence (AC: 1, 3)
+  - [x] Preview the exact route record before mutation.
+  - [x] Append authorized outcomes under `.downstroke/token-economy/` with schema validation and repository-relative state only.
+  - [x] Reject manipulated plans by recomputing policy before writing.
+- [x] Add `downstroke route` CLI preview/apply and JSON output (AC: 1-3)
+  - [x] Accept explicit task ID, task class, mode, risk, ambiguity, deterministic proof and verification outcome.
+  - [x] Keep routing provider-neutral and make escalation reasons visible.
+- [x] Add focused core and CLI tests for normal routing, no-LLM deterministic work, escalation, preview-only behavior and manipulated plans.
+- [x] Run typecheck, tests and native-only distributed-surface scan.
+
+### Review Findings
+
+- [x] [Review][Patch] Validate public core verification state, tool proof and canonical timestamp before ledger recording [`packages/core/src/index.ts`]
+- [x] [Review][Patch] Re-apply restricted ledger permissions when appending to an existing ledger [`packages/core/src/index.ts`]
 
 ## Dev Notes
 
@@ -80,17 +85,31 @@ GPT-5 Codex
 
 ### Debug Log References
 
-- Pending implementation.
+- `npm.cmd run build` — passing.
+- `npm.cmd run typecheck` — passing.
+- `npm.cmd test` — passing, 70/70.
+- `node --input-type=module -e "import { scanNativeOnlySurfaces } from './packages/core/dist/index.js'; console.log(JSON.stringify(await scanNativeOnlySurfaces(process.cwd()), null, 2));"` — passing, `status: ok`.
 
 ### Completion Notes List
 
-- Created implementation-ready Story 9.8 with a provider-neutral, deterministic routing boundary.
+- Added native token-economy routing contracts, deterministic no-LLM routing and escalation policy.
+- Added append-only repository-local token route ledger with preview/apply recomputation protection.
+- Added `downstroke route` CLI preview/apply behavior with JSON output.
+- Added README usage coverage for local token routing.
+- Completed BMAD code review; fixed schema validation and ledger permission findings.
 
 ### File List
 
 - `_bmad-output/implementation-artifacts/9-8-route-work-with-native-token-economy.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `README.md`
+- `packages/core/src/index.ts`
+- `packages/core/test/core.test.mjs`
+- `apps/cli/src/index.ts`
+- `apps/cli/test/cli.test.mjs`
 
 ## Change Log
 
 - 2026-07-08: Created implementation-ready Story 9.8 contract.
+- 2026-07-08: Implemented native token-economy routing, CLI usage, tests and README coverage.
+- 2026-07-08: Completed BMAD code review fixes and marked Story 9.8 done.

@@ -40,7 +40,7 @@ These rules reduce hidden state, make failures diagnosable and let a later devel
 - Runs real project checks through `doctor --run-checks`.
 - Stores review cadence and high-risk review policy.
 - Governs Git authorization separately for branch, commit and push.
-- Estimates task/backlog/sprint token usage from selected files.
+- Estimates task/backlog/sprint token usage from selected files and records native token-economy routing outcomes.
 - Creates a local Operational Experience store for durable facts, evidence and quarantine.
 - Imports Markdown, YAML and JSON project knowledge as source-linked observed facts.
 - Detects unsafe imports, prompt-injection patterns, secrets, unsupported formats and material conflicts.
@@ -256,9 +256,25 @@ Estimate LLM token ranges from explicit files:
 ```bash
 downstroke estimate --scope task --path docs/SPEC.md
 downstroke status --scope sprint --path docs/SPEC.md --consumed-tokens 12000
+downstroke route --task-id story.1 --task-class contextual --mode balanced
 ```
 
 Estimates are bounded ranges, not billing guarantees. Calibration against observed provider usage is intentionally left as the final planned feature.
+
+### `route`
+
+Preview and record a provider-neutral token-economy decision:
+
+```bash
+downstroke route --task-id story.1 --task-class contextual --mode balanced
+downstroke route --task-id story.1 --task-class contextual --mode balanced --yes
+downstroke route --task-id story.tools --task-class deterministic --tool-proven --verification passed --json
+downstroke route --task-id story.risk --risk high --yes
+```
+
+Routing modes are `greedy`, `balanced` and `rich`. Task classes are `deterministic`, `contextual` and `creative`. A deterministic task with tool proof and passed verification records `modelTier: "none"` and `contextBudget: 0`; no model is required. High risk, high ambiguity or failed verification escalates to `rich`/`advanced` with a blocking verification gate.
+
+Apply writes append-only JSON Lines to `.downstroke/token-economy/ledger.jsonl`. The record stores schema version, task ID, timestamp, selected mode, task class, risk, model tier, context budget, cache strategy, escalation trigger, verification gate and outcome. It does not store prompts, model output, provider credentials, secrets or absolute paths.
 
 ### `experience`
 
@@ -432,6 +448,7 @@ Inspect both sources and their evidence. Downstroke intentionally does not selec
 - No package is available from the public npm registry yet.
 - Local linking exercises implemented commands but is not a clean-install or tarball proof.
 - Token estimates remain heuristic until the final calibration story.
+- Token routing records policy outcomes only; it does not call a provider or schedule workers.
 - Context compilation, strict native cleanup, explicit worker orchestration, the execution engine and the complete knowledge lifecycle remain roadmap work.
 - Code intelligence is bounded and heuristic; the language toolchain remains authoritative.
 - Downstroke does not install or run external agent frameworks as product runtime dependencies.

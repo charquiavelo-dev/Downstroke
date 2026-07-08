@@ -1,4 +1,4 @@
-import { access, appendFile, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { access, appendFile, chmod, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
@@ -58,6 +58,38 @@ export type TokenEstimate = {
   modelAssumption: string;
   includedContext: string[];
   uncertainty: "high";
+};
+
+export const tokenEconomyModes = ["greedy", "balanced", "rich"] as const;
+export type TokenEconomyMode = typeof tokenEconomyModes[number];
+export const tokenTaskClasses = ["deterministic", "contextual", "creative"] as const;
+export type TokenTaskClass = typeof tokenTaskClasses[number];
+export type TokenRouteRequest = {
+  taskId: string;
+  mode: TokenEconomyMode;
+  taskClass: TokenTaskClass;
+  risk: "normal" | "high";
+  ambiguity: "low" | "high";
+  toolProven: boolean;
+  verification: "pending" | "passed" | "failed";
+};
+export type TokenRouteRecord = TokenRouteRequest & {
+  schemaVersion: 1;
+  recordedAt: string;
+  modelTier: "none" | "economy" | "standard" | "advanced";
+  contextBudget: number;
+  cacheStrategy: "none" | "content-hash";
+  escalationTrigger: "none" | "high-risk" | "high-ambiguity" | "verification-failed";
+  verificationGate: "tool-proof" | "standard" | "blocking";
+  outcome: "no-llm" | "routed" | "escalated";
+};
+export type TokenRoutePlan = {
+  status: "ready" | "blocked";
+  action: "append";
+  file: ".downstroke/token-economy/ledger.jsonl";
+  request: TokenRouteRequest;
+  record: TokenRouteRecord | null;
+  blockers: string[];
 };
 
 export type GitPermission = {
@@ -432,6 +464,55 @@ export function tokenUsageStatus(estimate: TokenEstimate, consumedTokens?: numbe
 } {
   if (consumedTokens !== undefined && (!Number.isInteger(consumedTokens) || consumedTokens < 0)) throw new Error("consumedTokens must be a non-negative integer");
   return { consumedTokens: consumedTokens ?? "unavailable", projectedRemainingTokens: estimate.range, estimate };
+}
+
+export function planTokenEconomyRoute(input: TokenRouteRequest, recordedAt = new Date().toISOString()): TokenRoutePlan {
+  const blockers: string[] = [];
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.taskId)) blockers.push("taskId must be 1-128 safe identifier characters");
+  if (!tokenEconomyModes.includes(input.mode)) blockers.push("mode must be greedy, balanced or rich");
+  if (!tokenTaskClasses.includes(input.taskClass)) blockers.push("taskClass must be deterministic, contextual or creative");
+  if (input.risk !== "normal" && input.risk !== "high") blockers.push("risk must be normal or high");
+  if (input.ambiguity !== "low" && input.ambiguity !== "high") blockers.push("ambiguity must be low or high");
+  if (typeof input.toolProven !== "boolean") blockers.push("toolProven must be boolean");
+  if (input.verification !== "pending" && input.verification !== "passed" && input.verification !== "failed") blockers.push("verification must be pending, passed or failed");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(recordedAt) || !Number.isFinite(Date.parse(recordedAt))) blockers.push("recordedAt must be an ISO timestamp");
+  if (blockers.length) return { status: "blocked", action: "append", file: ".downstroke/token-economy/ledger.jsonl", request: input, record: null, blockers };
+
+  const escalationTrigger = input.verification === "failed" ? "verification-failed"
+    : input.risk === "high" ? "high-risk"
+    : input.ambiguity === "high" ? "high-ambiguity"
+    : "none";
+  const noLlm = escalationTrigger === "none" && input.taskClass === "deterministic" && input.toolProven && input.verification === "passed";
+  const escalated = escalationTrigger !== "none";
+  const selectedMode: TokenEconomyMode = escalated ? "rich" : input.mode;
+  const tiers = { greedy: "economy", balanced: "standard", rich: "advanced" } as const;
+  const budgets = { greedy: 4_000, balanced: 12_000, rich: 32_000 } as const;
+  const record: TokenRouteRecord = {
+    schemaVersion: 1,
+    ...input,
+    mode: selectedMode,
+    recordedAt,
+    modelTier: noLlm ? "none" : tiers[selectedMode],
+    contextBudget: noLlm ? 0 : budgets[selectedMode],
+    cacheStrategy: noLlm ? "none" : "content-hash",
+    escalationTrigger,
+    verificationGate: noLlm ? "tool-proof" : escalated ? "blocking" : "standard",
+    outcome: noLlm ? "no-llm" : escalated ? "escalated" : "routed",
+  };
+  return { status: "ready", action: "append", file: ".downstroke/token-economy/ledger.jsonl", request: input, record, blockers: [] };
+}
+
+export async function applyTokenEconomyRoute(root: string, plan: TokenRoutePlan): Promise<DoctorResult> {
+  if (plan.status !== "ready" || !plan.record) return { id: "token-economy.route", status: "fail", message: plan.blockers.join("; ") || "Token route is blocked", remediation: "Correct and preview the route again" };
+  const fresh = planTokenEconomyRoute(plan.request, plan.record.recordedAt);
+  if (fresh.status !== "ready" || JSON.stringify(fresh.record) !== JSON.stringify(plan.record)) return { id: "token-economy.route", status: "fail", message: "Token route changed after preview", remediation: "Preview the route again" };
+  const resolved = await gitRoot(root);
+  const directory = join(resolved, ".downstroke", "token-economy");
+  const ledger = join(directory, "ledger.jsonl");
+  await mkdir(directory, { recursive: true });
+  await appendFile(ledger, `${JSON.stringify(plan.record)}\n`, { encoding: "utf8", mode: 0o600 });
+  await chmod(ledger, 0o600);
+  return { id: "token-economy.route", status: "ok", message: "Token route recorded", evidence: plan.record.taskId, remediation: "Run verification required by the recorded gate" };
 }
 
 const gitBranches = { main: "main", develop: "develop", feature: "feature/*", release: "release/*", hotfix: "hotfix/*" } as const;

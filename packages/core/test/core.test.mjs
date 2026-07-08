@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -725,4 +725,26 @@ test("code stack detection reports observed package technologies without scripts
   const report = await detectCodeStack(root);
   assert.equal(report.status, "ready");
   assert.deepEqual(report.stack.map(({ technology }) => technology).sort(), ["TypeScript", "Vite", "Zod"]);
+});
+
+test("token economy routes the lowest sufficient tier and records escalations", async () => {
+  const root = await gitFixture();
+  const deterministic = planTokenEconomyRoute({ taskId: "task.tools", mode: "balanced", taskClass: "deterministic", risk: "normal", ambiguity: "low", toolProven: true, verification: "passed" }, "2026-07-08T00:00:00.000Z");
+  assert.equal(deterministic.record.modelTier, "none");
+  assert.equal(deterministic.record.contextBudget, 0);
+  assert.equal(deterministic.record.outcome, "no-llm");
+  await assert.rejects(readFile(join(root, deterministic.file)));
+  assert.equal(planTokenEconomyRoute({ taskId: "task.bad", mode: "balanced", taskClass: "deterministic", risk: "normal", ambiguity: "low", toolProven: "yes", verification: "done" }, "July 8, 2026").status, "blocked");
+
+  const escalated = planTokenEconomyRoute({ taskId: "task.risk", mode: "greedy", taskClass: "contextual", risk: "high", ambiguity: "low", toolProven: false, verification: "pending" }, "2026-07-08T00:00:01.000Z");
+  assert.equal(escalated.record.mode, "rich");
+  assert.equal(escalated.record.modelTier, "advanced");
+  assert.equal(escalated.record.verificationGate, "blocking");
+  assert.equal((await applyTokenEconomyRoute(root, escalated)).status, "ok");
+  const entry = JSON.parse((await readFile(join(root, escalated.file), "utf8")).trim());
+  assert.equal(entry.escalationTrigger, "high-risk");
+
+  const manipulated = structuredClone(escalated);
+  manipulated.record.contextBudget = 1;
+  assert.equal((await applyTokenEconomyRoute(root, manipulated)).status, "fail");
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -60,6 +60,11 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       consumers: { type: "string", multiple: true },
       impact: { type: "string" },
       tests: { type: "string" },
+      "task-id": { type: "string" },
+      "task-class": { type: "string" },
+      ambiguity: { type: "string" },
+      "tool-proven": { type: "boolean", default: false },
+      verification: { type: "string" },
     },
     strict: true,
     allowPositionals: true,
@@ -80,6 +85,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "  downstroke communication --mode compact --yes",
       "  downstroke simplicity --proposal \"reuse existing helper\" --json",
       "  downstroke code index --yes",
+      "  downstroke route --task-id task.1 --task-class contextual --mode balanced",
       "  downstroke stack detect --json",
       "  downstroke experience init",
       "  downstroke workflow resume",
@@ -417,6 +423,41 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-code-command", message: "Use code index, code impact --path <path>, or code context --path <path>" }, null, 2));
     else console.error("Usage: downstroke code <index|impact|context> [--path <path>] [--yes] [--json]");
     return 1;
+  }
+
+  if (command === "route") {
+    const mode = values.mode ?? "balanced";
+    const taskClass = values["task-class"] ?? "contextual";
+    const risk = values.risk ?? "normal";
+    const ambiguity = values.ambiguity ?? "low";
+    const verification = values.verification ?? "pending";
+    if (!tokenEconomyModes.includes(mode as TokenEconomyMode) || !tokenTaskClasses.includes(taskClass as TokenTaskClass) || !["normal", "high"].includes(risk) || !["low", "high"].includes(ambiguity) || !["pending", "passed", "failed"].includes(verification)) {
+      const error = { status: "fail", error: "invalid-token-route", message: "Use valid --mode, --task-class, --risk, --ambiguity and --verification values" };
+      if (values.json) console.log(JSON.stringify(error, null, 2)); else console.error(error.message);
+      return 1;
+    }
+    const plan = planTokenEconomyRoute({
+      taskId: values["task-id"] ?? "",
+      mode: mode as TokenEconomyMode,
+      taskClass: taskClass as TokenTaskClass,
+      risk: risk as "normal" | "high",
+      ambiguity: ambiguity as "low" | "high",
+      toolProven: values["tool-proven"],
+      verification: verification as "pending" | "passed" | "failed",
+    });
+    if (!values.yes || values["dry-run"] || plan.status === "blocked") {
+      if (values.json) console.log(JSON.stringify(plan, null, 2));
+      else {
+        console.log(`ROUTE ${plan.status} ${plan.record?.outcome ?? "invalid"} task=${plan.request.taskId || "missing"}`);
+        if (plan.record) console.log(`POLICY mode=${plan.record.mode} class=${plan.record.taskClass} risk=${plan.record.risk} tier=${plan.record.modelTier} budget=${plan.record.contextBudget} cache=${plan.record.cacheStrategy} escalation=${plan.record.escalationTrigger} verification=${plan.record.verificationGate}`);
+        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+        if (plan.status === "ready") console.log("Run again with --yes to record this token route.");
+      }
+      return plan.status === "blocked" ? 1 : 0;
+    }
+    const result = await applyTokenEconomyRoute(cwd, plan);
+    if (values.json) console.log(JSON.stringify({ plan, result }, null, 2)); else console.log(`${result.status.toUpperCase()} ${result.message} task=${result.evidence ?? "unknown"}`);
+    return result.status === "ok" ? 0 : 1;
   }
 
   if (command === "stack") {
