@@ -338,7 +338,7 @@ FR72-FR81: Epic 10 - Package distribution, sanitized public release and document
 - 6.1: FR32; 6.2: FR33; 6.3: FR34.
 - 7.1: FR38-FR40; 7.2: FR36, FR38-FR40; 7.3: FR37-FR40.
 - 8.1: FR42, FR45; 8.2: FR41; 8.3: FR46-FR47; 8.4: FR48-FR50; 8.5: FR43-FR44.
-- 9.1: FR60-FR61; 9.2: FR62; 9.3: FR63; 9.4: FR64; 9.5: FR65; 9.6: FR66; 9.7: FR67; 9.8: FR68.
+- 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83; 9.5: FR63; 9.6: FR64; 9.7: FR62; 9.8: FR56-FR59; 9.9: FR63, FR82; 9.10: FR60-FR61; 9.11: FR66; 9.12: FR67; 9.13: FR68.
 - 10.1: FR72; 10.2: FR73-FR74; 10.3: FR75; 10.4: FR78; 10.5: FR77, FR79-FR81; 10.6: FR76.
 
 ## Epic List
@@ -1043,6 +1043,7 @@ As a developer, I want reuse, dependency, abstraction and rewrite gates, So that
 **Acceptance Criteria:**
 **Given** proposed work **When** evaluated **Then** deletion, reuse, configuration, platform, existing dependency and small local code are considered before new dependencies or abstractions.
 **Given** a dependency, shared package, abstraction or broad rewrite **When** proposed **Then** evidence, consumers, impact, owner, tests and removal/rollback are required as applicable.
+**Given** code changes or dependency changes **When** native risk audit runs **Then** dangerous code smells such as unsafe execution, secret leakage, path traversal, injection, ReDoS, dependency supply-chain risk and risky generated artifacts are reported with severity, evidence and the next safe action.
 **Given** security, data integrity, accessibility or production reliability **When** simplicity conflicts **Then** the safety requirement wins and the exception is recorded.
 
 ### Story 9.7: Add Native Code Intelligence

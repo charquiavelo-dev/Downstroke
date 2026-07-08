@@ -153,6 +153,64 @@ export type ExperienceImportRecord = {
 };
 export type ExperienceImportPlan = { status: "ready" | "blocked"; records: ExperienceImportRecord[]; blockers: string[] };
 
+export const workflowPhases = ["plan", "review", "implementation", "verification"] as const;
+export type WorkflowPhase = typeof workflowPhases[number];
+export type WorkflowStatus = "backlog" | "ready-for-dev" | "in-progress" | "review" | "done" | "blocked";
+export type WorkflowItem = {
+  id: string;
+  type: "brief" | "spec" | "epic" | "story" | "task";
+  title: string;
+  status: WorkflowStatus;
+  risk: "normal" | "high";
+  review: "cadence" | "individual";
+  acceptanceCriteria: string[];
+  tasks: string[];
+  source?: Pick<ExperienceFact["source"], "type" | "path" | "hash">;
+  createdAt: string;
+  updatedAt: string;
+};
+export type WorkflowCheckpoint = {
+  id: string;
+  itemId: string;
+  phase: WorkflowPhase;
+  status: "pending" | "approved";
+  createdAt: string;
+  approvedAt?: string;
+};
+export type WorkflowConflict = {
+  id: string;
+  itemId: string;
+  owner: string;
+  sources: { path: string; hash: string }[];
+  options: { id: string; consequence: string }[];
+  consequences: string[];
+  status: "pending" | "resolved";
+  createdAt: string;
+};
+export type WorkflowNextAction = {
+  status: "ready" | "blocked";
+  itemId: string | null;
+  action: "plan" | "implement" | "verify" | "review" | "done" | "approve-plan" | "approve-review" | "approve-implementation" | "approve-verification" | "resolve-conflict";
+  reason: string;
+};
+export type WorkflowItemInput = {
+  item: unknown;
+  controlled?: boolean;
+  phase?: WorkflowPhase;
+  approved?: boolean;
+  conflict?: unknown;
+};
+export type WorkflowPlan = {
+  status: "ready" | "blocked";
+  action: "append" | "skip";
+  files: string[];
+  item: WorkflowItem | null;
+  checkpoint?: WorkflowCheckpoint;
+  conflict?: WorkflowConflict;
+  nextAction?: WorkflowNextAction;
+  blockers: string[];
+};
+
 const responsibilities = {
   user: "approves",
   llm: "advises",
@@ -789,6 +847,227 @@ export async function applyExperienceImport(root: string, plan: ExperienceImport
   return conflictOnly
     ? { id: "experience.import", status: "warn", message: "Conflict candidates retained; human resolution required", evidence: `appended=${appended};skipped=${skipped}`, remediation: "Resolve the reported material conflicts" }
     : { id: "experience.import", status: "ok", message: "Project knowledge import applied", evidence: `appended=${appended};skipped=${skipped}`, remediation: "No action required" };
+}
+
+export const workflowManifest = {
+  schemaVersion: "0.1.0",
+  module: "downstroke-workflows",
+  storage: { driver: "local-jsonl", path: ".downstroke/workflows" },
+  controlledPhases: workflowPhases,
+} as const;
+
+const workflowFiles = [
+  ["manifest.json", "file"],
+  ["items.jsonl", "file"],
+  ["evidence.jsonl", "file"],
+  ["decisions.jsonl", "file"],
+  ["checkpoints.jsonl", "file"],
+] as const;
+
+async function checkedWorkflowRoot(root: string, create = false): Promise<string> {
+  const repository = await gitRoot(root);
+  const downstroke = join(repository, ".downstroke");
+  if (create) await mkdir(join(downstroke, "workflows"), { recursive: true });
+  const base = await realpath(join(downstroke, "workflows"));
+  if (relative(repository, base).startsWith("..")) throw new Error("Workflow storage is outside repository");
+  return base;
+}
+
+async function readWorkflowLines(path: string): Promise<string[]> {
+  try {
+    const content = await readFile(path, "utf8");
+    return content.split("\n").filter(Boolean);
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+function validWorkflowSource(value: unknown): WorkflowItem["source"] | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const source = value as Record<string, unknown>;
+  if (!["file", "command", "git", "manifest", "managed-block", "user-input", "llm-output", "external-tool", "bridge"].includes(String(source.type))) return undefined;
+  if (typeof source.path !== "string" || !safeExperiencePath(source.path)) return undefined;
+  if (source.hash !== undefined && (typeof source.hash !== "string" || !/^[a-f0-9]{64}$/i.test(source.hash))) return undefined;
+  return { type: source.type as ExperienceFact["source"]["type"], path: source.path, ...(typeof source.hash === "string" ? { hash: source.hash.toLowerCase() } : {}) };
+}
+
+function parseWorkflowItem(value: unknown, timestamp: string): WorkflowItem | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  if (typeof input.id !== "string" || !/^[A-Za-z0-9._:-]{1,120}$/.test(input.id)) return undefined;
+  if (!["brief", "spec", "epic", "story", "task"].includes(String(input.type))) return undefined;
+  if (typeof input.title !== "string" || input.title.trim().length === 0 || input.title.length > 200) return undefined;
+  if (input.status !== undefined && !["backlog", "ready-for-dev", "in-progress", "review", "done", "blocked"].includes(String(input.status))) return undefined;
+  if (input.risk !== undefined && !["normal", "high"].includes(String(input.risk))) return undefined;
+  const source = input.source === undefined ? undefined : validWorkflowSource(input.source);
+  if (input.source !== undefined && source === undefined) return undefined;
+  const strings = (items: unknown) => Array.isArray(items) && items.every((item) => typeof item === "string" && item.length <= 500) ? items as string[] : [];
+  const risk = input.risk === "high" ? "high" : "normal";
+  return {
+    id: input.id,
+    type: input.type as WorkflowItem["type"],
+    title: input.title.trim(),
+    status: (input.status ?? "backlog") as WorkflowStatus,
+    risk,
+    review: risk === "high" ? "individual" : "cadence",
+    acceptanceCriteria: strings(input.acceptanceCriteria),
+    tasks: strings(input.tasks),
+    ...(source ? { source } : {}),
+    createdAt: typeof input.createdAt === "string" ? input.createdAt : timestamp,
+    updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : timestamp,
+  };
+}
+
+function parseWorkflowConflict(value: unknown, itemId: string, timestamp: string): WorkflowConflict | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null) return undefined;
+  const input = value as Record<string, unknown>;
+  const sources = Array.isArray(input.sources) ? input.sources.map((source) => {
+    if (typeof source !== "object" || source === null) return undefined;
+    const record = source as Record<string, unknown>;
+    return typeof record.path === "string" && safeExperiencePath(record.path) && typeof record.hash === "string" && /^[a-f0-9]{64}$/i.test(record.hash)
+      ? { path: record.path, hash: record.hash.toLowerCase() }
+      : undefined;
+  }) : [];
+  const options = Array.isArray(input.options) ? input.options.map((option) => {
+    if (typeof option !== "object" || option === null) return undefined;
+    const record = option as Record<string, unknown>;
+    return typeof record.id === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(record.id) && typeof record.consequence === "string" && record.consequence.length > 0
+      ? { id: record.id, consequence: record.consequence }
+      : undefined;
+  }) : [];
+  const consequences = Array.isArray(input.consequences) && input.consequences.every((item) => typeof item === "string" && item.length > 0) ? input.consequences : [];
+  if (typeof input.owner !== "string" || input.owner.trim() === "" || sources.length < 2 || sources.some((item) => !item) || options.length < 2 || options.some((item) => !item) || consequences.length === 0) return undefined;
+  return {
+    id: `conflict.${itemId}.${createHash("sha256").update(JSON.stringify(normalizeJson({ sources, options, consequences }))).digest("hex").slice(0, 12)}`,
+    itemId,
+    owner: input.owner.trim(),
+    sources: sources as { path: string; hash: string }[],
+    options: options as { id: string; consequence: string }[],
+    consequences,
+    status: "pending",
+    createdAt: timestamp,
+  };
+}
+
+async function readWorkflowItems(root: string): Promise<WorkflowItem[]> {
+  const base = await checkedWorkflowRoot(root);
+  return (await readWorkflowLines(join(base, "items.jsonl"))).map((line) => JSON.parse(line) as WorkflowItem);
+}
+
+async function readWorkflowCheckpoints(root: string): Promise<WorkflowCheckpoint[]> {
+  const base = await checkedWorkflowRoot(root);
+  return (await readWorkflowLines(join(base, "checkpoints.jsonl"))).map((line) => JSON.parse(line) as WorkflowCheckpoint);
+}
+
+async function readWorkflowConflicts(root: string): Promise<WorkflowConflict[]> {
+  const base = await checkedWorkflowRoot(root);
+  return (await readWorkflowLines(join(base, "decisions.jsonl"))).map((line) => JSON.parse(line) as WorkflowConflict);
+}
+
+function nextFromItem(item: WorkflowItem | undefined): WorkflowNextAction {
+  if (!item) return { status: "blocked", itemId: null, action: "plan", reason: "No workflow item is available" };
+  if (item.status === "blocked") return { status: "blocked", itemId: item.id, action: "resolve-conflict", reason: "Item is blocked" };
+  if (item.status === "done") return { status: "ready", itemId: item.id, action: "done", reason: "Item is complete" };
+  if (item.status === "review") return { status: "ready", itemId: item.id, action: "review", reason: "Item is ready for review" };
+  if (item.status === "in-progress") return { status: "ready", itemId: item.id, action: "verify", reason: "Item is in progress" };
+  if (item.status === "ready-for-dev") return { status: "ready", itemId: item.id, action: "implement", reason: "Item is ready for implementation" };
+  return { status: "ready", itemId: item.id, action: "plan", reason: "Item is in backlog" };
+}
+
+function lastMatching<T>(items: T[], predicate: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) if (predicate(items[index]!)) return items[index];
+  return undefined;
+}
+
+function controlledAction(phase: WorkflowPhase): WorkflowNextAction["action"] {
+  return `approve-${phase}` as WorkflowNextAction["action"];
+}
+
+export async function resolveWorkflowNextAction(root: string, itemId?: string): Promise<WorkflowNextAction> {
+  try {
+    const items = await readWorkflowItems(root);
+    const item = itemId ? lastMatching(items, (candidate) => candidate.id === itemId) : items[items.length - 1];
+    if (!item) return nextFromItem(undefined);
+    const conflicts = await readWorkflowConflicts(root);
+    if (conflicts.some((conflict) => conflict.itemId === item.id && conflict.status === "pending")) {
+      return { status: "blocked", itemId: item.id, action: "resolve-conflict", reason: "Material conflict requires owner decision" };
+    }
+    const checkpoints = await readWorkflowCheckpoints(root);
+    const pending = lastMatching(checkpoints, (checkpoint) => checkpoint.itemId === item.id && checkpoint.status === "pending");
+    if (pending) return { status: "ready", itemId: item.id, action: controlledAction(pending.phase), reason: "Controlled checkpoint requires approval" };
+    return nextFromItem(item);
+  } catch {
+    return { status: "blocked", itemId: itemId ?? null, action: "plan", reason: "Workflow state cannot be inspected safely" };
+  }
+}
+
+export async function planWorkflowItem(root: string, input: WorkflowItemInput | unknown): Promise<WorkflowPlan> {
+  const timestamp = new Date().toISOString();
+  const normalized = typeof input === "object" && input !== null && "item" in input ? input as WorkflowItemInput : { item: input };
+  const blockers: string[] = [];
+  const item = parseWorkflowItem(normalized.item, timestamp);
+  if (!item) return { status: "blocked", action: "append", files: workflowFiles.map(([path]) => `.downstroke/workflows/${path}`), item: null, blockers: ["Workflow item is malformed"] };
+  const phase = normalized.phase ?? "plan";
+  if (!workflowPhases.includes(phase)) blockers.push("Controlled phase is invalid");
+  let checkpoint: WorkflowCheckpoint | undefined;
+  if (normalized.controlled) {
+    checkpoint = {
+      id: `checkpoint.${item.id}.${phase}.${createHash("sha256").update(`${item.id}:${phase}:${timestamp}`).digest("hex").slice(0, 12)}`,
+      itemId: item.id,
+      phase,
+      status: normalized.approved ? "approved" : "pending",
+      createdAt: timestamp,
+      ...(normalized.approved ? { approvedAt: timestamp } : {}),
+    };
+  }
+  const conflict = parseWorkflowConflict(normalized.conflict, item.id, timestamp);
+  if (normalized.conflict !== undefined && !conflict) blockers.push("Material conflict checkpoint is incomplete");
+  if (conflict) blockers.push("Material workflow conflict requires human decision");
+  let existing: WorkflowItem[] = [];
+  try { existing = await readWorkflowItems(root); }
+  catch { /* missing workflow storage is valid during preview */ }
+  const duplicate = existing.find((candidate) => candidate.id === item.id && JSON.stringify(normalizeJson(candidate)) === JSON.stringify(normalizeJson(item)));
+  const nextAction = conflict
+    ? { status: "blocked", itemId: item.id, action: "resolve-conflict", reason: "Material conflict requires owner decision" } satisfies WorkflowNextAction
+    : checkpoint && checkpoint.status === "pending"
+      ? { status: "ready", itemId: item.id, action: controlledAction(checkpoint.phase), reason: "Controlled checkpoint requires approval" } satisfies WorkflowNextAction
+      : nextFromItem(item);
+  return {
+    status: blockers.length ? "blocked" : "ready",
+    action: duplicate && !checkpoint && !conflict ? "skip" : "append",
+    files: workflowFiles.map(([path]) => `.downstroke/workflows/${path}`),
+    item,
+    ...(checkpoint ? { checkpoint } : {}),
+    ...(conflict ? { conflict } : {}),
+    nextAction,
+    blockers,
+  };
+}
+
+async function initializeWorkflowStorage(root: string): Promise<string> {
+  const base = await checkedWorkflowRoot(root, true);
+  for (const [path] of workflowFiles) {
+    const target = join(base, path);
+    if (await exists(target)) continue;
+    await writeFile(target, path === "manifest.json" ? `${JSON.stringify(workflowManifest, null, 2)}\n` : "", { flag: "wx" });
+  }
+  return base;
+}
+
+export async function applyWorkflowItem(root: string, plan: WorkflowPlan): Promise<DoctorResult> {
+  const conflictOnly = plan.blockers.length > 0 && plan.blockers.every((blocker) => blocker.startsWith("Material workflow conflict"));
+  if ((plan.status === "blocked" && !conflictOnly) || !plan.item) return { id: "workflow.item", status: "fail", message: plan.blockers.join("; ") || "Workflow plan is blocked", remediation: "Correct and preview the workflow item again" };
+  const fresh = await planWorkflowItem(root, { item: plan.item, ...(plan.checkpoint ? { controlled: true, phase: plan.checkpoint.phase, approved: plan.checkpoint.status === "approved" } : {}), ...(plan.conflict ? { conflict: plan.conflict } : {}) });
+  if (fresh.status !== plan.status || fresh.action !== plan.action || JSON.stringify(normalizeJson(fresh.item)) !== JSON.stringify(normalizeJson(plan.item))) return { id: "workflow.item", status: "fail", message: "Workflow state changed after preview", remediation: "Preview the workflow item again" };
+  const base = await initializeWorkflowStorage(root);
+  if (plan.action === "append") await appendFile(join(base, "items.jsonl"), `${JSON.stringify(plan.item)}\n`);
+  if (plan.checkpoint) await appendFile(join(base, "checkpoints.jsonl"), `${JSON.stringify(plan.checkpoint)}\n`);
+  if (plan.conflict) await appendFile(join(base, "decisions.jsonl"), `${JSON.stringify(plan.conflict)}\n`);
+  return conflictOnly
+    ? { id: "workflow.item", status: "warn", message: "Workflow conflict retained; human resolution required", evidence: plan.item.id, remediation: "Resolve the reported material conflict" }
+    : { id: "workflow.item", status: "ok", message: plan.action === "skip" ? "Workflow item already exists" : "Workflow item stored", evidence: plan.item.id, remediation: "No action required" };
 }
 
 type LocalRead =

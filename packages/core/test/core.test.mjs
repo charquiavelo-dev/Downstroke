@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, readGitPolicy, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -489,4 +489,78 @@ test("experience import canonicalizes paths, rejects malformed text and lowers g
   assert.equal(plan.records.find(({ path }) => path === "docs/invalid.md")?.reason, "binary-content");
   assert.equal(plan.records.find(({ path }) => path === "dist/rules.json")?.trust, "external");
   assert.equal((await planExperienceImport(root, ["docs/bad\nname.md"])).status, "blocked");
+});
+
+test("workflow item preview is deterministic and does not mutate state", async () => {
+  const root = await gitFixture();
+  const plan = await planWorkflowItem(root, {
+    item: { id: "story.9.4", type: "story", title: "Native workflows", status: "ready-for-dev", acceptanceCriteria: ["Resume is deterministic"], tasks: ["Add state"] },
+  });
+
+  assert.equal(plan.status, "ready");
+  assert.equal(plan.action, "append");
+  assert.equal(plan.nextAction?.action, "implement");
+  await assert.rejects(readFile(join(root, ".downstroke", "workflows", "items.jsonl")));
+});
+
+test("workflow apply persists state and resolves next action from records only", async () => {
+  const root = await gitFixture();
+  const plan = await planWorkflowItem(root, {
+    item: { id: "story.9.4", type: "story", title: "Native workflows", status: "in-progress", source: { type: "file", path: "docs/story.md", hash: "a".repeat(64) } },
+  });
+
+  assert.equal((await applyWorkflowItem(root, plan)).status, "ok");
+  assert.equal((await planWorkflowItem(root, plan.item)).action, "skip");
+  assert.deepEqual(await resolveWorkflowNextAction(root, "story.9.4"), { status: "ready", itemId: "story.9.4", action: "verify", reason: "Item is in progress" });
+});
+
+test("workflow high-risk items always require individual review", async () => {
+  const root = await gitFixture();
+  const plan = await planWorkflowItem(root, {
+    item: { id: "story.risk", type: "story", title: "Production migration", status: "ready-for-dev", risk: "high" },
+  });
+
+  assert.equal(plan.status, "ready");
+  assert.equal(plan.item?.review, "individual");
+});
+
+test("workflow controlled mode advances through persisted checkpoints", async () => {
+  const root = await gitFixture();
+  const first = await planWorkflowItem(root, {
+    controlled: true,
+    phase: "plan",
+    item: { id: "story.controlled", type: "story", title: "Controlled story", status: "ready-for-dev" },
+  });
+
+  assert.equal(first.checkpoint?.phase, "plan");
+  assert.equal(first.nextAction?.action, "approve-plan");
+  assert.equal((await applyWorkflowItem(root, first)).status, "ok");
+  assert.deepEqual(await resolveWorkflowNextAction(root, "story.controlled"), { status: "ready", itemId: "story.controlled", action: "approve-plan", reason: "Controlled checkpoint requires approval" });
+
+  const second = await planWorkflowItem(root, {
+    controlled: true,
+    phase: "review",
+    approved: true,
+    item: { id: "story.controlled", type: "story", title: "Controlled story", status: "ready-for-dev" },
+  });
+  assert.equal(second.status, "ready");
+  assert.equal(second.checkpoint?.phase, "review");
+});
+
+test("workflow material conflicts persist evidence and pause execution", async () => {
+  const root = await gitFixture();
+  const plan = await planWorkflowItem(root, {
+    item: { id: "story.conflict", type: "story", title: "Conflicting story", status: "blocked" },
+    conflict: {
+      owner: "maintainer",
+      sources: [{ path: "docs/a.md", hash: "a".repeat(64) }, { path: "docs/b.md", hash: "b".repeat(64) }],
+      options: [{ id: "a", consequence: "Keep local contract" }, { id: "b", consequence: "Adopt imported contract" }],
+      consequences: ["Delivery pauses until owner decides"],
+    },
+  });
+
+  assert.equal(plan.status, "blocked");
+  assert.equal(plan.nextAction?.action, "resolve-conflict");
+  assert.equal((await applyWorkflowItem(root, plan)).status, "warn");
+  assert.deepEqual(await resolveWorkflowNextAction(root, "story.conflict"), { status: "blocked", itemId: "story.conflict", action: "resolve-conflict", reason: "Material conflict requires owner decision" });
 });

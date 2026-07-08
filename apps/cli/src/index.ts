@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, readGitPolicy, readPlanningCadence, runProjectChecks, tokenUsageStatus, type DecisionKind, type GitPolicy, type ReviewMode } from "@downstroke/core";
+import { applyCadenceUpdate, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyWorkflowItem, cadenceChoices, checkFiles, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planExperienceFact, planExperienceImport, planGitPolicy, planWorkflowItem, readGitPolicy, readPlanningCadence, resolveWorkflowNextAction, runProjectChecks, tokenUsageStatus, workflowPhases, type DecisionKind, type GitPolicy, type ReviewMode, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -40,6 +40,12 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "allow-push": { type: "boolean", default: false },
       disable: { type: "boolean", default: false },
       fact: { type: "string" },
+      item: { type: "string" },
+      "item-id": { type: "string" },
+      controlled: { type: "boolean", default: false },
+      phase: { type: "string" },
+      approved: { type: "boolean", default: false },
+      conflict: { type: "string" },
     },
     strict: true,
     allowPositionals: true,
@@ -252,6 +258,67 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return 1;
   }
 
+  if (command === "workflow") {
+    const action = positionals[0];
+    if (action === "resume") {
+      const result = await resolveWorkflowNextAction(cwd, values["item-id"]);
+      if (values.json) console.log(JSON.stringify(result, null, 2));
+      else console.log(`WORKFLOW NEXT ${result.status} ${result.itemId ?? "none"} ${result.action} ${result.reason}`);
+      return result.status === "blocked" ? 1 : 0;
+    }
+    if (action === "add" && values.item) {
+      if (values.phase !== undefined && !workflowPhases.includes(values.phase as WorkflowPhase)) {
+        const error = { status: "fail", error: "invalid-workflow-phase", message: "--phase must be plan, review, implementation or verification" };
+        if (values.json) console.log(JSON.stringify(error, null, 2)); else console.error(error.message);
+        return 1;
+      }
+      let item: unknown;
+      let conflict: unknown;
+      try {
+        item = JSON.parse(values.item) as unknown;
+        conflict = values.conflict === undefined ? undefined : JSON.parse(values.conflict) as unknown;
+      } catch {
+        const error = { status: "fail", error: "invalid-workflow-json", message: "--item and --conflict must be valid JSON" };
+        if (values.json) console.log(JSON.stringify(error, null, 2)); else console.error(error.message);
+        return 1;
+      }
+      const plan = await planWorkflowItem(cwd, {
+        item,
+        ...(values.controlled ? { controlled: true } : {}),
+        ...(values.phase ? { phase: values.phase as WorkflowPhase } : {}),
+        ...(values.approved ? { approved: true } : {}),
+        ...(conflict === undefined ? {} : { conflict }),
+      });
+      const summary = {
+        status: plan.status,
+        action: plan.action,
+        item: plan.item ? { id: plan.item.id, type: plan.item.type, status: plan.item.status, risk: plan.item.risk, review: plan.item.review } : null,
+        checkpoint: plan.checkpoint ? { itemId: plan.checkpoint.itemId, phase: plan.checkpoint.phase, status: plan.checkpoint.status } : null,
+        conflict: plan.conflict ? { id: plan.conflict.id, itemId: plan.conflict.itemId, owner: plan.conflict.owner, sources: plan.conflict.sources.length, options: plan.conflict.options.length, status: plan.conflict.status } : null,
+        nextAction: plan.nextAction,
+        blockers: plan.blockers,
+      };
+      const conflictOnly = plan.blockers.length > 0 && plan.blockers.every((blocker) => blocker.startsWith("Material workflow conflict"));
+      if (!values.yes || values["dry-run"] || plan.status === "blocked" && !conflictOnly) {
+        if (values.json) console.log(JSON.stringify(summary, null, 2));
+        else {
+          console.log(`WORKFLOW ${plan.status} ${plan.action} ${summary.item?.id ?? "invalid"}`);
+          if (summary.nextAction) console.log(`NEXT ${summary.nextAction.action} ${summary.nextAction.reason}`);
+          for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+          if (plan.status === "ready") console.log("Run again with --yes to authorize this workflow update.");
+        }
+        return plan.status === "blocked" ? 1 : 0;
+      }
+      const result = await applyWorkflowItem(cwd, plan);
+      if (values.json) console.log(JSON.stringify({ plan: summary, result }, null, 2));
+      else console.log(`${result.status.toUpperCase()} ${result.message} id=${result.evidence ?? "unknown"}`);
+      return result.status === "ok" ? 0 : 1;
+    }
+    if (values.json) console.log(JSON.stringify({ status: "fail", error: "invalid-workflow-command", message: "Use workflow add --item <json> or workflow resume [--item-id <id>]" }, null, 2));
+    else console.error("Usage: downstroke workflow <add|resume> [--item <json>] [--item-id <id>] [--controlled] [--phase <phase>] [--approved] [--conflict <json>] [--yes] [--json]");
+    return 1;
+  }
+
   if (command === "git-policy") {
     const allows = values["allow-branch"] || values["allow-commit"] || values["allow-push"];
     if (values.disable && allows) {
@@ -310,7 +377,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern|estimate|status|git-policy|experience> [options]");
+  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|govern|estimate|status|git-policy|experience|workflow> [options]");
   return 1;
 }
 

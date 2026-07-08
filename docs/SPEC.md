@@ -106,6 +106,8 @@ Keep product domains isolated. Shared packages contain only contracts or primiti
 | --- | --- | --- | --- |
 | `<entity>` | `<user | tenant | system>` | `<constraints>` | `<policy>` |
 | Experience fact | Repository | Valid provenance/trust; verified requires sanitized matching evidence; conflicting IDs fail | Local append-only JSONL plus deterministic ID index |
+| Workflow item | Repository | Versioned native item with status, ACs, tasks, risk, review mode, source and evidence references; high-risk review is always individual | Local `.downstroke/workflows/` JSON/JSONL records |
+| Workflow checkpoint | Repository | Controlled mode advances only through plan, review, implementation and verification checkpoints with explicit approval or pause | Local append-only checkpoint and decision records |
 
 - PostgreSQL constraints enforce important invariants.
 - Tenant-owned queries include tenant ownership server-side.
@@ -123,6 +125,8 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | `downstroke experience init` | Project developer | Repository-local v0.1 lite manifest and stores | Never overwrites; malformed/weakened manifest fails | Core and CLI initialization tests |
 | `downstroke experience add` | Project developer | Valid fact JSON; preview then `--yes` | Secret-free summary; duplicate conflict blocks | Core and CLI fact-write tests |
 | `downstroke experience import` | Project developer | Repeated repository-relative Markdown, YAML or JSON paths; optional explicit `claim: key=value` lines; preview then `--yes` | Bounded metadata-only classification; unsafe content is rejected/quarantined; contradictory claim values are retained as conflicted candidates and pause | Core and CLI import tests |
+| `downstroke workflow add` | Project developer | Valid native workflow item JSON; optional controlled checkpoint or material conflict JSON; preview then `--yes` | Payload-minimized summary; malformed state blocks; conflicts persist as pending decisions and pause | Core and CLI workflow tests |
+| `downstroke workflow resume` | Project developer | Optional workflow item ID | Computes next action only from persisted workflow records; invalid/conflicted state blocks instead of guessing | Core and CLI workflow resume tests |
 
 External integrations must define timeout, retry, rate-limit, fallback, secret ownership and observability behavior.
 

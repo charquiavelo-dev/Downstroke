@@ -258,3 +258,57 @@ test("experience import retains authorized conflict candidates and pauses", asyn
   assert.equal(await run(["experience", "import", "--path", "local.md", "--path", "remote.md", "--yes"], root), 1);
   assert.equal((await readFile(join(root, ".downstroke", "experience", "facts.jsonl"), "utf8")).trim().split("\n").length, 2);
 });
+
+test("workflow add previews and applies native workflow items", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-workflow-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  const item = JSON.stringify({ id: "story.9.4", type: "story", title: "Native workflows", status: "ready-for-dev", risk: "high" });
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["workflow", "add", "--item", item, "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const preview = JSON.parse(output.join("\n"));
+  assert.equal(preview.status, "ready");
+  assert.equal(preview.item.review, "individual");
+  await assert.rejects(readFile(join(root, ".downstroke", "workflows", "items.jsonl")));
+
+  assert.equal(await run(["workflow", "add", "--item", item, "--yes"], root), 0);
+  assert.match(await readFile(join(root, ".downstroke", "workflows", "items.jsonl"), "utf8"), /story\.9\.4/);
+});
+
+test("workflow resume reports controlled checkpoints and conflicts", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-workflow-resume-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  const item = JSON.stringify({ id: "story.controlled", type: "story", title: "Controlled story", status: "ready-for-dev" });
+  assert.equal(await run(["workflow", "add", "--item", item, "--controlled", "--phase", "plan", "--yes"], root), 0);
+
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["workflow", "resume", "--item-id", "story.controlled", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.equal(JSON.parse(output.join("\n")).action, "approve-plan");
+
+  const conflict = JSON.stringify({
+    owner: "maintainer",
+    sources: [{ path: "a.md", hash: "a".repeat(64) }, { path: "b.md", hash: "b".repeat(64) }],
+    options: [{ id: "a", consequence: "Keep A" }, { id: "b", consequence: "Keep B" }],
+    consequences: ["Pause"],
+  });
+  assert.equal(await run(["workflow", "add", "--item", JSON.stringify({ id: "story.conflict", type: "story", title: "Conflict", status: "blocked" }), "--conflict", conflict, "--yes"], root), 1);
+  const conflictOutput = [];
+  console.log = (value) => conflictOutput.push(String(value));
+  try {
+    assert.equal(await run(["workflow", "resume", "--item-id", "story.conflict", "--json"], root), 1);
+  } finally { console.log = originalLog; }
+  assert.equal(JSON.parse(conflictOutput.join("\n")).action, "resolve-conflict");
+});
