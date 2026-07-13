@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, nativeOnlySurfaces, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus } from "../dist/index.js";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyNativeReleasePreparation, applyNativeWorkerRegistration, applyTokenEconomyRoute, applyWorkflowItem, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, listNativeWorkers, nativeOnlySurfaces, nativeRuntimeResponsibilities, nativeWorkerCatalog, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planNativeRelease, planNativeWorkerRegistration, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus, validateNativeWorkerOutput, verifyNativeRelease } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -20,6 +20,41 @@ async function gitFixture() {
   await exec("git", ["add", "README.md"], { cwd: root });
   await exec("git", ["commit", "-m", "chore: initialize fixture"], { cwd: root });
   return root;
+}
+
+async function releaseFixture() {
+  const root = await gitFixture();
+  for (const surface of nativeOnlySurfaces) {
+    await mkdir(dirname(join(root, surface)), { recursive: true });
+    await writeFile(join(root, surface), "Downstroke native surface\n");
+  }
+  await mkdir(join(root, "packages", "tool"), { recursive: true });
+  await writeFile(join(root, "package.json"), `${JSON.stringify({ name: "fixture-root", version: "0.1.0", private: true, workspaces: ["packages/tool"], scripts: { typecheck: "node -e \"process.exit(0)\"", test: "node -e \"process.exit(0)\"", build: "node -e \"process.exit(0)\"" } }, null, 2)}\n`);
+  await writeFile(join(root, "packages", "tool", "package.json"), `${JSON.stringify({ name: "@fixture/tool", version: "0.1.0", files: ["index.js"], bin: { fixture: "index.js" } }, null, 2)}\n`);
+  await writeFile(join(root, "packages", "tool", "index.js"), "#!/usr/bin/env node\nconsole.log('fixture ok');\n");
+  await writeFile(join(root, "package-lock.json"), `${JSON.stringify({ name: "fixture-root", version: "0.1.0", lockfileVersion: 3, requires: true, packages: { "": { name: "fixture-root", version: "0.1.0", workspaces: ["packages/tool"] }, "packages/tool": { name: "@fixture/tool", version: "0.1.0", bin: { fixture: "index.js" } } } }, null, 2)}\n`);
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: add release fixture"], { cwd: root });
+  await exec("git", ["tag", "v0.1.0"], { cwd: root });
+  return root;
+}
+
+function workerManifest(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    id: "local.change-auditor",
+    role: "Risk Auditor",
+    purpose: "Audit a bounded contextual change without executing tools.",
+    inputSchema: { type: "object", properties: { taskId: "string", context: "object" }, required: ["taskId", "context"], additionalProperties: false },
+    outputSchema: { type: "object", properties: { summary: "string", claims: "array" }, required: ["summary", "claims"], additionalProperties: false },
+    allowedTools: ["simplicity.audit"],
+    mutationRights: [],
+    budget: { maxSteps: 8, maxTokens: 20000 },
+    stopCondition: { type: "complete-or-blocked", maxFailures: 1 },
+    evidenceRequirements: ["source-reference", "finding-severity"],
+    auditRequirements: ["plan-hash", "input-hash", "claim-status"],
+    ...overrides,
+  };
 }
 
 test("copy-if-missing preserves an existing user file", async () => {
@@ -293,6 +328,201 @@ test("Git policy returns a structured failure when the repository disappears aft
   const result = await applyGitPolicy(root, plan);
   assert.equal(result.status, "fail");
   assert.match(result.message, /repository/i);
+});
+
+test("native release planning is deterministic and applies Conventional Commit precedence", async () => {
+  const root = await releaseFixture();
+  await writeFile(join(root, "feature.txt"), "feature\n");
+  await exec("git", ["add", "feature.txt"], { cwd: root });
+  await exec("git", ["commit", "-m", "feat(core): add release planning"], { cwd: root });
+
+  const first = await planNativeRelease(root, { channel: "stable", packages: ["packages/tool"] });
+  const second = await planNativeRelease(root, { channel: "stable", packages: ["packages/tool"] });
+  assert.equal(first.status, "ready");
+  assert.equal(first.bump, "minor");
+  assert.equal(first.nextVersion, "0.2.0");
+  assert.equal(first.gitTag, "v0.2.0");
+  assert.equal(first.distTag, "latest");
+  assert.equal(first.planHash, second.planHash);
+  assert.deepEqual(first, second);
+  await assert.rejects(readFile(join(root, ".downstroke", "releases", "events.jsonl")));
+
+  await writeFile(join(root, "breaking.txt"), "breaking\n");
+  await exec("git", ["add", "breaking.txt"], { cwd: root });
+  await exec("git", ["commit", "-m", "fix!: change contract", "-m", "BREAKING CHANGE: update the public contract"], { cwd: root });
+  assert.equal((await planNativeRelease(root, { channel: "stable", packages: ["packages/tool"] })).nextVersion, "1.0.0");
+
+  const documentationOnly = await releaseFixture();
+  await writeFile(join(documentationOnly, "notes.md"), "notes\n");
+  await exec("git", ["add", "notes.md"], { cwd: documentationOnly });
+  await exec("git", ["commit", "-m", "docs: expand release notes"], { cwd: documentationOnly });
+  const noRelease = await planNativeRelease(documentationOnly, { channel: "stable", packages: ["packages/tool"] });
+  assert.equal(noRelease.bump, "none");
+  assert.equal(noRelease.nextVersion, null);
+
+  const prerelease = await releaseFixture();
+  await exec("git", ["switch", "-c", "develop"], { cwd: prerelease });
+  await writeFile(join(prerelease, "fix.txt"), "fix\n");
+  await exec("git", ["add", "fix.txt"], { cwd: prerelease });
+  await exec("git", ["commit", "-m", "fix: prepare beta"], { cwd: prerelease });
+  const beta = await planNativeRelease(prerelease, { channel: "beta", packages: ["packages/tool"] });
+  assert.equal(beta.nextVersion, "0.1.1-beta.1");
+  assert.equal(beta.distTag, "beta");
+});
+
+test("native release planning blocks unsafe baselines, branches, owned drift and malformed commits", async () => {
+  const missingTag = await gitFixture();
+  assert.equal((await planNativeRelease(missingTag, { channel: "stable", packages: [] })).status, "blocked");
+
+  const root = await releaseFixture();
+  await exec("git", ["switch", "-c", "feature/not-release"], { cwd: root });
+  assert.match((await planNativeRelease(root, { channel: "stable", packages: ["packages/tool"] })).blockers.join(" "), /branch/i);
+  await exec("git", ["switch", "main"], { cwd: root });
+  await writeFile(join(root, "packages", "tool", "package.json"), "{}\n");
+  assert.equal((await planNativeRelease(root, { channel: "stable", packages: ["packages/tool"] })).status, "blocked");
+
+  const malformed = await releaseFixture();
+  await writeFile(join(malformed, "bad.txt"), "bad\n");
+  await exec("git", ["add", "bad.txt"], { cwd: malformed });
+  await exec("git", ["commit", "-m", "release changes"], { cwd: malformed });
+  assert.match((await planNativeRelease(malformed, { channel: "stable", packages: ["packages/tool"] })).blockers.join(" "), /Conventional Commit/);
+
+  const competingLock = await releaseFixture();
+  await writeFile(join(competingLock, "yarn.lock"), "# competing package-manager state\n");
+  assert.match((await planNativeRelease(competingLock, { channel: "stable", packages: ["packages/tool"] })).blockers.join(" "), /Multiple package-manager/);
+
+  const graphGap = await releaseFixture();
+  await mkdir(join(graphGap, "packages", "helper"), { recursive: true });
+  await writeFile(join(graphGap, "packages", "helper", "package.json"), `${JSON.stringify({ name: "@fixture/helper", version: "0.1.0" }, null, 2)}\n`);
+  const graphRoot = JSON.parse(await readFile(join(graphGap, "package.json"), "utf8"));
+  graphRoot.workspaces.push("packages/helper");
+  await writeFile(join(graphGap, "package.json"), `${JSON.stringify(graphRoot, null, 2)}\n`);
+  const graphTool = JSON.parse(await readFile(join(graphGap, "packages", "tool", "package.json"), "utf8"));
+  graphTool.dependencies = { "@fixture/helper": "0.1.0" };
+  await writeFile(join(graphGap, "packages", "tool", "package.json"), `${JSON.stringify(graphTool, null, 2)}\n`);
+  assert.match((await planNativeRelease(graphGap, { channel: "stable", packages: ["packages/tool"] })).blockers.join(" "), /undeclared workspace package/);
+
+  const stale = await releaseFixture();
+  await writeFile(join(stale, "fix.txt"), "fix\n");
+  await exec("git", ["add", "fix.txt"], { cwd: stale });
+  await exec("git", ["commit", "-m", "fix: plan release"], { cwd: stale });
+  const stalePlan = await planNativeRelease(stale, { channel: "stable", packages: ["packages/tool"] });
+  await writeFile(join(stale, "later.txt"), "later\n");
+  await exec("git", ["add", "later.txt"], { cwd: stale });
+  await exec("git", ["commit", "-m", "chore: advance head"], { cwd: stale });
+  assert.equal((await applyNativeReleasePreparation(stale, stalePlan, stalePlan.planHash)).status, "fail");
+
+  const interrupted = await releaseFixture();
+  await writeFile(join(interrupted, "fix.txt"), "fix\n");
+  await exec("git", ["add", "fix.txt"], { cwd: interrupted });
+  await exec("git", ["commit", "-m", "fix: prepare interrupted release"], { cwd: interrupted });
+  const interruptedPlan = await planNativeRelease(interrupted, { channel: "stable", packages: ["packages/tool"] });
+  await mkdir(join(interrupted, ".downstroke", "releases"), { recursive: true });
+  await writeFile(join(interrupted, ".downstroke", "releases", "transaction.json"), "{\"state\":\"interrupted\"}\n");
+  assert.equal((await applyNativeReleasePreparation(interrupted, interruptedPlan, interruptedPlan.planHash)).status, "fail");
+  assert.match(await readFile(join(interrupted, ".downstroke", "releases", "transaction.json"), "utf8"), /interrupted/);
+});
+
+test("native release preparation is guarded, idempotent and verification stays local", async () => {
+  const root = await releaseFixture();
+  await writeFile(join(root, "fix.txt"), "fix\n");
+  await exec("git", ["add", "fix.txt"], { cwd: root });
+  await exec("git", ["commit", "-m", "fix: correct release output"], { cwd: root });
+  const plan = await planNativeRelease(root, { channel: "stable", packages: ["packages/tool"] });
+  assert.equal(plan.status, "ready");
+  assert.equal((await applyNativeReleasePreparation(root, plan, plan.planHash)).status, "ok");
+  assert.equal(JSON.parse(await readFile(join(root, "packages", "tool", "package.json"), "utf8")).version, "0.1.1");
+  assert.equal(JSON.parse(await readFile(join(root, "package-lock.json"), "utf8")).packages["packages/tool"].version, "0.1.1");
+  assert.match(await readFile(join(root, "CHANGELOG.md"), "utf8"), /0\.1\.1/);
+  assert.equal((await applyNativeReleasePreparation(root, plan, plan.planHash)).status, "ok");
+  assert.equal((await applyNativeReleasePreparation(root, plan, "0".repeat(64))).status, "fail");
+
+  const packagePath = join(root, "packages", "tool", "package.json");
+  const preparedPackage = await readFile(packagePath, "utf8");
+  await writeFile(packagePath, preparedPackage.replace('"version": "0.1.1"', '"version": "0.1.0"'));
+  assert.equal((await verifyNativeRelease(root, plan)).status, "fail");
+  await writeFile(packagePath, preparedPackage);
+
+  const rootManifestPath = join(root, "package.json");
+  const preparedRoot = JSON.parse(await readFile(rootManifestPath, "utf8"));
+  preparedRoot.scripts.test = "node -e \"process.exit(9)\"";
+  await writeFile(rootManifestPath, `${JSON.stringify(preparedRoot, null, 2)}\n`);
+  assert.match((await verifyNativeRelease(root, plan)).message, /test failed/);
+  preparedRoot.scripts.test = "node -e \"process.exit(0)\"";
+  await writeFile(rootManifestPath, `${JSON.stringify(preparedRoot, null, 2)}\n`);
+
+  const invalidAllowlist = JSON.parse(preparedPackage);
+  invalidAllowlist.files = ["../private.txt"];
+  await writeFile(packagePath, `${JSON.stringify(invalidAllowlist, null, 2)}\n`);
+  assert.match((await verifyNativeRelease(root, plan)).message, /files allowlist/);
+
+  const brokenInstall = JSON.parse(preparedPackage);
+  brokenInstall.dependencies = { "missing-local-package": "file:../../missing-local-package.tgz" };
+  await writeFile(packagePath, `${JSON.stringify(brokenInstall, null, 2)}\n`);
+  assert.match((await verifyNativeRelease(root, plan)).message, /clean install failed/);
+  await writeFile(packagePath, preparedPackage);
+
+  const nativeSurface = join(root, nativeOnlySurfaces[0]);
+  await writeFile(nativeSurface, "bmad\n");
+  assert.match((await verifyNativeRelease(root, plan)).message, /native-only/);
+  await writeFile(nativeSurface, "Downstroke native surface\n");
+  const verification = await verifyNativeRelease(root, plan);
+  assert.equal(verification.status, "ok", verification.message);
+  assert.equal((await exec("git", ["tag", "--list", "v0.1.1"], { cwd: root })).stdout.trim(), "");
+  assert.equal((await exec("git", ["remote"], { cwd: root })).stdout.trim(), "");
+});
+
+test("native worker catalog declares bounded roles and runtime responsibilities", () => {
+  assert.deepEqual(nativeRuntimeResponsibilities.map(({ stage }) => stage), ["Planner", "Scheduler", "Executor", "Verifier", "Recorder"]);
+  assert.deepEqual(nativeWorkerCatalog.map(({ role }) => role), ["Planner", "Repository Inspector", "Risk Auditor", "Evidence Validator", "Workflow Guardian", "Context Compiler", "Release Guardian"]);
+  assert.equal(Object.isFrozen(nativeWorkerCatalog), true);
+  for (const manifest of nativeWorkerCatalog) {
+    assert.equal(manifest.inputSchema.additionalProperties, false);
+    assert.equal(manifest.outputSchema.additionalProperties, false);
+    assert.equal(manifest.mutationRights.length, 0);
+    assert.ok(manifest.allowedTools.length > 0);
+    assert.ok(manifest.budget.maxSteps > 0 && manifest.budget.maxTokens > 0);
+    assert.ok(manifest.evidenceRequirements.length > 0 && manifest.auditRequirements.length > 0);
+  }
+});
+
+test("native worker planning rejects unnecessary orchestration, unsafe manifests and self-verified claims", async () => {
+  const root = await gitFixture();
+  const deterministic = await planNativeWorkerRegistration(root, { manifest: workerManifest(), task: { id: "task.deterministic", taskClass: "deterministic", toolProven: true, singlePathSufficient: true, justification: "A local function proves the result." } });
+  assert.equal(deterministic.status, "blocked");
+  assert.equal(deterministic.mode, "deterministic");
+  assert.match(deterministic.nextAction, /deterministic/i);
+  await assert.rejects(readFile(join(root, ".downstroke", "workers", "registry.jsonl")));
+
+  const unknownField = await planNativeWorkerRegistration(root, { manifest: workerManifest({ surprise: true }), task: { id: "task.context", taskClass: "contextual", toolProven: false, singlePathSufficient: false, justification: "Independent bounded evidence review is required." } });
+  assert.match(unknownField.blockers.join(" "), /unknown/i);
+  const mutation = await planNativeWorkerRegistration(root, { manifest: workerManifest({ mutationRights: ["filesystem.write"] }), task: { id: "task.mutation", taskClass: "contextual", toolProven: false, singlePathSufficient: false, justification: "The requested review spans independent evidence." } });
+  assert.match(mutation.blockers.join(" "), /Story 9\.14|execution task/i);
+
+  assert.equal(validateNativeWorkerOutput({ summary: "done", claims: [{ id: "claim.one", status: "verified", statement: "done", evidenceRefs: ["sha256:abc"] }] }).status, "blocked");
+  assert.equal(validateNativeWorkerOutput({ summary: "bounded", claims: [{ id: "claim.path", status: "observed", statement: "Read C:\\Users\\private\\secret.txt", evidenceRefs: ["source:local"] }] }).status, "blocked");
+  assert.equal(validateNativeWorkerOutput({ summary: "bounded", claims: [{ id: "claim.one", status: "observed", statement: "A source was inspected.", evidenceRefs: ["source:README.md"] }] }).status, "ok");
+});
+
+test("native worker registration is guarded, idempotent and hash-chain audited", async () => {
+  const root = await gitFixture();
+  const request = { manifest: workerManifest(), task: { id: "task.audit", taskClass: "contextual", toolProven: false, singlePathSufficient: false, justification: "The bounded risk review needs an independently declared role." } };
+  const plan = await planNativeWorkerRegistration(root, request);
+  assert.equal(plan.status, "ready");
+  assert.equal(plan.mode, "worker");
+  await assert.rejects(readFile(join(root, ".downstroke", "workers", "registry.jsonl")));
+  assert.equal((await applyNativeWorkerRegistration(root, { ...plan, manifest: { ...plan.manifest, purpose: "tampered" } }, plan.planHash)).status, "fail");
+  assert.equal((await applyNativeWorkerRegistration(root, plan, "0".repeat(64))).status, "fail");
+  assert.equal((await applyNativeWorkerRegistration(root, plan, plan.planHash)).status, "ok");
+  assert.equal((await applyNativeWorkerRegistration(root, plan, plan.planHash)).status, "ok");
+
+  const registry = (await readFile(join(root, ".downstroke", "workers", "registry.jsonl"), "utf8")).trim().split(/\r?\n/);
+  const audit = (await readFile(join(root, ".downstroke", "workers", "audit.jsonl"), "utf8")).trim().split(/\r?\n/);
+  assert.equal(registry.length, 1);
+  assert.equal(audit.length, 1);
+  assert.equal(JSON.parse(audit[0]).previousHash, null);
+  assert.doesNotMatch(`${registry[0]}${audit[0]}`, new RegExp(root.replaceAll("\\", "\\\\"), "i"));
+  assert.equal((await listNativeWorkers(root)).length, 8);
 });
 
 test("experience initialization is local, secure and idempotent", async () => {

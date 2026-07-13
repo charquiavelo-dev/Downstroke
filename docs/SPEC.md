@@ -46,12 +46,12 @@ A developer can safely initialize or inspect an existing project, install only t
 This milestone is reached only when:
 
 - Every planned product capability through Epics 1-9 is implemented, reviewed and verified, including Stories 9.11-9.15.
-- README completion (Story 10.1), local npm package preparation (Story 10.2) and token calibration (Story 10.7) are done.
+- README completion (Story 10.1), native release automation (Story 10.2), local npm package preparation (Story 10.3) and token calibration (Story 10.8) are done.
 - All runtime, templates, generated projects, CLI help and active public documentation are Downstroke-native; maintenance tools remain excluded from release output.
 - A clean local tarball installation passes init, doctor, help, build, typecheck, tests and native-only scans without unpublished workspace dependencies.
 - No story remains in backlog, ready-for-dev, in-progress or review within the milestone scope, and no unresolved high/medium release finding remains.
 
-When these gates pass, announce the milestone explicitly and ask the owner to perform local acceptance. npm publication (Story 10.3), public-history work and the documentation site begin only after that local acceptance.
+When these gates pass, announce the milestone explicitly and ask the owner to perform local acceptance. npm publication (Story 10.4), public-history work and the documentation site begin only after that local acceptance.
 
 ## Business Rules And Invariants
 
@@ -65,6 +65,7 @@ Number every rule so code, tests and Downstroke workflow items can reference it.
 | `BR-004` | Durable project facts retain source, trust, scope, status, TTL and evidence; generated output cannot directly become verified truth. | Experience runtime validation and authorized JSONL writes | Experience trust/evidence tests |
 | `BR-005` | Native orchestration uses deterministic functions before worker orchestration; workers are schema-bound, permission-scoped and cannot bypass preview, evidence, workflow or human checkpoints. | Runtime manifest, workflow gate and audit records | Worker manifest tests and blocked mutation fixtures |
 | `BR-006` | Project knowledge is governed knowledge, not chat memory or generic RAG; accepted knowledge must be scoped, source-linked, lifecycle-managed, conflict-aware and reviewable. | Knowledge registry, compiler and health audit | Knowledge lifecycle and compiler tests |
+| `BR-007` | Downstroke Native Releases deterministically plans version, channel, notes, changelog, package metadata and verification from repository evidence; planning or preparation authority never grants publish, push, tag or history-rewrite authority. | Native release plan, scoped authorization and append-only release state | Stable-plan, blocked-publish and clean-artifact tests |
 
 ## User Flows
 
@@ -112,7 +113,8 @@ Keep product domains isolated. Shared packages contain only contracts or primiti
 | Workflow item | Repository | Versioned native item with status, ACs, tasks, risk, review mode, source and evidence references; high-risk review is always individual | Local `.downstroke/workflows/` JSON/JSONL records |
 | Workflow checkpoint | Repository | Controlled mode advances only through plan, review, implementation and verification checkpoints with explicit approval or pause | Local append-only checkpoint and decision records |
 | Execution task | Repository | Planner, scheduler, executor, verifier and recorder state are explicit; deterministic execution is attempted before worker orchestration | Local workflow/execution ledger |
-| Native worker | Repository | Worker role, inputs, allowed tools, mutation rights, budget, stop condition and output schema are declared before execution | Local runtime manifest and audit events |
+| Release plan | Repository | Git tip, baseline tag, commit set, SemVer decision, channel, dist-tag, notes, changelog, package targets, checks, approvals and stable hash agree before preparation | Local `.downstroke/releases/` plan and append-only event records |
+| Native worker | Repository | Worker role, strict input/output schemas, allowed tools, mutation rights, finite budget, stop condition, evidence and audit requirements are declared before execution; built-ins are immutable and read-only | Local `.downstroke/workers/` registry and hash-chained audit events |
 | Knowledge lifecycle rule | Repository | Facts can expire, become stale, be invalidated or lose confidence only through explicit policy and evidence | Experience lifecycle records |
 | Knowledge record | Repository | Rules, decisions, preferences and stack notes include scope, status, trust, source evidence, lifecycle and deterministic ID | Local `.downstroke/knowledge/` records |
 | Stack package | Repository | Technology/version knowledge is version-bound, source-linked and stale when the detected project version changes | Local knowledge registry and health report |
@@ -136,7 +138,11 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | `downstroke experience import` | Project developer | Repeated repository-relative Markdown, YAML or JSON paths; optional explicit `claim: key=value` lines; preview then `--yes` | Bounded metadata-only classification; unsafe content is rejected/quarantined; contradictory claim values are retained as conflicted candidates and pause | Core and CLI import tests |
 | `downstroke workflow add` | Project developer | Valid native workflow item JSON; optional controlled checkpoint or material conflict JSON; preview then `--yes` | Payload-minimized summary; malformed state blocks; conflicts persist as pending decisions and pause | Core and CLI workflow tests |
 | `downstroke workflow resume` | Project developer | Optional workflow item ID | Computes next action only from persisted workflow records; invalid/conflicted state blocks instead of guessing | Core and CLI workflow resume tests |
+| `downstroke worker list` | Project developer | Immutable built-in catalog plus valid local registrations | Executes no worker or tool; malformed local state fails rather than disappearing | Worker catalog and registry tests |
+| `downstroke worker register` | Project developer | Strict manifest, routing evidence and justification; preview then exact `--plan` plus `--yes` | Deterministic work selects the simpler path; mutation-capable or manipulated manifests block; registration grants no execution authority | Worker routing, registration and audit tests |
 | `downstroke run` | Project developer | Execution task, mode and optional worker manifest; preview then explicit approval for mutation | Uses deterministic planner/scheduler/executor/verifier/recorder first; worker orchestration is rejected unless justified and scoped | Runtime and workflow orchestration tests |
+| `downstroke release plan` | Framework maintainer | Git history, package metadata and release policy; read-only human/JSON plan | Blocks malformed commits, invalid baselines, dirty release-owned files, branch/tag/version collisions and metadata drift | Stable plan and blocked-state tests |
+| `downstroke release prepare` | Framework maintainer | Verified plan; preview then `--yes` for local release-owned files only | Atomically updates declared versions, lockfile metadata, changelog and local release state; cannot publish, push or tag | Idempotent preparation and blocked-publish tests |
 | `downstroke health` | Project developer | Repository scope and optional strict mode | Explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items without executing unsafe artifacts | Health engine tests and fixture reports |
 | `downstroke stack detect` | Project developer | Local repository package/config files | Reports observed technologies, versions and uncertainty without executing arbitrary scripts | Stack detection tests |
 | `downstroke knowledge list` | Project developer | Repository-local knowledge registry | Shows accepted, proposed, stale, deprecated, invalidated and conflicted records | Knowledge registry tests |

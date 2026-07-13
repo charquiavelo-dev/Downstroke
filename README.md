@@ -16,7 +16,7 @@ That focus is not a hard limit. The core value is repository-local discipline: d
 
 ## Status
 
-Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import and native workflow state.
+Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import, native workflow state, schema-bound worker contracts and local release planning, preparation and verification.
 
 The CLI can be built, linked and exercised locally today. It is not published to the npm registry yet, and the framework has not reached its complete native acceptance milestone. Local testing is useful now for the implemented commands; it must not be mistaken for release readiness.
 
@@ -252,7 +252,37 @@ downstroke cleanup --yes
 downstroke cleanup --json
 ```
 
-Cleanup never deletes matched sources. It moves known legacy paths such as `_bmad`, `_bmad-output`, `.codegraph`, legacy local skills and `docs/stories` into `docs/legacy/downstroke-cleanup/`. Preview first; apply only with `--yes`.
+Cleanup never deletes matched sources. It moves known legacy workflow, code-intelligence, local-skill and Markdown-story paths into `docs/legacy/downstroke-cleanup/`. Preview first; apply only with `--yes`.
+
+### `release`
+
+Downstroke Native Releases derives a deterministic local release plan from reachable Git tags, Conventional Commits and explicit package targets:
+
+```bash
+downstroke release plan --channel stable --package packages/core --package apps/cli
+downstroke release plan --channel stable --package packages/core --package apps/cli --json
+downstroke release prepare --channel stable --package packages/core --package apps/cli --plan <hash> --yes
+downstroke release verify --plan <hash>
+```
+
+Planning is read-only. Preparation revalidates the exact plan before changing declared versions, exact internal dependencies, supported lockfile metadata, `CHANGELOG.md` and append-only `.downstroke/releases/` evidence. Verification runs declared checks, inspects actual npm pack allowlists and hashes, installs local tarballs in a clean temporary fixture and enforces the native-only boundary.
+
+This command never creates Git tags, pushes, creates hosted releases or contacts a package registry. Authenticated npm publication, provenance and post-publication recovery remain the separately reviewed high-risk work in Story 10.4.
+
+### `worker`
+
+List the immutable Downstroke-native worker catalog or preview an inert repository-local manifest registration:
+
+```bash
+downstroke worker list
+downstroke worker list --json
+downstroke worker register --manifest '<json>' --task-id task.audit --task-class contextual --justification "Independent bounded review is required."
+downstroke worker register --manifest '<json>' --task-id task.audit --task-class contextual --justification "Independent bounded review is required." --plan <hash> --yes
+```
+
+Every manifest declares strict input/output schemas, allowed native capabilities, mutation rights, finite budgets, stop conditions, evidence and audit requirements. Registration is preview-first, repository-local and idempotent. Built-in workers are read-only, and a manifest never becomes tool-execution authority.
+
+Deterministic or single-path work rejects worker registration and returns the simpler route. Scheduling, invocation, fan-out, retries, provider calls and `downstroke run` remain Story 9.14; the current worker surface executes nothing.
 
 ### `cadence`
 
@@ -491,7 +521,7 @@ Inspect both sources and their evidence. Downstroke intentionally does not selec
 - Local linking exercises implemented commands but is not a clean-install or tarball proof.
 - Token estimates remain heuristic until the final calibration story.
 - Token routing records policy outcomes only; it does not call a provider or schedule workers.
-- Context compilation, strict native cleanup, explicit worker orchestration, the execution engine and the complete knowledge lifecycle remain roadmap work.
+- Worker execution, scheduling, fan-out and the complete knowledge lifecycle remain roadmap work; the current worker catalog and local registration are inert contracts only.
 - Code intelligence is bounded and heuristic; the language toolchain remains authoritative.
 - Downstroke does not install or run external agent frameworks as product runtime dependencies.
 
@@ -524,17 +554,17 @@ npm test
 npm run build
 ```
 
-The test suite currently covers safe file operations, project inspection, native-only scans, cadence, governance, Git policy, token estimates, Operational Experience, safe import and native workflow state.
+The test suite currently covers safe file operations, project inspection, native-only scans, cadence, governance, Git policy, token estimates, Operational Experience, safe import, native workflow state and local native release planning, preparation and verification.
 
 ## Release direction
 
 The release path is:
 
 1. Complete native platform capabilities.
-2. Finish public README and local package preparation.
-3. Verify tarball contents and clean install.
+2. Resolve the explicit public package manifest and metadata in Story 10.3.
+3. Use the verified native release plan to prove tarball contents and clean installation.
 4. Calibrate token estimates against observed usage.
 5. Ask the maintainer for local acceptance.
-6. Prepare npm publication and public repository release only after acceptance.
+6. Perform authenticated npm publication and public repository release through the high-risk Story 10.4 workflow only after acceptance.
 
 Downstroke is not treated as ready just because it builds. It is ready when its native workflows, evidence, safety gates and package surface can prove it.

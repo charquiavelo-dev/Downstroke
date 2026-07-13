@@ -170,9 +170,9 @@ FR72: Before a documentation site exists, the repository README explains install
 
 FR73: Once the framework passes its functional and release gates, Downstroke can be packed and distributed as an npm package with a working CLI binary and only required runtime files.
 
-FR74: Package readiness validates metadata, license, exports, Node compatibility, tarball contents, clean-install behavior and package provenance before publication.
+FR74: Package readiness starts from a deterministic Downstroke release plan derived from Conventional Commits and the last valid release tag. The plan declares the next SemVer version, channel, tag, release notes, changelog changes, package/version consistency, required checks and publication authorization before metadata, license, exports, Node compatibility, tarball contents, clean-install behavior and package provenance are validated.
 
-FR75: npm publication is an explicit high-risk operation requiring authenticated maintainer confirmation, version selection and post-publish installation verification.
+FR75: npm publication is an explicit high-risk operation requiring a verified Downstroke release plan, authenticated maintainer confirmation, immutable version and tag collision checks, provenance-capable CI and post-publish installation verification. Eligible existing packages use trusted staged publishing and 2FA approval; first publication uses a separately approved bootstrap path.
 
 FR76: After README and npm distribution are ready, Downstroke can provide a React documentation and showcase site containing only working, verifiable framework capabilities.
 
@@ -290,7 +290,7 @@ NFR38: Stack recommendations are based on product capabilities, team constraints
 
 NFR39: npm package contents exclude source archives, secrets, local state, test fixtures and unrelated documentation unless explicitly required at runtime.
 
-NFR40: Release artifacts are reproducible from a tagged commit and the published package version matches repository metadata and changelog state.
+NFR40: Release analysis is deterministic and idempotent for the same Git tip and prior tag. Artifacts are reproducible from the tagged commit; package metadata, lockfile, changelog, release notes, Git tag, GitHub release, npm version and dist-tag cannot disagree. Concurrent or repeated execution blocks or safely reports the existing release.
 
 NFR41: The documentation site is accessible, responsive, internationalizable and never presents unfinished capabilities as available.
 
@@ -376,7 +376,7 @@ FR72-FR81: Epic 10 - Package distribution, sanitized public release and document
 - 7.1: FR38-FR40; 7.2: FR36, FR38-FR40; 7.3: FR37-FR40.
 - 8.1: FR42, FR45; 8.2: FR41; 8.3: FR46-FR47; 8.4: FR48-FR50; 8.5: FR43-FR44.
 - 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83, FR88; 9.5: FR63; 9.6: FR64, FR87; 9.7: FR62, FR90; 9.8: FR56-FR59; 9.9: FR63, FR82, FR87, FR91; 9.10: FR60-FR61, FR86, FR92; 9.11: FR66, FR84, FR87; 9.12: FR67; 9.13: FR68; 9.14: FR84, FR88; 9.15: FR85-FR86, FR89-FR93.
-- 10.1: FR72; 10.2: FR73-FR74; 10.3: FR75; 10.4: FR78; 10.5: FR77, FR79-FR81; 10.6: FR76.
+- 10.1: FR72; 10.2: FR74-FR75; 10.3: FR73-FR74; 10.4: FR75; 10.5: FR78; 10.6: FR77, FR79-FR81; 10.7: FR76; 10.8: FR56-FR59.
 
 ## Epic List
 
@@ -636,7 +636,7 @@ So that I can evaluate backlog and sprint cost before execution.
 **When** monetary cost cannot be verified
 **Then** Downstroke reports tokens without inventing a currency estimate.
 
-This story provides preliminary visibility only. Accuracy calibration and available-budget decisions are deferred to Story 10.7, after all product and release workflows are complete and representative observed usage exists.
+This story provides preliminary visibility only. Accuracy calibration and available-budget decisions are deferred to Story 10.8, after all product and release workflows are complete and representative observed usage exists.
 
 ## Epic 3: Safe Git and Multi-Repository Delivery
 
@@ -1185,7 +1185,19 @@ As a new user, I want one reliable README, So that I can install and use Downstr
 **Given** the repository **When** the README is reviewed **Then** requirements, installation, quick start, commands, configuration, safety, examples and troubleshooting are complete.
 **Given** unfinished features **When** documented **Then** they are labeled planned rather than available.
 
-### Story 10.2: Prepare the npm Package
+### Story 10.2: Automate Native Downstroke Releases
+As a maintainer, I want deterministic Downstroke release planning from repository history, So that consistent releases can be prepared without a third-party release framework.
+
+**Acceptance Criteria:**
+**Given** the last valid release tag and Conventional Commits **When** `downstroke release plan` runs **Then** it deterministically selects no release, patch, minor or major; breaking-change footers and `!` trigger major, `feat` triggers minor, `fix` triggers patch and non-product commits alone trigger no release.
+**Given** release-worthy commits **When** the plan is rendered **Then** version, stable or prerelease channel, npm dist-tag, Git tag, grouped release notes, changelog changes, package targets, checks, risks, rollback direction and required approvals are available in human-readable and JSON output.
+**Given** malformed history, an invalid or missing baseline tag, dirty release-owned files, version or tag collisions, detached or unauthorized branches or metadata disagreement **When** planning runs **Then** it blocks with evidence and a next action rather than guessing.
+**Given** identical repository state **When** planning repeats **Then** the stable plan hash and output are identical and no file, tag, release, remote or registry is mutated.
+**Given** explicit local authorization **When** `downstroke release prepare --yes` runs **Then** only declared package versions, lockfile metadata, changelog and append-only `.downstroke/releases/` state are updated atomically and reruns are idempotent.
+**Given** a prepared release **When** verification runs **Then** configured typecheck, test and build, allowlisted package contents, clean-fixture installation, native-only scan and version consistency must pass before state becomes `ready`.
+**Given** publication is requested **When** only planning or preparation approval exists **Then** Downstroke refuses to publish, push, create tags or create a GitHub release.
+
+### Story 10.3: Prepare the npm Package
 As a maintainer, I want a verified npm tarball, So that the CLI installs cleanly with only required runtime files.
 
 **Acceptance Criteria:**
@@ -1194,22 +1206,26 @@ As a maintainer, I want a verified npm tarball, So that the CLI installs cleanly
 **Given** package contents **When** scanned **Then** secrets, planning output, source archives and maintenance-only files are absent.
 **Given** package, CLI help and generated templates **When** release scanning runs **Then** external construction-tool names, installers, dependencies and active instructions are absent.
 
-### Story 10.3: Publish and Verify the npm Release
+### Story 10.4: Publish and Verify the npm Release
 As a maintainer, I want an authenticated npm release, So that users can install the approved version.
 
 **Acceptance Criteria:**
 **Given** release readiness **When** publication is proposed **Then** `npm whoami` must equal `charquiavelo` and version, tag, provenance and tarball are shown.
 **Given** explicit high-risk approval **When** publish runs **Then** the package is released once and credentials or recovery keys are never read.
 **Given** publication **When** verification runs **Then** a clean install resolves the published version and executes the smoke checks.
+**Given** an eligible existing package **When** CI submits the release **Then** trusted staged publishing uses short-lived OIDC credentials, provenance-capable hosted infrastructure and a maintainer 2FA approval before public availability.
+**Given** a first package release **When** staged publishing is unavailable **Then** a separate bootstrap path requires fresh high-risk approval and records why the staged path could not be used.
+**Given** concurrent or repeated release attempts **When** version or tag state already exists **Then** the duplicate attempt blocks or reports the verified existing result without publishing twice.
+**Given** a failed or defective publication **When** recovery is planned **Then** Downstroke never automatically unpublishes or reuses a version; it proposes deprecation, dist-tag correction or a new patch with fresh high-risk approval.
 
-### Story 10.4: Preserve the Private Maintenance Repository
+### Story 10.5: Preserve the Private Maintenance Repository
 As a maintainer, I want full history preserved privately, So that public sanitization never destroys development evidence.
 
 **Acceptance Criteria:**
 **Given** a private remote **When** backup is proposed **Then** target, branches, tags and commit tip are previewed and push requires confirmation.
 **Given** completion **When** verified **Then** the expected full-history tip is readable from the private remote before sanitization can continue.
 
-### Story 10.5: Cut a Sanitized Single-Commit Public Release
+### Story 10.6: Cut a Sanitized Single-Commit Public Release
 As a maintainer, I want a clean public repository, So that users see the framework rather than internal construction history.
 
 **Acceptance Criteria:**
@@ -1217,7 +1233,7 @@ As a maintainer, I want a clean public repository, So that users see the framewo
 **Given** the release tree **When** validated **Then** final `.gitignore`, secret scan, package smoke checks, build and README pass.
 **Given** a one-commit branch **When** history replacement is proposed **Then** the exact remote and destructive effect are shown and explicit confirmation is required before force-push.
 
-### Story 10.6: Launch the React Documentation and Showcase Site
+### Story 10.7: Launch the React Documentation and Showcase Site
 As a prospective user, I want accurate searchable documentation and examples, So that I can evaluate and adopt Downstroke.
 
 **Acceptance Criteria:**
@@ -1226,7 +1242,7 @@ As a prospective user, I want accurate searchable documentation and examples, So
 **Given** planned capabilities **When** displayed **Then** they are not represented as available or interactive.
 **Given** public documentation **When** scanned **Then** it describes only Downstroke-owned capabilities and contains no maintenance-tool branding or setup instructions.
 
-### Story 10.7: Calibrate Token Estimates Against Observed Usage
+### Story 10.8: Calibrate Token Estimates Against Observed Usage
 As a developer, I want estimates compared with observed provider usage and the currently available token budget, So that I can judge whether planned work fits before execution.
 
 **Acceptance Criteria:**

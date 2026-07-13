@@ -252,9 +252,9 @@ FR72: Before a documentation site exists, the repository README explains install
 
 FR73: Once the framework passes its functional and release gates, Downstroke can be packed and distributed as an npm package with a working CLI binary and only required runtime files.
 
-FR74: Package readiness validates metadata, license, exports, Node compatibility, tarball contents, clean-install behavior and package provenance before publication.
+FR74: Package readiness starts from a deterministic Downstroke release plan derived from Conventional Commits and the last valid release tag. The plan declares the next SemVer version, channel, tag, release notes, changelog changes, package/version consistency, required checks and publication authorization before metadata, license, exports, Node compatibility, tarball contents, clean-install behavior and package provenance are validated.
 
-FR75: npm publication is an explicit high-risk operation requiring authenticated maintainer confirmation, version selection and post-publish installation verification.
+FR75: npm publication is an explicit high-risk operation requiring a verified Downstroke release plan, authenticated maintainer confirmation, immutable version and tag collision checks, provenance-capable CI and post-publish installation verification. Eligible existing packages use trusted staged publishing and 2FA approval; first publication uses a separately approved bootstrap path.
 
 FR76: After README and npm distribution are ready, Downstroke can provide a React documentation and showcase site containing only working, verifiable framework capabilities.
 
@@ -372,7 +372,7 @@ NFR38: Stack recommendations are based on product capabilities, team constraints
 
 NFR39: npm package contents exclude source archives, secrets, local state, test fixtures and unrelated documentation unless explicitly required at runtime.
 
-NFR40: Release artifacts are reproducible from a tagged commit and the published package version matches repository metadata and changelog state.
+NFR40: Release analysis is deterministic and idempotent for the same Git tip and prior tag. Artifacts are reproducible from the tagged commit; package metadata, lockfile, changelog, release notes, Git tag, GitHub release, npm version and dist-tag cannot disagree. Concurrent or repeated execution blocks or safely reports the existing release.
 
 NFR41: The documentation site is accessible, responsive, internationalizable and never presents unfinished capabilities as available.
 

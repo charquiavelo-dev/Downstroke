@@ -2,7 +2,7 @@
 import { mkdir, readFile, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyNativeReleasePreparation, applyNativeWorkerRegistration, applyTokenEconomyRoute, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, legacyCleanupSources, listNativeWorkers, nativeReleaseChannels, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planNativeRelease, planNativeWorkerRegistration, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readNativeReleasePlan, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, verifyNativeRelease, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type NativeReleaseChannel, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -24,14 +24,7 @@ type CleanupPlan = {
   blockers: string[];
 };
 
-const cleanupSources = [
-  { source: "_bmad", reason: "legacy workflow source" },
-  { source: "_bmad-output", reason: "legacy workflow output" },
-  { source: ".codegraph", reason: "legacy code-intelligence source" },
-  { source: ".agents/skills/caveman", reason: "legacy communication skill" },
-  { source: ".agents/skills/ponytail", reason: "legacy simplicity skill" },
-  { source: "docs/stories", reason: "non-native Markdown workflow state" },
-] as const;
+const cleanupSources = legacyCleanupSources;
 
 async function readHealthWorkflowItems(cwd: string): Promise<{ items: HealthWorkflowItem[]; blockers: string[] }> {
   try {
@@ -189,6 +182,12 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       ambiguity: { type: "string" },
       "tool-proven": { type: "boolean", default: false },
       verification: { type: "string" },
+      channel: { type: "string" },
+      package: { type: "string", multiple: true },
+      plan: { type: "string" },
+      manifest: { type: "string" },
+      justification: { type: "string" },
+      "single-path": { type: "boolean", default: false },
     },
     strict: true,
     allowPositionals: true,
@@ -212,6 +211,8 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "  downstroke simplicity --proposal \"reuse existing helper\" --json",
       "  downstroke code index --yes",
       "  downstroke route --task-id task.1 --task-class contextual --mode balanced",
+      "  downstroke release plan --channel stable --package apps/cli --json",
+      "  downstroke worker list --json",
       "  downstroke knowledge compile --task-id task.1 --path src/index.ts --json",
       "  downstroke stack detect --json",
       "  downstroke experience init",
@@ -311,6 +312,102 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     await applyCleanup(cwd, plan.archiveTargets);
     if (!values.json) console.log("OK Cleanup archived legacy sources");
     return 0;
+  }
+
+  if (command === "release") {
+    const action = positionals[0];
+    if (!action || !["plan", "prepare", "verify"].includes(action)) {
+      console.error("release action must be plan, prepare or verify; publication and Git mutation require a later high-risk workflow");
+      return 1;
+    }
+    if (action === "verify") {
+      if (!values.plan) {
+        console.error("--plan must identify the prepared release plan");
+        return 1;
+      }
+      const saved = await readNativeReleasePlan(cwd, values.plan);
+      if (!saved) {
+        console.error("Release plan was not found or failed integrity validation");
+        return 1;
+      }
+      const result = await verifyNativeRelease(cwd, saved);
+      if (values.json) console.log(JSON.stringify(result, null, 2));
+      else console.log(`${result.status.toUpperCase()} ${result.message}${result.remediation ? ` next=${result.remediation}` : ""}`);
+      return result.status === "ok" ? 0 : 1;
+    }
+    const channel = values.channel;
+    if (!channel || !nativeReleaseChannels.includes(channel as NativeReleaseChannel)) {
+      console.error("--channel must be stable, beta or rc");
+      return 1;
+    }
+    const plan = await planNativeRelease(cwd, { channel: channel as NativeReleaseChannel, packages: values.package ?? [] });
+    if (action === "plan" || !values.yes || plan.status === "blocked") {
+      if (values.json) console.log(JSON.stringify(plan, null, 2));
+      else {
+        console.log(`RELEASE ${plan.status} bump=${plan.bump} version=${plan.nextVersion ?? "none"} channel=${plan.request.channel}`);
+        console.log(`BASE ${plan.baselineTag ?? "missing"} head=${plan.head ?? "missing"} branch=${plan.branch ?? "detached"}`);
+        console.log(`TARGETS ${plan.packages.map((item) => `${item.name}@${item.currentVersion}`).join(", ") || "none"}`);
+        console.log(`OUTPUT tag=${plan.gitTag ?? "none"} dist-tag=${plan.distTag} plan=${plan.planHash ?? "blocked"}`);
+        console.log(`NOTES breaking=${plan.notes.breaking.length} features=${plan.notes.features.length} fixes=${plan.notes.fixes.length}`);
+        console.log(`CHECKS ${plan.checks.join(", ")}`);
+        console.log(`APPROVALS ${plan.requiredApprovals.join(", ")}`);
+        for (const risk of plan.risks) console.log(`RISK ${risk}`);
+        console.log(`ROLLBACK ${plan.rollback}`);
+        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+        if (action === "prepare" && plan.status === "ready") console.log(`NEXT downstroke release prepare --channel ${plan.request.channel} --package ${plan.request.packages.join(" --package ")} --plan ${plan.planHash} --yes`);
+      }
+      return plan.status === "blocked" ? 1 : 0;
+    }
+    if (!values.plan || values.plan !== plan.planHash) {
+      console.error("--plan must match the current release plan hash");
+      return 1;
+    }
+    const result = await applyNativeReleasePreparation(cwd, plan, values.plan);
+    if (values.json) console.log(JSON.stringify(result, null, 2));
+    else console.log(`${result.status.toUpperCase()} ${result.message}${result.remediation ? ` next=${result.remediation}` : ""}`);
+    return result.status === "ok" ? 0 : 1;
+  }
+
+  if (command === "worker") {
+    const action = positionals[0];
+    if (action === "list") {
+      const workers = await listNativeWorkers(cwd);
+      if (values.json) console.log(JSON.stringify(workers, null, 2));
+      else for (const worker of workers) console.log(`WORKER ${worker.id} role=${worker.role} tools=${worker.allowedTools.join(",")} mutations=${worker.mutationRights.length}`);
+      return 0;
+    }
+    if (action !== "register" || !values.manifest || !values["task-id"] || !values["task-class"] || !values.justification) {
+      console.error("Usage: downstroke worker <list|register> --manifest <json> --task-id <id> --task-class <class> --justification <text> [--plan <hash>] [--yes] [--json]");
+      return 1;
+    }
+    if (!tokenTaskClasses.includes(values["task-class"] as TokenTaskClass)) {
+      console.error("--task-class must be deterministic, contextual or creative");
+      return 1;
+    }
+    let manifest: unknown;
+    try { manifest = JSON.parse(values.manifest) as unknown; }
+    catch { console.error("--manifest must be valid JSON"); return 1; }
+    const plan = await planNativeWorkerRegistration(cwd, {
+      manifest,
+      task: { id: values["task-id"], taskClass: values["task-class"] as TokenTaskClass, toolProven: values["tool-proven"], singlePathSufficient: values["single-path"], justification: values.justification },
+    });
+    if (!values.yes || plan.status === "blocked") {
+      if (values.json) console.log(JSON.stringify(plan, null, 2));
+      else {
+        console.log(`WORKER REGISTRATION ${plan.status} mode=${plan.mode} action=${plan.action} plan=${plan.planHash ?? "blocked"}`);
+        for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+        console.log(`NEXT ${plan.nextAction}`);
+      }
+      return plan.status === "ready" ? 0 : 1;
+    }
+    if (!values.plan || values.plan !== plan.planHash) {
+      console.error("--plan must match the current worker registration plan hash");
+      return 1;
+    }
+    const result = await applyNativeWorkerRegistration(cwd, plan, values.plan);
+    if (values.json) console.log(JSON.stringify({ plan, result }, null, 2));
+    else console.log(`${result.status.toUpperCase()} ${result.message}${result.remediation ? ` next=${result.remediation}` : ""}`);
+    return result.status === "ok" ? 0 : 1;
   }
 
   if (command === "setup-agents") {
@@ -829,7 +926,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|health|cleanup|setup-agents|cadence|communication|simplicity|code|stack|govern|estimate|status|git-policy|experience|workflow> [options]");
+  console.error("Usage: downstroke <init|doctor|health|cleanup|setup-agents|cadence|communication|simplicity|code|stack|govern|estimate|status|git-policy|release|worker|experience|workflow> [options]");
   return 1;
 }
 

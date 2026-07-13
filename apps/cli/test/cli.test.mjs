@@ -2,14 +2,32 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
+import { nativeOnlySurfaces } from "@downstroke/core";
 import { run } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 process.env.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
+
+function workerManifest() {
+  return {
+    schemaVersion: 1,
+    id: "local.change-auditor",
+    role: "Risk Auditor",
+    purpose: "Audit a bounded contextual change without executing tools.",
+    inputSchema: { type: "object", properties: { taskId: "string", context: "object" }, required: ["taskId", "context"], additionalProperties: false },
+    outputSchema: { type: "object", properties: { summary: "string", claims: "array" }, required: ["summary", "claims"], additionalProperties: false },
+    allowedTools: ["simplicity.audit"],
+    mutationRights: [],
+    budget: { maxSteps: 8, maxTokens: 20000 },
+    stopCondition: { type: "complete-or-blocked", maxFailures: 1 },
+    evidenceRequirements: ["source-reference", "finding-severity"],
+    auditRequirements: ["plan-hash", "input-hash", "claim-status"],
+  };
+}
 
 test("lite init creates its canonical documents", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
@@ -303,6 +321,80 @@ test("git-policy human output shows the policy and each permission", async () =>
   assert.match(output.join("\n"), /PERMISSION branch/);
   assert.match(output.join("\n"), /PERMISSION commit enabled=true/);
   assert.match(output.join("\n"), /PERMISSION push/);
+});
+
+test("release commands plan, prepare and verify locally without Git or registry mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-release-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await exec("git", ["config", "user.name", "Downstroke Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  for (const surface of nativeOnlySurfaces) {
+    await mkdir(dirname(join(root, surface)), { recursive: true });
+    await writeFile(join(root, surface), "Downstroke native surface\n");
+  }
+  await mkdir(join(root, "packages", "tool"), { recursive: true });
+  await writeFile(join(root, "package.json"), `${JSON.stringify({ name: "fixture-root", version: "0.1.0", private: true, workspaces: ["packages/tool"], scripts: { typecheck: "node -e \"process.exit(0)\"", test: "node -e \"process.exit(0)\"", build: "node -e \"process.exit(0)\"" } }, null, 2)}\n`);
+  await writeFile(join(root, "packages", "tool", "package.json"), `${JSON.stringify({ name: "@fixture/tool", version: "0.1.0", files: ["index.js"], bin: { fixture: "index.js" } }, null, 2)}\n`);
+  await writeFile(join(root, "packages", "tool", "index.js"), "#!/usr/bin/env node\nconsole.log('fixture ok');\n");
+  await writeFile(join(root, "package-lock.json"), `${JSON.stringify({ name: "fixture-root", version: "0.1.0", lockfileVersion: 3, packages: { "": { name: "fixture-root", version: "0.1.0", workspaces: ["packages/tool"] }, "packages/tool": { name: "@fixture/tool", version: "0.1.0", bin: { fixture: "index.js" } } } }, null, 2)}\n`);
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: initialize package"], { cwd: root });
+  await exec("git", ["tag", "v0.1.0"], { cwd: root });
+  await writeFile(join(root, "fix.txt"), "fix\n");
+  await exec("git", ["add", "fix.txt"], { cwd: root });
+  await exec("git", ["commit", "-m", "fix: improve package"], { cwd: root });
+
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["release", "plan", "--channel", "stable", "--package", "packages/tool", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const plan = JSON.parse(output.join("\n"));
+  assert.equal(plan.nextVersion, "0.1.1");
+  output.length = 0;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["release", "plan", "--channel", "stable", "--package", "packages/tool"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.match(output.join("\n"), /TARGETS @fixture\/tool@0\.1\.0/);
+  assert.match(output.join("\n"), /CHECKS typecheck, test, build, package-contents, clean-install, native-only/);
+  assert.match(output.join("\n"), /ROLLBACK /);
+  assert.equal(await run(["release", "prepare", "--channel", "stable", "--package", "packages/tool", "--plan", plan.planHash, "--yes"], root), 0);
+  assert.equal(await run(["release", "verify", "--plan", plan.planHash], root), 0);
+  assert.equal(await run(["release", "publish", "--channel", "stable", "--package", "packages/tool", "--yes"], root), 1);
+  assert.equal((await exec("git", ["tag", "--list", "v0.1.1"], { cwd: root })).stdout.trim(), "");
+});
+
+test("worker commands list, preview and idempotently register inert local manifests", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-worker-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await exec("git", ["config", "user.name", "Downstroke Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: initialize fixture"], { cwd: root });
+  const manifest = JSON.stringify(workerManifest());
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["worker", "list", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.equal(JSON.parse(output.join("\n")).length, 7);
+
+  output.length = 0;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["worker", "register", "--manifest", manifest, "--task-id", "task.audit", "--task-class", "contextual", "--justification", "Independent bounded risk review is required.", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const plan = JSON.parse(output.join("\n"));
+  assert.equal(plan.status, "ready");
+  await assert.rejects(readFile(join(root, ".downstroke", "workers", "registry.jsonl")));
+  assert.equal(await run(["worker", "register", "--manifest", manifest, "--task-id", "task.audit", "--task-class", "contextual", "--justification", "Independent bounded risk review is required.", "--plan", plan.planHash, "--yes"], root), 0);
+  assert.equal(await run(["worker", "register", "--manifest", manifest, "--task-id", "task.audit", "--task-class", "contextual", "--justification", "Independent bounded risk review is required.", "--plan", plan.planHash, "--yes"], root), 0);
+  assert.equal((await readFile(join(root, ".downstroke", "workers", "registry.jsonl"), "utf8")).trim().split(/\r?\n/).length, 1);
+  assert.equal(await run(["worker", "register", "--manifest", manifest, "--task-id", "task.simple", "--task-class", "deterministic", "--tool-proven", "--single-path", "--justification", "A function proves the result.", "--json"], root), 1);
 });
 
 test("experience init and authorized fact writes stay repository-local and secret-free", async () => {

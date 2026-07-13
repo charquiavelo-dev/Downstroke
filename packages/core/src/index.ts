@@ -1,8 +1,9 @@
-import { access, appendFile, chmod, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { access, appendFile, chmod, copyFile, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
 
 export type FileOperation = {
   source: string;
@@ -92,6 +93,38 @@ export type TokenRoutePlan = {
   blockers: string[];
 };
 
+export const nativeReleaseChannels = ["stable", "beta", "rc"] as const;
+export type NativeReleaseChannel = typeof nativeReleaseChannels[number];
+export type NativeReleaseBump = "none" | "patch" | "minor" | "major";
+export type NativeReleaseRequest = { channel: NativeReleaseChannel; packages: string[] };
+export type NativeReleaseCommit = { sha: string; subject: string; type: string; breaking: boolean };
+export type NativeReleasePackage = { path: string; name: string; currentVersion: string; manifestHash: string };
+export type NativeReleasePlan = {
+  schemaVersion: 1;
+  policyVersion: 1;
+  status: "ready" | "blocked";
+  request: NativeReleaseRequest;
+  branch: string | null;
+  head: string | null;
+  baselineTag: string | null;
+  baselineSha: string | null;
+  baselineVersion: string | null;
+  bump: NativeReleaseBump;
+  nextVersion: string | null;
+  gitTag: string | null;
+  distTag: "latest" | "beta" | "rc";
+  commits: NativeReleaseCommit[];
+  notes: { breaking: string[]; features: string[]; fixes: string[] };
+  changelog: string;
+  packages: NativeReleasePackage[];
+  checks: string[];
+  risks: string[];
+  rollback: string;
+  requiredApprovals: string[];
+  planHash: string | null;
+  blockers: string[];
+};
+
 export type KnowledgeRecord = {
   id: string;
   kind: "rule" | "decision" | "preference" | "stack-note";
@@ -127,6 +160,54 @@ export type CompiledTaskContext = {
   excluded: ContextExclusion[];
   blockers: string[];
   stableHash: string;
+};
+
+export const nativeWorkerRoles = ["Planner", "Repository Inspector", "Risk Auditor", "Evidence Validator", "Workflow Guardian", "Context Compiler", "Release Guardian"] as const;
+export type NativeWorkerRole = typeof nativeWorkerRoles[number];
+export const nativeWorkerToolIds = ["workflow.read", "repository.inspect", "simplicity.audit", "evidence.validate", "context.compile", "release.plan"] as const;
+export type NativeWorkerToolId = typeof nativeWorkerToolIds[number];
+export type NativeWorkerValueType = "string" | "number" | "boolean" | "array" | "object";
+export type NativeWorkerObjectSchema = {
+  type: "object";
+  properties: Readonly<Record<string, NativeWorkerValueType>>;
+  required: readonly string[];
+  additionalProperties: false;
+};
+export type NativeWorkerManifest = {
+  schemaVersion: 1;
+  id: string;
+  role: NativeWorkerRole;
+  purpose: string;
+  inputSchema: NativeWorkerObjectSchema;
+  outputSchema: NativeWorkerObjectSchema;
+  allowedTools: readonly NativeWorkerToolId[];
+  mutationRights: readonly string[];
+  budget: { maxSteps: number; maxTokens: number };
+  stopCondition: { type: "complete-or-blocked"; maxFailures: number };
+  evidenceRequirements: readonly string[];
+  auditRequirements: readonly string[];
+};
+export type NativeWorkerClaim = { id: string; status: "observed" | "inferred"; statement: string; evidenceRefs: string[] };
+export type NativeWorkerTask = {
+  id: string;
+  taskClass: TokenTaskClass;
+  toolProven: boolean;
+  singlePathSufficient: boolean;
+  justification: string;
+};
+export type NativeWorkerRegistrationRequest = { manifest: unknown; task: NativeWorkerTask };
+export type NativeWorkerRegistrationPlan = {
+  schemaVersion: 1;
+  status: "ready" | "blocked";
+  mode: "deterministic" | "worker";
+  action: "append" | "skip";
+  task: NativeWorkerTask;
+  manifest: NativeWorkerManifest | null;
+  manifestHash: string | null;
+  responsibilities: typeof nativeRuntimeResponsibilities;
+  blockers: string[];
+  nextAction: string;
+  planHash: string | null;
 };
 
 export type GitPermission = {
@@ -752,6 +833,699 @@ async function gitRoot(root: string): Promise<string> {
   const result = await runGit(root, ["rev-parse", "--show-toplevel"]);
   if (result.code !== 0 || !result.stdout) throw new Error(result.stderr || "Not a Git repository");
   return realpath(result.stdout);
+}
+
+type ParsedVersion = { major: number; minor: number; patch: number; channel?: "beta" | "rc"; sequence?: number };
+
+function parseNativeVersion(value: string): ParsedVersion | undefined {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(beta|rc)\.(0|[1-9]\d*))?$/.exec(value);
+  if (!match) return undefined;
+  const numbers = [match[1], match[2], match[3], match[5]].filter((item): item is string => item !== undefined).map(Number);
+  if (numbers.some((item) => !Number.isSafeInteger(item))) return undefined;
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]), ...(match[4] ? { channel: match[4] as "beta" | "rc", sequence: Number(match[5]) } : {}) };
+}
+
+function compareNativeVersions(left: ParsedVersion, right: ParsedVersion): number {
+  for (const key of ["major", "minor", "patch"] as const) if (left[key] !== right[key]) return left[key] - right[key];
+  if (!left.channel && right.channel) return 1;
+  if (left.channel && !right.channel) return -1;
+  if (left.channel !== right.channel) return (left.channel ?? "").localeCompare(right.channel ?? "");
+  return (left.sequence ?? 0) - (right.sequence ?? 0);
+}
+
+function bumpNativeVersion(version: ParsedVersion, bump: Exclude<NativeReleaseBump, "none">): ParsedVersion {
+  if (bump === "major") return { major: version.major + 1, minor: 0, patch: 0 };
+  if (bump === "minor") return { major: version.major, minor: version.minor + 1, patch: 0 };
+  return { major: version.major, minor: version.minor, patch: version.patch + 1 };
+}
+
+function nativeVersionText(version: ParsedVersion): string {
+  return `${version.major}.${version.minor}.${version.patch}${version.channel ? `-${version.channel}.${version.sequence}` : ""}`;
+}
+
+function nativeReleaseHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(normalizeJson(value))).digest("hex");
+}
+
+function nativeReleasePlanHash(plan: NativeReleasePlan): string {
+  const { planHash: _planHash, blockers: _blockers, status: _status, ...stable } = plan;
+  return nativeReleaseHash(stable);
+}
+
+async function readJsonObject(path: string): Promise<Record<string, unknown>> {
+  const value = JSON.parse(await readFile(path, "utf8")) as unknown;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${basename(path)} must contain a JSON object`);
+  return value as Record<string, unknown>;
+}
+
+function safeReleasePath(path: string): boolean {
+  return path.length > 0 && !isAbsolute(path) && !path.split(/[\\/]/).includes("..") && !path.includes("\0");
+}
+
+function branchAllowsChannel(branch: string, channel: NativeReleaseChannel): boolean {
+  return channel === "stable" ? branch === "main" : channel === "beta" ? branch === "develop" : branch.startsWith("release/") && branch.length > 8;
+}
+
+function parseReleaseCommit(sha: string, message: string): NativeReleaseCommit | undefined {
+  const [subject = "", ...body] = message.replace(/\r\n/g, "\n").split("\n");
+  const match = /^([A-Za-z][A-Za-z0-9-]*)(?:\([^)\r\n]+\))?(!)?: .+$/.exec(subject);
+  if (!match) return undefined;
+  const breaking = Boolean(match[2]) || body.some((line) => /^BREAKING(?: CHANGE|-CHANGE):\s+\S/.test(line));
+  return { sha, subject, type: match[1]!.toLowerCase(), breaking };
+}
+
+export async function planNativeRelease(root: string, input: NativeReleaseRequest): Promise<NativeReleasePlan> {
+  const blockers: string[] = [];
+  const request: NativeReleaseRequest = { channel: input.channel, packages: [...new Set(input.packages)].sort() };
+  if (!nativeReleaseChannels.includes(input.channel)) blockers.push("channel must be stable, beta or rc");
+  if (!request.packages.length) blockers.push("At least one explicit release package is required");
+  if (request.packages.some((path) => !safeReleasePath(path))) blockers.push("Release package paths must be safe repository-relative paths");
+  let resolved = root;
+  let branch: string | null = null;
+  let head: string | null = null;
+  let baselineTag: string | null = null;
+  let baselineSha: string | null = null;
+  let baselineVersion: string | null = null;
+  const packages: NativeReleasePackage[] = [];
+  const commits: NativeReleaseCommit[] = [];
+  try {
+    resolved = await gitRoot(root);
+    const branchResult = await runGit(resolved, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    const headResult = await runGit(resolved, ["rev-parse", "HEAD"]);
+    if (branchResult.code !== 0) blockers.push("Detached or unborn HEAD cannot plan a release");
+    else {
+      branch = branchResult.stdout;
+      if (!branchAllowsChannel(branch, input.channel)) blockers.push(`Branch ${branch} is not authorized for channel ${input.channel}`);
+    }
+    if (headResult.code !== 0) blockers.push("Repository has no release HEAD");
+    else head = headResult.stdout;
+
+    const tagResult = await runGit(resolved, ["tag", "--merged", "HEAD", "--list", "v*"]);
+    if (tagResult.code !== 0) blockers.push(`Release tags cannot be inspected: ${tagResult.stderr || tagResult.code}`);
+    const parsedTags = tagResult.stdout.split(/\r?\n/).filter(Boolean).map((tag) => ({ tag, version: parseNativeVersion(tag.slice(1)) })).filter((item): item is { tag: string; version: ParsedVersion } => Boolean(item.version));
+    parsedTags.sort((left, right) => compareNativeVersions(right.version, left.version) || left.tag.localeCompare(right.tag));
+    if (!parsedTags.length) blockers.push("No unique reachable canonical release baseline tag exists");
+    else {
+      const top = parsedTags[0]!;
+      if (parsedTags[1] && compareNativeVersions(top.version, parsedTags[1].version) === 0) blockers.push("Multiple baseline tags represent the same release version");
+      else {
+        baselineTag = top.tag;
+        baselineVersion = nativeVersionText(top.version);
+        const sha = await runGit(resolved, ["rev-list", "-n", "1", baselineTag]);
+        if (sha.code !== 0 || !sha.stdout) blockers.push("Baseline tag cannot be resolved");
+        else baselineSha = sha.stdout;
+      }
+    }
+
+    const owned = [...request.packages.map((path) => `${path}/package.json`), "package-lock.json", "CHANGELOG.md", ".downstroke/releases"];
+    const dirty = await runGit(resolved, ["status", "--porcelain", "--", ...owned]);
+    if (dirty.code !== 0) blockers.push("Release-owned file state cannot be inspected");
+    else if (dirty.stdout) blockers.push(`Release-owned files are dirty: ${dirty.stdout.split(/\r?\n/).map((line) => line.slice(3)).join(", ")}`);
+
+    let packageVersion: string | null = null;
+    const selectedManifests = new Map<string, Record<string, unknown>>();
+    for (const path of request.packages) {
+      try {
+        const manifestPath = join(resolved, ...path.split("/"), "package.json");
+        const content = await readFile(manifestPath, "utf8");
+        const manifest = JSON.parse(content) as unknown;
+        if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) throw new Error("manifest must be an object");
+        const item = manifest as Record<string, unknown>;
+        if (typeof item.name !== "string" || typeof item.version !== "string" || item.private === true || !parseNativeVersion(item.version)) throw new Error("manifest name/version/private state is invalid");
+        if (packageVersion !== null && packageVersion !== item.version) blockers.push("Release packages must use one fixed version");
+        packageVersion = item.version;
+        selectedManifests.set(path, item);
+        packages.push({ path, name: item.name, currentVersion: item.version, manifestHash: nativeReleaseHash(content) });
+      } catch (error: unknown) {
+        blockers.push(`${path}/package.json is invalid: ${error instanceof Error ? error.message : "read failed"}`);
+      }
+    }
+    try {
+      const rootManifest = await readJsonObject(join(resolved, "package.json"));
+      if (rootManifest.private !== true || !Array.isArray(rootManifest.workspaces) || !rootManifest.workspaces.every((path) => typeof path === "string" && safeReleasePath(path) && !/[?*]/.test(path))) {
+        blockers.push("The private root must declare explicit workspace paths");
+      } else {
+        const workspaceNames = new Map<string, string>();
+        for (const path of rootManifest.workspaces as string[]) {
+          const workspace = await readJsonObject(join(resolved, ...path.split("/"), "package.json"));
+          if (typeof workspace.name !== "string") blockers.push(`${path}/package.json has no package name`);
+          else workspaceNames.set(workspace.name, path);
+        }
+        const selectedNames = new Set(packages.map((item) => item.name));
+        for (const [path, manifest] of selectedManifests) for (const key of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+          if (typeof manifest[key] !== "object" || manifest[key] === null || Array.isArray(manifest[key])) continue;
+          for (const [name, specifier] of Object.entries(manifest[key] as Record<string, unknown>)) {
+            if (!workspaceNames.has(name)) continue;
+            if (!selectedNames.has(name)) blockers.push(`${path} depends on undeclared workspace package ${name}`);
+            else if (specifier !== packageVersion) blockers.push(`${path} must use the exact internal version for ${name}`);
+          }
+        }
+      }
+    } catch (error: unknown) {
+      blockers.push(error instanceof Error ? `Workspace topology is invalid: ${error.message}` : "Workspace topology is invalid");
+    }
+    for (const alternative of ["npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"]) {
+      try {
+        await stat(join(resolved, alternative));
+        blockers.push(`Multiple package-manager state is unsupported: ${alternative}`);
+      } catch (error: unknown) {
+        const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "READ_ERROR";
+        if (code !== "ENOENT") blockers.push(`${alternative} cannot be inspected`);
+      }
+    }
+    try {
+      const lock = await readJsonObject(join(resolved, "package-lock.json"));
+      if (lock.lockfileVersion !== 3 || typeof lock.packages !== "object" || lock.packages === null) blockers.push("package-lock.json must use supported lockfileVersion 3");
+      else for (const item of packages) if (!Object.hasOwn(lock.packages as object, item.path)) blockers.push(`package-lock.json is missing ${item.path}`);
+    } catch (error: unknown) {
+      blockers.push(error instanceof Error ? error.message : "package-lock.json is invalid");
+    }
+    if (baselineVersion && packageVersion && baselineVersion !== packageVersion) blockers.push(`Package version ${packageVersion} does not match baseline ${baselineVersion}`);
+
+    if (baselineTag) {
+      const log = await runGit(resolved, ["log", "--no-merges", "--format=%H%x00%B%x00%x1e", `${baselineTag}..HEAD`]);
+      if (log.code !== 0) blockers.push(`Release commits cannot be read: ${log.stderr || log.code}`);
+      else for (const record of log.stdout.split("\x1e").map((item) => item.trim()).filter(Boolean)) {
+        const [sha = "", message = ""] = record.split("\0");
+        const parsed = parseReleaseCommit(sha, message);
+        if (!parsed) blockers.push(`Commit ${sha.slice(0, 12) || "unknown"} is not a valid Conventional Commit`);
+        else commits.push(parsed);
+      }
+    }
+  } catch (error: unknown) {
+    blockers.push(error instanceof Error ? error.message : "Release repository cannot be inspected");
+  }
+
+  const rank: Record<NativeReleaseBump, number> = { none: 0, patch: 1, minor: 2, major: 3 };
+  let bump: NativeReleaseBump = "none";
+  for (const commit of commits) {
+    const candidate: NativeReleaseBump = commit.breaking ? "major" : commit.type === "feat" ? "minor" : commit.type === "fix" ? "patch" : "none";
+    if (rank[candidate] > rank[bump]) bump = candidate;
+  }
+  let nextVersion: string | null = null;
+  if (baselineVersion && bump !== "none") {
+    const base = bumpNativeVersion(parseNativeVersion(baselineVersion)!, bump);
+    if (input.channel !== "stable") {
+      const prefix = `${base.major}.${base.minor}.${base.patch}-${input.channel}.`;
+      let sequence = 1;
+      const tags = await runGit(resolved, ["tag", "--merged", "HEAD", "--list", `v${prefix}*`]);
+      for (const tag of tags.stdout.split(/\r?\n/)) {
+        const parsed = parseNativeVersion(tag.slice(1));
+        if (parsed?.channel === input.channel) sequence = Math.max(sequence, (parsed.sequence ?? 0) + 1);
+      }
+      base.channel = input.channel;
+      base.sequence = sequence;
+    }
+    nextVersion = nativeVersionText(base);
+    const collision = await runGit(resolved, ["show-ref", "--verify", "--quiet", `refs/tags/v${nextVersion}`]);
+    if (collision.code === 0) blockers.push(`Release tag v${nextVersion} already exists`);
+    else if (collision.code !== 1) blockers.push("Next release tag collision cannot be inspected");
+  }
+  const notes = {
+    breaking: commits.filter((item) => item.breaking).map((item) => item.subject),
+    features: commits.filter((item) => item.type === "feat").map((item) => item.subject),
+    fixes: commits.filter((item) => item.type === "fix").map((item) => item.subject),
+  };
+  const changelog = nextVersion ? [`## ${nextVersion}`, ...notes.breaking.map((item) => `- BREAKING: ${item}`), ...notes.features.map((item) => `- ${item}`), ...notes.fixes.map((item) => `- ${item}`), ""].join("\n") : "";
+  const plan: NativeReleasePlan = {
+    schemaVersion: 1, policyVersion: 1, status: blockers.length ? "blocked" : "ready", request, branch, head, baselineTag, baselineSha, baselineVersion, bump, nextVersion,
+    gitTag: nextVersion ? `v${nextVersion}` : null, distTag: input.channel === "stable" ? "latest" : input.channel, commits, notes, changelog, packages,
+    checks: ["typecheck", "test", "build", "package-contents", "clean-install", "native-only"],
+    risks: ["publication requires separate high-risk authorization", "published versions are immutable"],
+    rollback: "Before publication, restore prepared files; after publication, create a patch, deprecate or correct the dist-tag with fresh approval.",
+    requiredApprovals: ["prepare-local-files", "publish-separately"], planHash: null, blockers,
+  };
+  if (plan.status === "ready") plan.planHash = nativeReleasePlanHash(plan);
+  return plan;
+}
+
+type ReleaseEvent = { schemaVersion: 1; state: "planned" | "prepared" | "ready" | "failed"; planHash: string; version: string; previousHash: string | null; evidence: string[]; recordHash: string };
+
+async function readReleaseEvents(root: string): Promise<ReleaseEvent[]> {
+  try {
+    return (await readFile(join(root, ".downstroke", "releases", "events.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as ReleaseEvent);
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "READ_ERROR";
+    if (code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+export async function readNativeReleasePlan(root: string, planHash: string): Promise<NativeReleasePlan | null> {
+  if (!/^[a-f0-9]{64}$/.test(planHash)) return null;
+  const resolved = await gitRoot(root);
+  try {
+    const value = JSON.parse(await readFile(join(resolved, ".downstroke", "releases", `${planHash}.json`), "utf8")) as unknown;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+    const plan = value as NativeReleasePlan;
+    return plan.planHash === planHash && nativeReleasePlanHash(plan) === planHash ? plan : null;
+  } catch { return null; }
+}
+
+function releaseEvent(state: ReleaseEvent["state"], plan: NativeReleasePlan, previousHash: string | null, evidence: string[]): ReleaseEvent {
+  const value = { schemaVersion: 1 as const, state, planHash: plan.planHash!, version: plan.nextVersion!, previousHash, evidence };
+  return { ...value, recordHash: nativeReleaseHash(value) };
+}
+
+export async function applyNativeReleasePreparation(root: string, plan: NativeReleasePlan, expectedPlanHash: string): Promise<DoctorResult> {
+  if (plan.status !== "ready" || !plan.planHash || !plan.nextVersion || expectedPlanHash !== plan.planHash || nativeReleasePlanHash(plan) !== plan.planHash) return { id: "release.prepare", status: "fail", message: "Release plan is blocked, malformed or has the wrong hash", remediation: "Run downstroke release plan again" };
+  let resolved: string;
+  try { resolved = await gitRoot(root); } catch { return { id: "release.prepare", status: "fail", message: "Release repository is unavailable", remediation: "Restore the repository and plan again" }; }
+  const existing = await readReleaseEvents(resolved);
+  if (existing.some((item) => item.planHash === plan.planHash && (item.state === "prepared" || item.state === "ready"))) return { id: "release.prepare", status: "ok", message: "Release is already prepared", evidence: plan.planHash };
+  if (existing.some((item) => item.version === plan.nextVersion && item.planHash !== plan.planHash)) return { id: "release.prepare", status: "fail", message: `Release version ${plan.nextVersion} already belongs to another plan`, remediation: "Resolve the release evidence conflict and plan a new version" };
+  const fresh = await planNativeRelease(resolved, plan.request);
+  if (fresh.status !== "ready" || fresh.planHash !== plan.planHash) return { id: "release.prepare", status: "fail", message: "Release plan changed after preview", remediation: "Review a new release plan" };
+  const releaseRoot = join(resolved, ".downstroke", "releases");
+  await mkdir(releaseRoot, { recursive: true });
+  const lockPath = join(releaseRoot, "prepare.lock");
+  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    lock = await open(lockPath, "wx", 0o600);
+    const targetNames = new Set(plan.packages.map((item) => item.name));
+    const rendered = new Map<string, string>();
+    const updateManifest = async (path: string) => {
+      const manifest = await readJsonObject(path);
+      manifest.version = plan.nextVersion;
+      for (const key of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+        if (typeof manifest[key] !== "object" || manifest[key] === null || Array.isArray(manifest[key])) continue;
+        const dependencies = manifest[key] as Record<string, unknown>;
+        for (const name of targetNames) if (Object.hasOwn(dependencies, name)) dependencies[name] = plan.nextVersion;
+      }
+      rendered.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    };
+    for (const item of plan.packages) await updateManifest(join(resolved, ...item.path.split("/"), "package.json"));
+    const rootManifestPath = join(resolved, "package.json");
+    const rootManifest = await readJsonObject(rootManifestPath);
+    if (rootManifest.private === true && rootManifest.version === plan.baselineVersion) await updateManifest(rootManifestPath);
+    const lockFilePath = join(resolved, "package-lock.json");
+    const packageLock = await readJsonObject(lockFilePath);
+    if (packageLock.lockfileVersion !== 3 || typeof packageLock.packages !== "object" || packageLock.packages === null) throw new Error("Unsupported package-lock.json");
+    packageLock.version = plan.nextVersion;
+    for (const [path, value] of Object.entries(packageLock.packages as Record<string, unknown>)) {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+      const entry = value as Record<string, unknown>;
+      if (path === "" || plan.packages.some((item) => item.path === path)) entry.version = plan.nextVersion;
+      for (const key of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+        if (typeof entry[key] !== "object" || entry[key] === null || Array.isArray(entry[key])) continue;
+        for (const name of targetNames) if (Object.hasOwn(entry[key] as object, name)) (entry[key] as Record<string, unknown>)[name] = plan.nextVersion;
+      }
+    }
+    rendered.set(lockFilePath, `${JSON.stringify(packageLock, null, 2)}\n`);
+    const changelogPath = join(resolved, "CHANGELOG.md");
+    let previousChangelog = "# Changelog\n\n";
+    try { previousChangelog = await readFile(changelogPath, "utf8"); } catch { /* first changelog */ }
+    rendered.set(changelogPath, `${previousChangelog.trimEnd()}\n\n${plan.changelog}`);
+    const transactionPath = join(releaseRoot, "transaction.json");
+    await writeFile(transactionPath, `${JSON.stringify({ planHash: plan.planHash, files: [...rendered.keys()].map((path) => relative(resolved, path).replaceAll("\\", "/")) }, null, 2)}\n`, { mode: 0o600 });
+    const backups = new Map<string, string | null>();
+    const temps = new Map<string, string>();
+    try {
+      let index = 0;
+      for (const [path, content] of rendered) {
+        const temp = `${path}.downstroke-${plan.planHash.slice(0, 12)}.tmp`;
+        const backup = join(releaseRoot, `backup-${index++}`);
+        try { await copyFile(path, backup); backups.set(path, backup); } catch { backups.set(path, null); }
+        await writeFile(temp, content, { encoding: "utf8", mode: 0o600 });
+        temps.set(path, temp);
+      }
+      for (const [path, temp] of temps) await rename(temp, path);
+    } catch (error: unknown) {
+      for (const [path, backup] of backups) {
+        if (backup) await copyFile(backup, path);
+        else await unlink(path).catch(() => undefined);
+      }
+      throw error;
+    } finally {
+      for (const temp of temps.values()) await unlink(temp).catch(() => undefined);
+      for (const backup of backups.values()) if (backup) await unlink(backup).catch(() => undefined);
+      await unlink(transactionPath).catch(() => undefined);
+    }
+    const planned = releaseEvent("planned", plan, existing.at(-1)?.recordHash ?? null, [`head=${plan.head}`, `baseline=${plan.baselineTag}`]);
+    const prepared = releaseEvent("prepared", plan, planned.recordHash, [...rendered.keys()].map((path) => relative(resolved, path).replaceAll("\\", "/")));
+    await appendFile(join(releaseRoot, "events.jsonl"), `${JSON.stringify(planned)}\n${JSON.stringify(prepared)}\n`, { encoding: "utf8", mode: 0o600 });
+    await writeFile(join(releaseRoot, `${plan.planHash}.json`), `${JSON.stringify(plan, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    return { id: "release.prepare", status: "ok", message: `Prepared Downstroke release ${plan.nextVersion}`, evidence: plan.planHash };
+  } catch (error: unknown) {
+    return { id: "release.prepare", status: "fail", message: error instanceof Error ? error.message : "Release preparation failed", remediation: "Inspect release transaction evidence and plan again" };
+  } finally {
+    await lock?.close().catch(() => undefined);
+    await unlink(lockPath).catch(() => undefined);
+  }
+}
+
+function runLocalCommand(command: string, args: readonly string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const executable = process.platform === "win32" && command.toLowerCase().endsWith(".cmd") ? process.env.ComSpec ?? "cmd.exe" : command;
+    const commandArgs = executable === command ? [...args] : ["/d", "/s", "/c", command, ...args];
+    const child = spawn(executable, commandArgs, {
+      cwd,
+      env: { ...process.env, npm_config_cache: join(tmpdir(), "downstroke-npm-cache") },
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = ""; let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
+    child.once("error", (error) => resolve({ code: 1, stdout, stderr: error.message }));
+    child.once("exit", (code) => resolve({ code: code ?? 1, stdout: stdout.trim(), stderr: stderr.trim() }));
+  });
+}
+
+export async function verifyNativeRelease(root: string, plan: NativeReleasePlan): Promise<DoctorResult> {
+  if (plan.status !== "ready" || !plan.planHash || !plan.nextVersion) return { id: "release.verify", status: "fail", message: "A ready release plan is required", remediation: "Plan and prepare the release" };
+  const resolved = await gitRoot(root);
+  const events = await readReleaseEvents(resolved);
+  if (events.some((item) => item.planHash === plan.planHash && item.state === "ready")) return { id: "release.verify", status: "ok", message: "Release is already verified", evidence: plan.planHash };
+  if (!events.some((item) => item.planHash === plan.planHash && item.state === "prepared")) return { id: "release.verify", status: "fail", message: "Release has not been prepared", remediation: "Run downstroke release prepare" };
+  const evidence: string[] = [];
+  let failure: string | null = null;
+  try {
+    for (const item of plan.packages) {
+      const manifest = await readJsonObject(join(resolved, ...item.path.split("/"), "package.json"));
+      if (manifest.version !== plan.nextVersion) throw new Error(`${item.path} version does not match the release plan`);
+    }
+    const rootManifest = await readJsonObject(join(resolved, "package.json"));
+    const scripts = typeof rootManifest.scripts === "object" && rootManifest.scripts !== null ? rootManifest.scripts as Record<string, unknown> : {};
+    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    for (const script of ["typecheck", "test", "build"]) if (typeof scripts[script] === "string") {
+      const result = await runLocalCommand(npm, ["run", script], resolved);
+      evidence.push(`${script}:${result.code}`);
+      if (result.code !== 0) throw new Error(`${script} failed: ${result.stderr || result.stdout}`);
+    }
+    const packRoot = await mkdtemp(join(tmpdir(), "downstroke-release-pack-"));
+    const installRoot = await mkdtemp(join(tmpdir(), "downstroke-release-install-"));
+    try {
+      const tarballs: string[] = [];
+      for (const item of plan.packages) {
+        const sourceManifest = await readJsonObject(join(resolved, ...item.path.split("/"), "package.json"));
+        const allowlist = Array.isArray(sourceManifest.files) && sourceManifest.files.every((entry) => typeof entry === "string" && safeReleasePath(entry)) ? sourceManifest.files as string[] : [];
+        if (!allowlist.length) throw new Error(`${item.name} must declare a package files allowlist`);
+        const result = await runLocalCommand(npm, ["pack", join(resolved, ...item.path.split("/")), "--json", "--pack-destination", packRoot, "--ignore-scripts"], resolved);
+        if (result.code !== 0) throw new Error(`npm pack failed for ${item.name}: ${result.stderr || result.stdout}`);
+        const output = JSON.parse(result.stdout) as unknown;
+        if (!Array.isArray(output) || typeof output[0] !== "object" || output[0] === null || typeof (output[0] as Record<string, unknown>).filename !== "string") throw new Error(`npm pack returned invalid evidence for ${item.name}`);
+        const packed = output[0] as Record<string, unknown>;
+        const packedPaths = Array.isArray(packed.files) ? packed.files.map((entry) => typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>).path : undefined) : [];
+        if (!packedPaths.length || packedPaths.some((path) => typeof path !== "string" || !safeReleasePath(path))) throw new Error(`npm pack returned unsafe file evidence for ${item.name}`);
+        const automatic = /^(?:package\.json|readme(?:\.[^/]+)?|licen[cs]e(?:\.[^/]+)?|notice(?:\.[^/]+)?)$/i;
+        const unexpected = (packedPaths as string[]).filter((path) => !automatic.test(path) && !allowlist.some((allowed) => path === allowed || path.startsWith(`${allowed.replace(/\/$/, "")}/`)));
+        if (unexpected.length) throw new Error(`${item.name} packed files outside its allowlist: ${unexpected.join(", ")}`);
+        const tarball = join(packRoot, packed.filename as string);
+        tarballs.push(tarball);
+        evidence.push(`files:${item.name}:${(packedPaths as string[]).sort().join(",")}`);
+        evidence.push(`tarball:${basename(tarball)}:${createHash("sha256").update(await readFile(tarball)).digest("hex")}`);
+      }
+      await writeFile(join(installRoot, "package.json"), `${JSON.stringify({ name: "downstroke-release-verification", private: true }, null, 2)}\n`);
+      const installed = await runLocalCommand(npm, ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs], installRoot);
+      if (installed.code !== 0) throw new Error(`clean install failed: ${installed.stderr || installed.stdout}`);
+      for (const item of plan.packages) {
+        const installedRoot = join(installRoot, "node_modules", ...item.name.split("/"));
+        const installedManifest = await readJsonObject(join(installedRoot, "package.json"));
+        if (installedManifest.version !== plan.nextVersion) throw new Error(`${item.name} clean-install version drifted`);
+        const downstrokeBin = typeof installedManifest.bin === "object" && installedManifest.bin !== null ? (installedManifest.bin as Record<string, unknown>).downstroke : undefined;
+        if (item.name === "downstroke-cli" && typeof downstrokeBin === "string") {
+          const smoke = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "--help"], installRoot);
+          if (smoke.code !== 0) throw new Error(`downstroke CLI smoke failed: ${smoke.stderr || smoke.stdout}`);
+          evidence.push("cli-smoke:passed");
+        }
+      }
+      evidence.push("clean-install:passed");
+    } finally {
+      await rm(packRoot, { recursive: true, force: true });
+      await rm(installRoot, { recursive: true, force: true });
+    }
+    const nativeResults = await scanNativeOnlySurfaces(resolved);
+    if (nativeResults.status === "fail") throw new Error("native-only scan failed");
+    evidence.push("native-only:passed");
+  } catch (error: unknown) {
+    failure = error instanceof Error ? error.message : "Release verification failed";
+    evidence.push(failure);
+  }
+  const previousHash = events.at(-1)?.recordHash ?? null;
+  const event = releaseEvent(failure ? "failed" : "ready", plan, previousHash, evidence);
+  await appendFile(join(resolved, ".downstroke", "releases", "events.jsonl"), `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
+  return failure ? { id: "release.verify", status: "fail", message: failure, remediation: "Fix verification evidence and prepare a new release plan" } : { id: "release.verify", status: "ok", message: `Verified Downstroke release ${plan.nextVersion}`, evidence: plan.planHash };
+}
+
+export const nativeRuntimeResponsibilities = Object.freeze([
+  { stage: "Planner", responsibility: "Select the deterministic or justified worker route and declare required evidence." },
+  { stage: "Scheduler", responsibility: "Order declared dependencies and budgets without invoking work." },
+  { stage: "Executor", responsibility: "Use only the selected contract and scoped capabilities." },
+  { stage: "Verifier", responsibility: "Evaluate checks and evidence independently of worker claims." },
+  { stage: "Recorder", responsibility: "Record verified outcomes, failures and the next safe action." },
+] as const);
+
+const builtInWorkerDefinitions: readonly { id: string; role: NativeWorkerRole; purpose: string; tools: readonly NativeWorkerToolId[]; evidence: readonly string[] }[] = [
+  { id: "downstroke.planner", role: "Planner", purpose: "Select the smallest sufficient route from repository evidence.", tools: ["workflow.read"], evidence: ["routing-decision", "source-reference"] },
+  { id: "downstroke.repository-inspector", role: "Repository Inspector", purpose: "Inspect bounded repository structure without executing project code.", tools: ["repository.inspect"], evidence: ["repository-relative-path", "content-hash"] },
+  { id: "downstroke.risk-auditor", role: "Risk Auditor", purpose: "Audit bounded changes for safety and simplicity risks.", tools: ["simplicity.audit"], evidence: ["finding-severity", "source-reference"] },
+  { id: "downstroke.evidence-validator", role: "Evidence Validator", purpose: "Validate evidence without promoting worker assertions by itself.", tools: ["evidence.validate"], evidence: ["evidence-reference", "validation-result"] },
+  { id: "downstroke.workflow-guardian", role: "Workflow Guardian", purpose: "Inspect workflow checkpoints and decision ownership without approving them.", tools: ["workflow.read"], evidence: ["workflow-item-id", "checkpoint-status"] },
+  { id: "downstroke.context-compiler", role: "Context Compiler", purpose: "Compile bounded task context through the native context capability.", tools: ["context.compile"], evidence: ["context-hash", "exclusion-reason"] },
+  { id: "downstroke.release-guardian", role: "Release Guardian", purpose: "Inspect native release plans and blockers without publishing.", tools: ["release.plan"], evidence: ["release-plan-hash", "release-blocker"] },
+];
+
+function frozenBuiltInWorker(definition: typeof builtInWorkerDefinitions[number]): NativeWorkerManifest {
+  const inputSchema = Object.freeze({ type: "object" as const, properties: Object.freeze({ taskId: "string" as const, context: "object" as const }), required: Object.freeze(["taskId", "context"]), additionalProperties: false as const });
+  const outputSchema = Object.freeze({ type: "object" as const, properties: Object.freeze({ summary: "string" as const, claims: "array" as const }), required: Object.freeze(["summary", "claims"]), additionalProperties: false as const });
+  return Object.freeze({
+    schemaVersion: 1 as const,
+    id: definition.id,
+    role: definition.role,
+    purpose: definition.purpose,
+    inputSchema,
+    outputSchema,
+    allowedTools: Object.freeze([...definition.tools]),
+    mutationRights: Object.freeze([]),
+    budget: Object.freeze({ maxSteps: 8, maxTokens: 20000 }),
+    stopCondition: Object.freeze({ type: "complete-or-blocked" as const, maxFailures: 1 }),
+    evidenceRequirements: Object.freeze([...definition.evidence]),
+    auditRequirements: Object.freeze(["plan-hash", "input-hash", "claim-status"]),
+  });
+}
+
+export const nativeWorkerCatalog: readonly NativeWorkerManifest[] = Object.freeze(builtInWorkerDefinitions.map(frozenBuiltInWorker));
+
+function plainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function unknownKeys(value: Record<string, unknown>, allowed: readonly string[]): string[] {
+  const accepted = new Set(allowed);
+  return Object.keys(value).filter((key) => !accepted.has(key));
+}
+
+function boundedText(value: unknown, maximum = 240): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maximum && !/[\u0000-\u001f]/.test(value);
+}
+
+function absolutePathLike(value: string): boolean {
+  return /(?:^|\s)(?:[A-Za-z]:\\|\/(?:Users|home|var|etc)\/)/.test(value);
+}
+
+function stringList(value: unknown, maximumItems = 16): value is string[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= maximumItems && value.every((item) => boundedText(item, 120)) && new Set(value).size === value.length;
+}
+
+function parseNativeWorkerSchema(value: unknown, label: string, blockers: string[]): NativeWorkerObjectSchema | null {
+  if (!plainObject(value)) { blockers.push(`${label} must be an object schema`); return null; }
+  const extra = unknownKeys(value, ["type", "properties", "required", "additionalProperties"]);
+  if (extra.length) blockers.push(`${label} contains unknown fields: ${extra.join(", ")}`);
+  if (value.type !== "object" || value.additionalProperties !== false || !plainObject(value.properties) || !Array.isArray(value.required)) {
+    blockers.push(`${label} must be a strict object schema`);
+    return null;
+  }
+  const allowedTypes = new Set<NativeWorkerValueType>(["string", "number", "boolean", "array", "object"]);
+  const properties: Record<string, NativeWorkerValueType> = {};
+  for (const [key, type] of Object.entries(value.properties)) {
+    if (!/^[A-Za-z][A-Za-z0-9]{0,63}$/.test(key) || !allowedTypes.has(type as NativeWorkerValueType)) blockers.push(`${label} property ${key} is invalid`);
+    else properties[key] = type as NativeWorkerValueType;
+  }
+  if (!Object.keys(properties).length || !value.required.every((key) => typeof key === "string" && Object.hasOwn(properties, key)) || new Set(value.required).size !== value.required.length) blockers.push(`${label} required keys are invalid`);
+  return { type: "object", properties, required: value.required.filter((key): key is string => typeof key === "string"), additionalProperties: false };
+}
+
+function parseNativeWorkerManifest(value: unknown): { manifest: NativeWorkerManifest | null; blockers: string[] } {
+  const blockers: string[] = [];
+  if (!plainObject(value)) return { manifest: null, blockers: ["Worker manifest must be an object"] };
+  const allowed = ["schemaVersion", "id", "role", "purpose", "inputSchema", "outputSchema", "allowedTools", "mutationRights", "budget", "stopCondition", "evidenceRequirements", "auditRequirements"];
+  const extra = unknownKeys(value, allowed);
+  if (extra.length) blockers.push(`Worker manifest contains unknown fields: ${extra.join(", ")}`);
+  if (value.schemaVersion !== 1) blockers.push("Worker manifest schemaVersion must be 1");
+  if (typeof value.id !== "string" || !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(value.id) || value.id.length > 96) blockers.push("Worker manifest id is invalid");
+  if (!nativeWorkerRoles.includes(value.role as NativeWorkerRole)) blockers.push("Worker manifest role is unknown");
+  if (!boundedText(value.purpose)) blockers.push("Worker manifest purpose is invalid");
+  const inputSchema = parseNativeWorkerSchema(value.inputSchema, "inputSchema", blockers);
+  const outputSchema = parseNativeWorkerSchema(value.outputSchema, "outputSchema", blockers);
+  const tools = Array.isArray(value.allowedTools) ? value.allowedTools : [];
+  if (!tools.length || tools.some((tool) => !nativeWorkerToolIds.includes(tool as NativeWorkerToolId)) || new Set(tools).size !== tools.length) blockers.push("Worker manifest allowedTools must be a unique native allowlist");
+  const mutations = Array.isArray(value.mutationRights) ? value.mutationRights : [];
+  if (mutations.some((right) => typeof right !== "string" || !/^[a-z][a-z0-9.-]{1,63}$/.test(right)) || new Set(mutations).size !== mutations.length) blockers.push("Worker manifest mutationRights are invalid");
+  if (!plainObject(value.budget) || unknownKeys(value.budget, ["maxSteps", "maxTokens"]).length || !Number.isInteger(value.budget.maxSteps) || Number(value.budget.maxSteps) < 1 || Number(value.budget.maxSteps) > 64 || !Number.isInteger(value.budget.maxTokens) || Number(value.budget.maxTokens) < 1 || Number(value.budget.maxTokens) > 1_000_000) blockers.push("Worker manifest budget must be finite and bounded");
+  if (!plainObject(value.stopCondition) || unknownKeys(value.stopCondition, ["type", "maxFailures"]).length || value.stopCondition.type !== "complete-or-blocked" || !Number.isInteger(value.stopCondition.maxFailures) || Number(value.stopCondition.maxFailures) < 1 || Number(value.stopCondition.maxFailures) > 5) blockers.push("Worker manifest stopCondition must be finite");
+  if (!stringList(value.evidenceRequirements)) blockers.push("Worker manifest evidenceRequirements are invalid");
+  if (!stringList(value.auditRequirements)) blockers.push("Worker manifest auditRequirements are invalid");
+  const serialized = JSON.stringify(value);
+  if (secretLike(serialized)) blockers.push("Worker manifest contains secret-like content");
+  if (absolutePathLike(serialized)) blockers.push("Worker manifest contains an absolute path");
+  if (blockers.length || !inputSchema || !outputSchema || typeof value.id !== "string" || typeof value.purpose !== "string" || !plainObject(value.budget) || !plainObject(value.stopCondition)) return { manifest: null, blockers };
+  return { manifest: {
+    schemaVersion: 1, id: value.id, role: value.role as NativeWorkerRole, purpose: value.purpose, inputSchema, outputSchema,
+    allowedTools: tools as NativeWorkerToolId[], mutationRights: mutations as string[],
+    budget: { maxSteps: Number(value.budget.maxSteps), maxTokens: Number(value.budget.maxTokens) },
+    stopCondition: { type: "complete-or-blocked", maxFailures: Number(value.stopCondition.maxFailures) },
+    evidenceRequirements: value.evidenceRequirements as string[], auditRequirements: value.auditRequirements as string[],
+  }, blockers };
+}
+
+type NativeWorkerRegistryRecord = { schemaVersion: 1; manifest: NativeWorkerManifest; manifestHash: string };
+type NativeWorkerAuditRecord = { schemaVersion: 1; event: "registered"; workerId: string; manifestHash: string; planHash: string; previousHash: string | null; recordHash: string };
+
+function nativeWorkerHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(normalizeJson(value))).digest("hex");
+}
+
+function nativeWorkerPlanHash(plan: NativeWorkerRegistrationPlan): string {
+  const { planHash: _hash, status: _status, blockers: _blockers, action: _action, nextAction: _nextAction, ...stable } = plan;
+  return nativeWorkerHash(stable);
+}
+
+async function readNativeWorkerRegistry(root: string): Promise<NativeWorkerRegistryRecord[]> {
+  try {
+    const lines = (await readFile(join(root, ".downstroke", "workers", "registry.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean);
+    return lines.map((line) => {
+      const value = JSON.parse(line) as unknown;
+      if (!plainObject(value) || unknownKeys(value, ["schemaVersion", "manifest", "manifestHash"]).length || value.schemaVersion !== 1 || !plainObject(value.manifest) || typeof value.manifestHash !== "string") throw new Error("Worker registry contains a malformed record");
+      const parsed = parseNativeWorkerManifest(value.manifest);
+      if (!parsed.manifest || parsed.blockers.length || nativeWorkerHash(parsed.manifest) !== value.manifestHash) throw new Error("Worker registry integrity validation failed");
+      return { schemaVersion: 1, manifest: parsed.manifest, manifestHash: value.manifestHash };
+    });
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "READ_ERROR";
+    if (code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function readNativeWorkerAudit(root: string): Promise<NativeWorkerAuditRecord[]> {
+  try {
+    const records = (await readFile(join(root, ".downstroke", "workers", "audit.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as unknown);
+    let previous: string | null = null;
+    const validated: NativeWorkerAuditRecord[] = [];
+    for (const value of records) {
+      if (!plainObject(value) || unknownKeys(value, ["schemaVersion", "event", "workerId", "manifestHash", "planHash", "previousHash", "recordHash"]).length || value.schemaVersion !== 1 || value.event !== "registered" || typeof value.workerId !== "string" || typeof value.manifestHash !== "string" || typeof value.planHash !== "string" || (value.previousHash !== null && typeof value.previousHash !== "string") || typeof value.recordHash !== "string") throw new Error("Worker audit contains a malformed record");
+      const record = value as NativeWorkerAuditRecord;
+      const { recordHash, ...stable } = record;
+      if (record.previousHash !== previous || nativeWorkerHash(stable) !== recordHash) throw new Error("Worker audit hash chain is invalid");
+      previous = recordHash;
+      validated.push(record);
+    }
+    return validated;
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "READ_ERROR";
+    if (code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+export async function listNativeWorkers(root: string): Promise<NativeWorkerManifest[]> {
+  let resolved: string;
+  try { resolved = await gitRoot(root); }
+  catch { return [...nativeWorkerCatalog]; }
+  return [...nativeWorkerCatalog, ...(await readNativeWorkerRegistry(resolved)).map(({ manifest }) => manifest)];
+}
+
+export async function planNativeWorkerRegistration(root: string, request: NativeWorkerRegistrationRequest): Promise<NativeWorkerRegistrationPlan> {
+  const blockers: string[] = [];
+  const task = request.task;
+  if (!plainObject(task) || typeof task.id !== "string" || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(task.id) || !tokenTaskClasses.includes(task.taskClass) || typeof task.toolProven !== "boolean" || typeof task.singlePathSufficient !== "boolean" || !boundedText(task.justification, 400) || secretLike(task.justification)) blockers.push("Worker task routing input is invalid");
+  const deterministic = task?.singlePathSufficient === true || (task?.taskClass === "deterministic" && task?.toolProven === true);
+  const parsed = parseNativeWorkerManifest(request.manifest);
+  if (!deterministic) blockers.push(...parsed.blockers);
+  let manifest = deterministic ? null : parsed.manifest;
+  let manifestHash = manifest ? nativeWorkerHash(manifest) : null;
+  let action: "append" | "skip" = "append";
+  if (deterministic) blockers.push("Worker orchestration is unnecessary because a deterministic or single path is sufficient");
+  if (manifest && nativeWorkerCatalog.some((item) => item.id === manifest!.id)) blockers.push("Built-in worker manifests are immutable");
+  if (manifest?.mutationRights.length) blockers.push("Mutation-capable workers require a scoped Story 9.14 execution task, ownership and persisted workflow approvals");
+  try {
+    const resolved = await gitRoot(root);
+    if (manifest && manifestHash) {
+      const existing = (await readNativeWorkerRegistry(resolved)).find((item) => item.manifest.id === manifest!.id);
+      if (existing?.manifestHash === manifestHash) action = "skip";
+      else if (existing) blockers.push(`Worker id ${manifest.id} is already registered with another manifest`);
+    }
+  } catch (error: unknown) {
+    blockers.push(error instanceof Error ? error.message : "Worker repository cannot be inspected");
+  }
+  const plan: NativeWorkerRegistrationPlan = {
+    schemaVersion: 1,
+    status: blockers.length ? "blocked" : "ready",
+    mode: deterministic ? "deterministic" : "worker",
+    action,
+    task,
+    manifest,
+    manifestHash,
+    responsibilities: nativeRuntimeResponsibilities,
+    blockers,
+    nextAction: deterministic ? "Use the deterministic function or single execution path; Story 9.14 will execute selected routes." : blockers.length ? "Correct the manifest or approval boundary and preview registration again." : action === "skip" ? "No action required; the worker is already registered." : "Review the inert worker contract, then apply the exact plan with --yes.",
+    planHash: null,
+  };
+  if (plan.status === "ready") plan.planHash = nativeWorkerPlanHash(plan);
+  return plan;
+}
+
+export async function applyNativeWorkerRegistration(root: string, plan: NativeWorkerRegistrationPlan, expectedPlanHash: string): Promise<DoctorResult> {
+  if (plan.status !== "ready" || plan.mode !== "worker" || !plan.manifest || !plan.manifestHash || !plan.planHash || expectedPlanHash !== plan.planHash || nativeWorkerPlanHash(plan) !== plan.planHash) return { id: "worker.register", status: "fail", message: "Worker registration plan is blocked, malformed or has the wrong hash", remediation: "Preview registration again" };
+  let resolved: string;
+  try { resolved = await gitRoot(root); } catch { return { id: "worker.register", status: "fail", message: "Worker repository is unavailable", remediation: "Restore the repository and preview again" }; }
+  const base = join(resolved, ".downstroke", "workers");
+  const existingBefore = await readNativeWorkerRegistry(resolved).catch(() => []);
+  const auditBefore = await readNativeWorkerAudit(resolved).catch(() => []);
+  const registeredBefore = existingBefore.some((item) => item.manifest.id === plan.manifest!.id && item.manifestHash === plan.manifestHash);
+  const auditedBefore = auditBefore.some((item) => item.workerId === plan.manifest!.id && item.manifestHash === plan.manifestHash && item.planHash === plan.planHash);
+  if (registeredBefore && auditedBefore) return { id: "worker.register", status: "ok", message: "Native worker is already registered", evidence: plan.manifestHash };
+  const fresh = await planNativeWorkerRegistration(resolved, { manifest: plan.manifest, task: plan.task });
+  if (fresh.status !== "ready" || fresh.planHash !== plan.planHash || fresh.manifestHash !== plan.manifestHash) return { id: "worker.register", status: "fail", message: "Worker registration changed after preview", remediation: "Review a new registration plan" };
+  await mkdir(base, { recursive: true });
+  const lockPath = join(base, "register.lock");
+  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    lock = await open(lockPath, "wx", 0o600);
+    const registry = await readNativeWorkerRegistry(resolved);
+    const audit = await readNativeWorkerAudit(resolved);
+    const registered = registry.some((item) => item.manifest.id === plan.manifest!.id && item.manifestHash === plan.manifestHash);
+    const audited = audit.some((item) => item.workerId === plan.manifest!.id && item.manifestHash === plan.manifestHash && item.planHash === plan.planHash);
+    if (!registered) await appendFile(join(base, "registry.jsonl"), `${JSON.stringify({ schemaVersion: 1, manifest: plan.manifest, manifestHash: plan.manifestHash })}\n`, { encoding: "utf8", mode: 0o600 });
+    if (!audited) {
+      const stable = { schemaVersion: 1 as const, event: "registered" as const, workerId: plan.manifest.id, manifestHash: plan.manifestHash, planHash: plan.planHash, previousHash: audit.at(-1)?.recordHash ?? null };
+      await appendFile(join(base, "audit.jsonl"), `${JSON.stringify({ ...stable, recordHash: nativeWorkerHash(stable) })}\n`, { encoding: "utf8", mode: 0o600 });
+    }
+    return { id: "worker.register", status: "ok", message: registered && audited ? "Native worker is already registered" : "Native worker registered as an inert local contract", evidence: plan.manifestHash };
+  } catch (error: unknown) {
+    return { id: "worker.register", status: "fail", message: error instanceof Error ? error.message : "Worker registration failed", remediation: "Inspect the local worker audit state and preview again" };
+  } finally {
+    await lock?.close().catch(() => undefined);
+    await unlink(lockPath).catch(() => undefined);
+  }
+}
+
+export function validateNativeWorkerOutput(value: unknown): { status: "ok" | "blocked"; claims: NativeWorkerClaim[]; blockers: string[] } {
+  const blockers: string[] = [];
+  const claims: NativeWorkerClaim[] = [];
+  if (!plainObject(value) || unknownKeys(value, ["summary", "claims"]).length || !boundedText(value.summary, 1000) || !Array.isArray(value.claims) || value.claims.length > 64) return { status: "blocked", claims, blockers: ["Worker output must contain only a bounded summary and claims"] };
+  if (secretLike(value.summary) || absolutePathLike(value.summary)) blockers.push("Worker output summary contains secret-like or absolute-path content");
+  for (const candidate of value.claims) {
+    if (!plainObject(candidate) || unknownKeys(candidate, ["id", "status", "statement", "evidenceRefs"]).length || typeof candidate.id !== "string" || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(candidate.id) || !["observed", "inferred"].includes(String(candidate.status)) || !boundedText(candidate.statement, 1000) || !stringList(candidate.evidenceRefs)) {
+      blockers.push("Worker claims must remain bounded observed or inferred claims with evidence references");
+      continue;
+    }
+    const claimText = `${candidate.statement} ${candidate.evidenceRefs.join(" ")}`;
+    if (secretLike(claimText) || absolutePathLike(claimText)) { blockers.push(`Worker claim ${candidate.id} contains unsafe content`); continue; }
+    claims.push({ id: candidate.id, status: candidate.status as "observed" | "inferred", statement: candidate.statement, evidenceRefs: candidate.evidenceRefs });
+  }
+  return { status: blockers.length ? "blocked" : "ok", claims, blockers };
 }
 
 export async function readGitPolicy(root: string): Promise<GitPolicy | null> {
@@ -2142,6 +2916,15 @@ const legacySources = [
   },
   { id: "legacy.communication", paths: [".agents/skills/caveman", "skills/caveman"], label: "Legacy communication instructions" },
   { id: "legacy.simplicity", paths: [".agents/skills/ponytail"], label: "Legacy simplicity instructions" },
+] as const;
+
+export const legacyCleanupSources = [
+  { source: "_bmad", reason: "legacy workflow source" },
+  { source: "_bmad-output", reason: "legacy workflow output" },
+  { source: ".codegraph", reason: "legacy code-intelligence source" },
+  { source: ".agents/skills/caveman", reason: "legacy communication skill" },
+  { source: ".agents/skills/ponytail", reason: "legacy simplicity skill" },
+  { source: "docs/stories", reason: "non-native Markdown workflow state" },
 ] as const;
 
 async function inspectLegacyPath(path: string): Promise<"present" | "missing" | "unreadable"> {

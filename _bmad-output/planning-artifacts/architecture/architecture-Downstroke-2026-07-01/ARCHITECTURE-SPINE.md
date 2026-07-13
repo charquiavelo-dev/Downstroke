@@ -89,6 +89,7 @@ flowchart LR
 - **Binds:** FR72-FR81, NFR39-NFR45.
 - **Prevents:** Internal artifacts, secrets or unrecoverable history loss entering public releases.
 - **Rule:** npm and public-repository contents derive from explicit Release Manifests and clean-fixture verification. Public history replacement is impossible until the full-history private remote is verified.
+- **Lifecycle:** Downstroke Native Releases execute `inspect -> analyze commits -> plan version/channel -> prepare metadata -> verify clean artifact -> authorize -> stage/publish -> verify registry install -> record`. Planning authority cannot publish, publishing authority cannot rewrite history, and no remote tag or release is reported complete before registry verification succeeds.
 
 ### AD-10 — Plan composition rejects ambiguous ownership
 
