@@ -224,6 +224,7 @@ If the answer is weak, improve the spec before shipping the visible change.
 - Preserve user changes.
 - Local commits are allowed when useful.
 - Push requires explicit approval every time.
+- Before every push, update `README.md` with relevant current status, usage or roadmap information included in that push.
 - Commit small, coherent chunks.
 
 Commit examples:

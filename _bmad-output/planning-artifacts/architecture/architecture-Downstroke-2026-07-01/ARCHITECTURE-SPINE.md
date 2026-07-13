@@ -7,8 +7,8 @@ paradigm: functional-core-imperative-shell
 scope: Downstroke CLI, packages, project state, integrations and release boundaries
 status: final
 created: 2026-07-01
-updated: 2026-07-01
-binds: [FR1-FR81, NFR1-NFR45]
+updated: 2026-07-13
+binds: [FR1-FR106, NFR1-NFR55]
 sources:
   - ../../prds/prd-Downstroke-2026-07-01/prd.md
   - ../../epics.md
@@ -80,16 +80,16 @@ flowchart LR
 
 ### AD-8 — Product data and visual rules each have one authority
 
-- **Binds:** FR42-FR52, NFR24-NFR30.
+- **Binds:** FR42-FR52, FR95-FR106, NFR24-NFR30, NFR51-NFR54.
 - **Prevents:** Frontend/LLM authority over permissions, data, brand or copy.
-- **Rule:** Application backend contracts own operational data and authorization. The neutral design system owns tokens/assets; localization catalogs own visible copy. LLM and platform files are generated projections.
+- **Rule:** Application backend contracts own operational data and authorization. The neutral design system owns tokens/assets; versioned UX schemas own generated direction and parameters; governed registries retain reference provenance; localization catalogs own visible copy. LLM and platform files are generated projections.
 
 ### AD-9 — Release outputs are allowlisted and reproducible
 
-- **Binds:** FR72-FR81, NFR39-NFR45.
+- **Binds:** FR72-FR81, FR94, NFR39-NFR45, NFR55.
 - **Prevents:** Internal artifacts, secrets or unrecoverable history loss entering public releases.
 - **Rule:** npm and public-repository contents derive from explicit Release Manifests and clean-fixture verification. Public history replacement is impossible until the full-history private remote is verified.
-- **Lifecycle:** Downstroke Native Releases execute `inspect -> analyze commits -> plan version/channel -> prepare metadata -> verify clean artifact -> authorize -> stage/publish -> verify registry install -> record`. Planning authority cannot publish, publishing authority cannot rewrite history, and no remote tag or release is reported complete before registry verification succeeds.
+- **Lifecycle:** Downstroke Native Releases execute `inspect -> analyze commits -> plan version/channel -> prepare metadata -> verify clean consumer installation -> preserve and sanitize public artifacts -> verify documentation and calibration -> authorize -> stage/publish -> verify registry install -> record`. Planning authority cannot publish, publication is the final planned action, publishing authority cannot rewrite history, and no remote tag or release is reported complete before registry verification succeeds.
 
 ### AD-10 — Plan composition rejects ambiguous ownership
 
@@ -152,6 +152,7 @@ packages/presets/    # pure module composition
 | Git and multi-repo | `core`, `cli`, Project State | AD-2, AD-4, AD-5 |
 | Stack/provider guidance | capability Modules, `presets` | AD-1, AD-7 |
 | Design and localization | capability Modules | AD-8 |
+| Intelligent UX generation and resource registries | capability Modules | AD-8 |
 | Native platform/runtime/registry | Downstroke-owned capability packages | AD-6 |
 | npm/public release | release scripts and manifests | AD-5, AD-9 |
 

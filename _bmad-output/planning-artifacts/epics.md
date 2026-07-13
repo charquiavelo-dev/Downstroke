@@ -6,6 +6,8 @@ stepsCompleted:
   - step-04-final-validation
 inputDocuments:
   - docs/SPEC.md
+  - _bmad-output/planning-artifacts/prds/prd-Downstroke-2026-07-01/prd.md
+  - _bmad-output/planning-artifacts/architecture/architecture-Downstroke-2026-07-01/ARCHITECTURE-SPINE.md
   - docs/downstroke/source-guides/_bmad-output/architecture-downstroke-mvp.md
   - docs/downstroke/source-guides/_bmad-output/brief-downstroke-framework.md
   - docs/downstroke/source-guides/docs-es/23-multi-repo-workspace.md
@@ -210,6 +212,32 @@ FR92: Downstroke audits project knowledge for stale stack packages, contradictor
 
 FR93: Downstroke can propose candidate knowledge from repeated observations, but never activates candidates without human approval and workflow evidence.
 
+FR94: A local Downstroke consumer installation runs from a package artifact in the target project, performs the required guided setup and validation, and never treats a cloned framework source repository as the installed product.
+
+FR95: Downstroke transforms incomplete UI requests into a traceable design direction after asking only the missing UX-relevant questions and supports common product surface types.
+
+FR96: Every generated screen is described by versioned, allowed-value visual parameters instead of free-form styling instructions.
+
+FR97: Downstroke provides reusable motion levels and effects implemented with compositor-friendly properties unless a documented exception is required.
+
+FR98: Every motion pattern automatically provides an equivalent reduced-motion experience and no content depends on animation for comprehension.
+
+FR99: Every generated screen declares and validates a rendering performance budget covering layers, blur, filters, GPU-safe animation, reserved space and lazy media.
+
+FR100: Downstroke provides reusable scroll patterns with documented purpose, performance cost, accessibility behavior and fallback.
+
+FR101: A screen can select at most one compatible signature interaction per viewport from a governed set of interaction patterns.
+
+FR102: Downstroke indexes reusable components and visual patterns in a searchable registry with stack, dependency, motion, performance, accessibility, preview and variant metadata.
+
+FR103: Downstroke catalogs external UI resources with license, provenance, compatibility, documentation, tags and maintenance status so selection does not imply unsafe copying or installation.
+
+FR104: Downstroke generates one versioned design-token source covering color, spacing, radius, elevation, typography, motion, z-index, opacity, duration and easing, with only justified target exports.
+
+FR105: Downstroke projects the single design-system source into human and supported LLM/tool artifacts without creating competing authorities.
+
+FR106: Downstroke maintains curated inspiration references classified by industry, layout, motion, components, color, interaction and complexity.
+
 ### Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -312,6 +340,16 @@ NFR49: Knowledge storage remains local, inspectable and deterministic in the MVP
 
 NFR50: Generated summaries, LLM memory and RAG snippets cannot become accepted knowledge without source evidence and review.
 
+NFR51: UX direction, screen parameters, tokens and projections are deterministic, schema-versioned and traceable to approved input; unsupported free-form visual values fail validation.
+
+NFR52: Motion honors `prefers-reduced-motion`, preserves equivalent understanding and interaction, and defaults to `transform` and `opacity` rather than layout-triggering properties.
+
+NFR53: Generated interfaces prevent avoidable CLS, layout thrashing and repaint pressure, and fail their declared performance budget when limits are exceeded without an approved exception.
+
+NFR54: External UI resources and inspiration remain references until license, provenance, compatibility and maintenance state are verified; registry records cannot execute arbitrary install-time code.
+
+NFR55: Public npm publication is the final planned product action after local consumer installation, remaining product capabilities and public-release evidence pass; planning or package preparation never grants publish authority.
+
 ### Additional Requirements
 
 - Keep `core`, `spec`, `agents`, `gates`, `presets` and CLI as existing boundaries; do not create parallel Git, hosting, map or agent frameworks.
@@ -347,10 +385,38 @@ NFR50: Generated summaries, LLM memory and RAG snippets cannot become accepted k
 - Treat the README as the first complete user documentation; prepare and verify the npm tarball before publication; build the React documentation site only after package workflows are stable.
 - Preserve full history privately before creating a one-commit public release; generate the public tree from a reviewed release manifest and apply the final public `.gitignore` only at release cut.
 - Preserve Epic 1 and its Sprint 1 review state before Epic 2 implementation starts.
+- Preserve completed and in-review Story 10.1-10.3 identities while separating local release readiness from the later public npm publication.
+- Validate Downstroke from a clean consumer project using the packed artifact; cloning the maintenance repository is development setup, not product installation.
+- Complete the Intelligent UX Generation Engine before public npm publication.
+- Keep public npm publication as the final story after private-history preservation, sanitized public artifacts and documentation are ready.
 
 ### UX Design Requirements
 
-No formal UX contract exists. CLI work must retain actionable messages, `--json`, `--dry-run` and confirmations that identify target, scope and effect. Any future visible product surface must use the approved design system and localization contract.
+No formal product-surface UX contract exists. CLI work must retain actionable messages, `--json`, `--dry-run` and confirmations that identify target, scope and effect. The following requirements define the planned UX generation subsystem rather than a concrete Downstroke application screen:
+
+UX-DR1: Produce a traceable design-direction record from the smallest sufficient UX discovery for dashboards, SaaS products, landing pages, portfolios, admin panels and ecommerce surfaces.
+
+UX-DR2: Describe every screen with allowed values for density, depth, motion intensity, surface style, typography scale, interaction signature, hero type, scroll pattern, accessibility mode, fallback mode and performance budget.
+
+UX-DR3: Support none, subtle and expressive motion levels plus reveal, fade, slide, stagger, sticky, parallax, floating, transform and page-transition patterns.
+
+UX-DR4: Define reduced-motion replacements for parallax, reveal, sticky transitions, hover zoom and page transitions without removing content or required feedback.
+
+UX-DR5: Declare measurable limits for layers, blur, filters, compositor-safe animation, reserved layout space and lazy media per screen.
+
+UX-DR6: Document purpose, cost, accessibility and fallback for sticky storytelling, section reveal, snap scrolling, layered parallax and section transitions.
+
+UX-DR7: Permit at most one signature interaction per viewport and reject competing magnetic, spotlight, animated-border, floating-CTA, hero-parallax, morph or depth-card effects.
+
+UX-DR8: Index components, layouts, heroes, cards, pricing, dashboards, navigation, footers, login, onboarding, empty states and timelines with implementation and quality metadata.
+
+UX-DR9: Catalog external component systems, primitives, motion libraries and UI kits with current license, links, compatibility, tags and maintenance evidence.
+
+UX-DR10: Generate color, spacing, radius, elevation, typography, motion, z-index, opacity, duration and easing tokens from one versioned source with JSON, YAML, CSS variable, Tailwind, SCSS or TypeScript projections only when the target is selected.
+
+UX-DR11: Project the neutral design system into human documentation and supported LLM/design-tool guidance while retaining one source of truth.
+
+UX-DR12: Catalog curated inspiration by industry, layout, motion, components, color style, interaction and complexity without treating visual references as licensed implementation assets.
 
 ### FR Coverage Map
 
@@ -363,7 +429,9 @@ FR32-FR34: Epic 6 - Safe managed-rule evolution.
 FR36-FR40: Epic 7 - Three-pass 2D and 3D interactive delivery.
 FR41-FR50: Epic 8 - Design system, brand and internationalization.
 FR60-FR68, FR82-FR93: Epic 9 - Evidence-gated native platform evolution.
-FR72-FR81: Epic 10 - Package distribution, sanitized public release and documentation.
+FR72-FR74, FR94: Epic 10 - Local release readiness and consumer installation.
+FR95-FR106: Epic 11 - Intelligent UX generation.
+FR75-FR81: Epic 12 - Public distribution and documentation, ending with npm publication.
 
 ### Story Coverage Map
 
@@ -376,7 +444,9 @@ FR72-FR81: Epic 10 - Package distribution, sanitized public release and document
 - 7.1: FR38-FR40; 7.2: FR36, FR38-FR40; 7.3: FR37-FR40.
 - 8.1: FR42, FR45; 8.2: FR41; 8.3: FR46-FR47; 8.4: FR48-FR50; 8.5: FR43-FR44.
 - 9.1: FR60-FR61; 9.2: FR60; 9.3: FR61, FR82; 9.4: FR65, FR82-FR83, FR88; 9.5: FR63; 9.6: FR64, FR87; 9.7: FR62, FR90; 9.8: FR56-FR59; 9.9: FR63, FR82, FR87, FR91; 9.10: FR60-FR61, FR86, FR92; 9.11: FR66, FR84, FR87; 9.12: FR67; 9.13: FR68; 9.14: FR84, FR88; 9.15: FR85-FR86, FR89-FR93.
-- 10.1: FR72; 10.2: FR74-FR75; 10.3: FR73-FR74; 10.4: FR75; 10.5: FR78; 10.6: FR77, FR79-FR81; 10.7: FR76; 10.8: FR56-FR59.
+- 10.1: FR72; 10.2: FR74; 10.3: FR73-FR74; 10.4: FR94.
+- 11.1: FR95; 11.2: FR96; 11.3: FR98; 11.4: FR97; 11.5: FR99; 11.6: FR100; 11.7: FR101; 11.8: FR102; 11.9: FR103; 11.10: FR104; 11.11: FR105; 11.12: FR106.
+- 12.1: FR78; 12.2: FR77, FR79-FR81; 12.3: FR76; 12.4: FR56-FR59; 12.5: FR75.
 
 ## Epic List
 
@@ -416,9 +486,17 @@ Developers can create a consistent identity, install typography, generate neutra
 Maintainers can graduate proven external workflows into native capabilities, a worker runtime, a remote registry, native execution, health and automatic managed migrations without losing interoperability or rollback.
 **FRs covered:** FR60-FR68, FR82-FR88.
 
-### Epic 10: Package Distribution and Public Documentation
-Developers can understand Downstroke from the README, install a verified npm package, inspect a sanitized one-commit public repository and later use an accurate React documentation and showcase site.
-**FRs covered:** FR72-FR81.
+### Epic 10: Local Release Readiness
+Developers can understand Downstroke, install and validate a local package artifact in a clean consumer project, and prepare deterministic release evidence without publishing it.
+**FRs covered:** FR72-FR74, FR94.
+
+### Epic 11: Intelligent UX Generation Engine
+Developers can turn incomplete UI intent into deterministic, accessible and performant design direction while reusing governed patterns, resources, tokens and inspiration.
+**FRs covered:** FR95-FR106.
+
+### Epic 12: Public Distribution and Documentation
+Developers can evaluate Downstroke through sanitized public artifacts and accurate documentation before the maintainer performs the final explicitly authorized npm publication.
+**FRs covered:** FR75-FR81.
 
 ## Epic 1: Installable and Verifiable MVP
 
@@ -636,7 +714,7 @@ So that I can evaluate backlog and sprint cost before execution.
 **When** monetary cost cannot be verified
 **Then** Downstroke reports tokens without inventing a currency estimate.
 
-This story provides preliminary visibility only. Accuracy calibration and available-budget decisions are deferred to Story 10.8, after all product and release workflows are complete and representative observed usage exists.
+This story provides preliminary visibility only. Accuracy calibration and available-budget decisions are deferred to Story 12.4, after representative product and UX workflows exist and before final npm publication.
 
 ## Epic 3: Safe Git and Multi-Repository Delivery
 
@@ -1174,9 +1252,9 @@ As a developer, I want project knowledge to age, conflict and recover safely, So
 - Feed stale, conflicted and low-evidence knowledge into `downstroke health`.
 - Add `downstroke knowledge list`, `add`, `compile` and `audit` after the registry foundation exists.
 
-## Epic 10: Package Distribution and Public Documentation
+## Epic 10: Local Release Readiness
 
-Developers can install a verified package and understand the framework from clean public artifacts.
+Developers can understand Downstroke, install and validate a local package artifact in a clean consumer project, and prepare deterministic release evidence without publishing it.
 
 ### Story 10.1: Deliver a Complete Repository README
 As a new user, I want one reliable README, So that I can install and use Downstroke before the documentation site exists.
@@ -1206,26 +1284,342 @@ As a maintainer, I want a verified npm tarball, So that the CLI installs cleanly
 **Given** package contents **When** scanned **Then** secrets, planning output, source archives and maintenance-only files are absent.
 **Given** package, CLI help and generated templates **When** release scanning runs **Then** external construction-tool names, installers, dependencies and active instructions are absent.
 
-### Story 10.4: Publish and Verify the npm Release
-As a maintainer, I want an authenticated npm release, So that users can install the approved version.
+### Story 10.4: Validate Guided Consumer Installation
+
+As a project developer,
+I want to install a local Downstroke package artifact into my target project,
+So that I receive the real onboarding experience without operating from a cloned maintenance repository.
 
 **Acceptance Criteria:**
-**Given** release readiness **When** publication is proposed **Then** `npm whoami` must equal `charquiavelo` and version, tag, provenance and tarball are shown.
-**Given** explicit high-risk approval **When** publish runs **Then** the package is released once and credentials or recovery keys are never read.
-**Given** publication **When** verification runs **Then** a clean install resolves the published version and executes the smoke checks.
-**Given** an eligible existing package **When** CI submits the release **Then** trusted staged publishing uses short-lived OIDC credentials, provenance-capable hosted infrastructure and a maintainer 2FA approval before public availability.
-**Given** a first package release **When** staged publishing is unavailable **Then** a separate bootstrap path requires fresh high-risk approval and records why the staged path could not be used.
-**Given** concurrent or repeated release attempts **When** version or tag state already exists **Then** the duplicate attempt blocks or reports the verified existing result without publishing twice.
-**Given** a failed or defective publication **When** recovery is planned **Then** Downstroke never automatically unpublishes or reuses a version; it proposes deprecation, dist-tag correction or a new patch with fresh high-risk approval.
 
-### Story 10.5: Preserve the Private Maintenance Repository
+**Given** a clean consumer project
+**When** the locally packed Downstroke artifact is installed and initialization starts
+**Then** all prompts, plans, files and state target that consumer project rather than the package source, cache or maintenance checkout.
+
+**Given** required setup decisions are missing
+**When** interactive initialization runs
+**Then** Downstroke asks only the necessary project, preset and review-cadence questions and validates the resulting configuration.
+
+**Given** non-interactive execution
+**When** required decisions were not supplied through explicit flags or existing state
+**Then** initialization stops with actionable missing-input guidance instead of silently choosing product decisions.
+
+**Given** a cloned Downstroke source repository
+**When** contributor setup or diagnosis runs
+**Then** it is identified as a maintenance checkout and is never presented as the consumer installation path.
+
+**Given** initialization completes
+**When** `doctor`, help and configured verification run from the consumer project
+**Then** the installed binary and repository-local state pass without unpublished workspace dependencies.
+
+**Given** existing user-owned files
+**When** onboarding applies its plan
+**Then** they remain unchanged unless an explicitly owned mutation was previewed and approved.
+
+## Epic 11: Intelligent UX Generation Engine
+
+Developers can turn incomplete UI intent into deterministic, accessible and performant design direction while reusing governed patterns, resources, tokens and inspiration.
+
+### Story 11.1: Create the UX Direction Engine
+
+As a developer,
+I want incomplete UI requests transformed into a coherent design direction,
+So that generated interfaces use an intentional visual language instead of generic layouts.
+
+**Acceptance Criteria:**
+
+**Given** an incomplete UI request
+**When** UX discovery begins
+**Then** Downstroke asks only missing questions that materially affect product type, users, content, visual personality, density, layout, motion, accessibility or platform constraints.
+
+**Given** insufficient context for a visual decision
+**When** generation is requested
+**Then** the decision remains unresolved or is shown as an explicit assumption requiring approval rather than being silently invented.
+
+**Given** sufficient context
+**When** direction is generated
+**Then** a schema-valid `design-direction.json` records style, density, depth, motion, layout, hero and the evidence or approved assumption behind each value.
+
+**Given** a dashboard, SaaS product, landing page, portfolio, admin panel or ecommerce surface
+**When** direction is requested
+**Then** the same contract applies without forcing a landing-page layout onto an operational product.
+
+### Story 11.2: Define Versioned Visual Parameters
+
+As a developer,
+I want every generated screen described through allowed design parameters,
+So that layouts are deterministic rather than prompt-dependent.
+
+**Acceptance Criteria:**
+
+**Given** a screen definition
+**When** it is validated
+**Then** it declares allowed values for `layout_density`, `visual_depth`, `motion_intensity`, `surface_style`, `typography_scale`, `interaction_signature`, `hero_type`, `scroll_pattern`, `accessibility_mode`, `fallback_mode` and `performance_budget`.
+
+**Given** an unsupported value or free-form styling directive
+**When** validation runs
+**Then** it fails with the field, allowed values and next corrective action.
+
+**Given** identical approved inputs and schema version
+**When** screen parameters are generated repeatedly
+**Then** canonical output is stable and traceable to the design direction.
+
+**Given** a parameter-schema change
+**When** existing definitions are loaded
+**Then** the version is explicit and migration or incompatibility is reported without silently rewriting accepted values.
+
+### Story 11.3: Establish the Reduced-Motion Contract
+
+As a developer,
+I want motion-sensitive behavior governed before effects are selected,
+So that future animation preserves accessibility by construction.
+
+**Acceptance Criteria:**
+
+**Given** a motion-capable pattern
+**When** it is registered
+**Then** it declares its full-motion behavior, reduced alternative, essential feedback and comprehension invariant.
+
+**Given** `prefers-reduced-motion: reduce`
+**When** a generated surface renders
+**Then** parallax, reveal travel, sticky transitions, hover zoom and page transitions use their declared reduced alternatives.
+
+**Given** content order, status or action feedback
+**When** motion is disabled
+**Then** the same information and controls remain understandable and operable without animation.
+
+**Given** a pattern without an equivalent reduced experience
+**When** validation runs
+**Then** the pattern is rejected rather than emitted with motion as a prerequisite.
+
+### Story 11.4: Generate Governed Motion Effects
+
+As a developer,
+I want reusable modern motion effects,
+So that interfaces can feel refined without sacrificing accessibility or rendering stability.
+
+**Acceptance Criteria:**
+
+**Given** a motion-enabled screen
+**When** an effect is selected
+**Then** reveal, fade, slide, stagger, sticky, parallax, floating, transform and page-transition patterns are available under `none`, `subtle` or `expressive` intensity.
+
+**Given** a standard effect
+**When** implementation is generated
+**Then** it animates `transform` and `opacity` by default and does not animate `width`, `height`, `top` or `left`.
+
+**Given** a justified layout animation
+**When** a layout-triggering property is required
+**Then** the reason, measured budget, reduced alternative and fallback are recorded before approval.
+
+**Given** an effect lifecycle
+**When** the surface unmounts, navigation changes or execution is interrupted
+**Then** listeners, observers and animation resources are released.
+
+### Story 11.5: Enforce Screen Performance Budgets
+
+As a developer,
+I want generated interfaces to obey rendering budgets,
+So that visually refined experiences remain responsive.
+
+**Acceptance Criteria:**
+
+**Given** a screen definition
+**When** it becomes eligible for generation
+**Then** its `performance_budget` declares `max_layers`, `max_blur`, `max_filters`, `gpu_only`, `reserve_space` and `lazy_media` values.
+
+**Given** media, effects or deferred content
+**When** layout is generated
+**Then** required space is reserved and avoidable cumulative layout shift is prevented.
+
+**Given** scroll or animation behavior
+**When** implementation is evaluated
+**Then** repeated layout reads/writes, unnecessary repaints and unbounded effects fail the budget with evidence.
+
+**Given** a budget exception
+**When** it is proposed
+**Then** target device, measurement, user value, fallback and approval are required rather than silently weakening the budget.
+
+### Story 11.6: Provide Reusable Scroll Patterns
+
+As a developer,
+I want governed scrolling behaviors,
+So that scroll-based experiences remain consistent and intentional.
+
+**Acceptance Criteria:**
+
+**Given** a scroll-driven experience
+**When** a pattern is selected
+**Then** sticky storytelling, reveal sections, snap scrolling, layered parallax and section transitions are available only when compatible with the screen parameters.
+
+**Given** any scroll pattern
+**When** it is inspected
+**Then** purpose, suitable content, performance cost, keyboard and touch behavior, accessibility, reduced-motion behavior and fallback are documented.
+
+**Given** content that requires normal document navigation
+**When** snap, sticky or parallax would obstruct reading or focus
+**Then** the pattern is rejected or falls back to normal scrolling.
+
+**Given** unsupported APIs or a failed performance budget
+**When** the surface renders
+**Then** the declared static or simplified fallback preserves content order and actions.
+
+### Story 11.7: Select One Signature Interaction
+
+As a developer,
+I want each screen to optionally define one signature interaction,
+So that a product can be memorable without competing effects.
+
+**Acceptance Criteria:**
+
+**Given** a viewport definition
+**When** signature interaction is selected
+**Then** at most one magnetic button, spotlight cursor, animated border, floating CTA, hero parallax, morph transition or depth-card treatment is active.
+
+**Given** a second competing signature interaction
+**When** validation runs
+**Then** generation fails and identifies the conflict instead of choosing silently.
+
+**Given** touch, keyboard, coarse-pointer or reduced-motion input
+**When** the interaction is unavailable or unsuitable
+**Then** the declared equivalent control and visual fallback remain usable.
+
+**Given** no interaction with clear product value
+**When** direction is approved
+**Then** `interaction_signature: none` is valid and no decorative interaction is invented.
+
+### Story 11.8: Create the Pattern Library Registry
+
+As a developer,
+I want reusable visual patterns indexed,
+So that future generation reuses proven solutions instead of inventing replacements.
+
+**Acceptance Criteria:**
+
+**Given** a component, layout, hero, card, pricing section, dashboard, navigation, footer, login, onboarding, empty state or timeline
+**When** it enters the registry
+**Then** its record includes `id`, `name`, `purpose`, `stack`, `complexity`, `category`, `dependencies`, `motion`, `performance`, `a11y`, `preview` and `variants`.
+
+**Given** a generation request
+**When** patterns are searched
+**Then** category, framework, style, motion and complexity filters return deterministic compatible candidates.
+
+**Given** a reusable candidate
+**When** provenance, compatibility, accessibility or fallback metadata is incomplete
+**Then** it remains unavailable for automatic selection and reports the missing evidence.
+
+**Given** no compatible pattern
+**When** search completes
+**Then** the result is empty with constraints explained rather than substituting an unrelated pattern.
+
+### Story 11.9: Catalog External UI Resources
+
+As a developer,
+I want external UI resources catalogued with current evidence,
+So that Downstroke can reference proven implementations safely.
+
+**Acceptance Criteria:**
+
+**Given** an external component system, primitive library, motion library, implementation guide or accessibility source
+**When** it is catalogued
+**Then** its record includes name, category, stack, description, best use, reusability, Downstroke notes, license, homepage, repository, documentation, compatibility, tags, maintenance evidence and verification date.
+
+**Given** the supplied resource catalog
+**When** the initial dataset is prepared
+**Then** its component, registry, motion, accessibility, token and architecture sources are normalized without creating one implementation task per resource.
+
+**Given** a claim such as component count, compatibility, maintenance or license
+**When** the record becomes selectable
+**Then** the claim is verified against a current official source and stale or conflicting evidence blocks automatic recommendation.
+
+**Given** a resource record
+**When** it is searched or selected
+**Then** no package is installed, code copied or remote script executed without a separate preview, license-compatible plan and authorization.
+
+### Story 11.10: Generate Versioned Design Tokens
+
+As a developer,
+I want reusable design tokens generated from one authority,
+So that projects share a coherent visual language across selected targets.
+
+**Acceptance Criteria:**
+
+**Given** an approved design direction
+**When** tokens are generated
+**Then** color, spacing, radius, elevation, typography, motion, z-index, opacity, duration and easing values are schema-valid, semantic and versioned.
+
+**Given** identical approved input and generator version
+**When** generation repeats
+**Then** canonical token output is deterministic.
+
+**Given** JSON, YAML, CSS variables, Tailwind, SCSS or TypeScript targets
+**When** exports are requested
+**Then** only selected targets are emitted and each projection references the canonical token version.
+
+**Given** a token change
+**When** it would alter accepted screens or patterns
+**Then** impact is shown and approval is required before projections are regenerated.
+
+### Story 11.11: Project the Design System to Consumers
+
+As a developer,
+I want the design system projected into human and tool-specific artifacts,
+So that every consumer follows the same source without duplicated authority.
+
+**Acceptance Criteria:**
+
+**Given** a versioned design-system source
+**When** projections are selected
+**Then** supported outputs can include `design-system.md`, `tokens.json`, Tailwind configuration, `figma-tokens.json`, `claude.md`, `codex.md`, `copilot.md` and `cursor.md`.
+
+**Given** a projection
+**When** it is generated
+**Then** it declares its source version and contains no independent editable decisions that can override the neutral authority.
+
+**Given** an unselected or unsupported consumer
+**When** generation runs
+**Then** no speculative adapter or unused artifact is created.
+
+**Given** a manually changed projection
+**When** validation runs
+**Then** drift is reported with regeneration guidance rather than back-propagating the projection into the source of truth.
+
+### Story 11.12: Curate the Inspiration Catalog
+
+As a developer,
+I want curated inspiration references indexed,
+So that generated layouts are grounded in proven patterns without copying unlicensed work.
+
+**Acceptance Criteria:**
+
+**Given** an inspiration reference
+**When** it is catalogued
+**Then** source, URL, industry, layout, motion, components, color style, interaction, complexity, access date and usage notes are recorded.
+
+**Given** sources such as Awwwards, Mobbin, Godly, Land-book, One Page Love, SaaS Landing Page, UI Jar, UI Garage, Refero or Lapa Ninja
+**When** initial curation runs
+**Then** references are classified consistently and dead, inaccessible or materially changed links are reported.
+
+**Given** a generation request
+**When** inspiration is selected
+**Then** the record informs direction and pattern search but is never treated as licensed code, assets or permission to reproduce a design.
+
+**Given** multiple references
+**When** they conflict with approved tokens, accessibility or performance budgets
+**Then** the approved Downstroke contract wins and the incompatible reference is excluded with rationale.
+
+## Epic 12: Public Distribution and Documentation
+
+Developers can evaluate Downstroke through sanitized public artifacts and accurate documentation before the maintainer performs the final explicitly authorized npm publication.
+
+### Story 12.1: Preserve the Private Maintenance Repository
 As a maintainer, I want full history preserved privately, So that public sanitization never destroys development evidence.
 
 **Acceptance Criteria:**
 **Given** a private remote **When** backup is proposed **Then** target, branches, tags and commit tip are previewed and push requires confirmation.
 **Given** completion **When** verified **Then** the expected full-history tip is readable from the private remote before sanitization can continue.
 
-### Story 10.6: Cut a Sanitized Single-Commit Public Release
+### Story 12.2: Cut a Sanitized Single-Commit Public Release
 As a maintainer, I want a clean public repository, So that users see the framework rather than internal construction history.
 
 **Acceptance Criteria:**
@@ -1233,20 +1627,65 @@ As a maintainer, I want a clean public repository, So that users see the framewo
 **Given** the release tree **When** validated **Then** final `.gitignore`, secret scan, package smoke checks, build and README pass.
 **Given** a one-commit branch **When** history replacement is proposed **Then** the exact remote and destructive effect are shown and explicit confirmation is required before force-push.
 
-### Story 10.7: Launch the React Documentation and Showcase Site
+### Story 12.3: Launch the React Documentation and Showcase Site
 As a prospective user, I want accurate searchable documentation and examples, So that I can evaluate and adopt Downstroke.
 
 **Acceptance Criteria:**
-**Given** stable README and npm workflows **When** the site is built **Then** installation, CLI reference, guides and working showcases match the released version.
+**Given** the verified local release candidate **When** the site is built **Then** installation, CLI reference, guides and working showcases match that exact candidate version.
+**Given** npm publication is still pending **When** installation guidance is displayed **Then** it is labeled local or prerelease and does not claim registry availability.
 **Given** visible content **When** rendered **Then** it uses the design system, localization catalogs, accessibility and responsive rules.
 **Given** planned capabilities **When** displayed **Then** they are not represented as available or interactive.
 **Given** public documentation **When** scanned **Then** it describes only Downstroke-owned capabilities and contains no maintenance-tool branding or setup instructions.
 
-### Story 10.8: Calibrate Token Estimates Against Observed Usage
+### Story 12.4: Calibrate Token Estimates Against Observed Usage
 As a developer, I want estimates compared with observed provider usage and the currently available token budget, So that I can judge whether planned work fits before execution.
 
 **Acceptance Criteria:**
-**Given** representative completed Downstroke workflows **When** provider-reported token usage is recorded **Then** the system compares observed usage with the original estimate without treating either value as monetary cost.
+**Given** representative completed Downstroke workflows, including the Intelligent UX Generation Engine **When** provider-reported token usage is recorded **Then** the system compares observed usage with the original estimate without treating either value as monetary cost.
 **Given** repeated observations by scope and model **When** calibration is evaluated **Then** accuracy, sample size and uncertainty are reported and estimation assumptions are adjusted only from sufficient evidence.
 **Given** an estimate and a current available-token budget **When** feasibility is requested **Then** the result is `fits`, `does-not-fit` or `uncertain` based on the calibrated range.
 **Given** missing or incompatible provider observations **When** comparison is requested **Then** the result remains unavailable rather than claiming accuracy.
+
+### Story 12.5: Publish and Verify the npm Release
+
+As a maintainer,
+I want an authenticated npm release after every planned capability and public artifact is ready,
+So that users can install the approved version as Downstroke's final planned product action.
+
+**Acceptance Criteria:**
+
+**Given** any incomplete prior epic or Story 12.1-12.4
+**When** publication is proposed
+**Then** the operation blocks and identifies the incomplete prerequisite.
+
+**Given** release readiness
+**When** publication is proposed
+**Then** `npm whoami` must equal `charquiavelo` and version, tag, provenance, tarball, plan hash and required checks are shown.
+
+**Given** explicit fresh high-risk approval
+**When** publish runs
+**Then** the package is released once and credentials or recovery keys are never read, copied or logged.
+
+**Given** an eligible existing package
+**When** CI submits the release
+**Then** trusted staged publishing uses short-lived OIDC credentials, provenance-capable hosted infrastructure and maintainer 2FA approval before public availability.
+
+**Given** a first package release
+**When** staged publishing is unavailable
+**Then** a separate bootstrap path requires fresh approval and records why the staged path could not be used.
+
+**Given** publication
+**When** verification runs
+**Then** a clean consumer install resolves the published version and passes initialization, guided onboarding, doctor, help and configured smoke checks.
+
+**Given** successful registry verification
+**When** public documentation is finalized
+**Then** local or prerelease installation guidance is replaced with the verified npm version and no earlier artifact claims publication.
+
+**Given** concurrent or repeated release attempts
+**When** version or tag state already exists
+**Then** the duplicate attempt blocks or reports the verified existing result without publishing twice.
+
+**Given** a failed or defective publication
+**When** recovery is planned
+**Then** Downstroke never automatically unpublishes or reuses a version and instead proposes deprecation, dist-tag correction or a new patch with fresh approval.

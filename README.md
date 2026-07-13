@@ -20,7 +20,7 @@ Downstroke is under active development before public npm release. The repository
 
 The CLI can be built, linked and exercised locally today. It is not published to the npm registry yet, and the framework has not reached its complete native acceptance milestone. Local testing is useful now for the implemented commands; it must not be mistaken for release readiness.
 
-The public release milestone is intentionally strict. Native package preparation and clean-install checks now pass locally; final token calibration and maintainer acceptance still gate publication.
+The public release milestone is intentionally strict. Native package preparation and clean-install checks now pass locally. Remaining planned work adds guided consumer onboarding, the Intelligent UX Generation Engine, sanitized public artifacts, documentation and token calibration before the final separately authorized npm publication.
 
 ## Philosophy
 
@@ -55,6 +55,8 @@ These rules reduce hidden state, make failures diagnosable and let a later devel
 - Keeps external construction artifacts as maintenance-only evidence, not product runtime dependencies.
 
 ## Install and run locally today
+
+Cloning this repository is the contributor and framework-maintenance path, not the intended consumer installation experience. Story 10.4 will validate guided onboarding from the packed artifact inside a separate target project before public release.
 
 Requirements:
 
@@ -268,7 +270,7 @@ downstroke release verify --plan <hash>
 
 Planning is read-only. Preparation revalidates the exact plan before changing declared versions, exact internal dependencies, supported lockfile metadata, `CHANGELOG.md` and append-only `.downstroke/releases/` evidence. Verification runs declared checks, inspects actual npm pack allowlists and hashes, installs local tarballs in a clean temporary fixture and enforces the native-only boundary.
 
-This command never creates Git tags, pushes, creates hosted releases or contacts a package registry. Authenticated npm publication, provenance and post-publication recovery remain the separately reviewed high-risk work in Story 10.4.
+This command never creates Git tags, pushes, creates hosted releases or contacts a package registry. Authenticated npm publication, provenance and post-publication recovery remain the final separately reviewed high-risk work in Story 12.5.
 
 ### `worker`
 
@@ -344,7 +346,7 @@ downstroke status --scope sprint --path docs/SPEC.md --consumed-tokens 12000
 downstroke route --task-id story.1 --task-class contextual --mode balanced
 ```
 
-Estimates are bounded ranges, not billing guarantees. Calibration against observed provider usage is intentionally left as the final planned feature.
+Estimates are bounded ranges, not billing guarantees. Story 12.4 calibrates them against representative observed provider usage before final npm publication.
 
 ### `route`
 
@@ -549,7 +551,7 @@ Inspect both sources and their evidence. Downstroke intentionally does not selec
 
 - No package is available from the public npm registry yet.
 - The local `downstroke` tarball passes an offline clean install plus help, init and doctor smoke checks; no npm registry version has been published.
-- Token estimates remain heuristic until the final calibration story.
+- Token estimates remain heuristic until Story 12.4 calibration.
 - Token routing records policy outcomes only; it does not call a provider or schedule workers.
 - Deterministic `project.verify` execution is available; generic operations, worker invocation, fan-out, retries and provider calls are intentionally unavailable.
 - Knowledge is a strict local registry; embeddings, vector search, crawlers, semantic conflict inference, background expiry services and autonomous activation are intentionally unavailable.
@@ -593,9 +595,10 @@ The release path is:
 
 1. Complete native platform capabilities.
 2. Use the Apache-2.0 `downstroke` package manifest and native release verification to prove tarball contents and offline clean installation.
-3. Keep internal workspaces private and bundled inside the one public tarball.
-4. Calibrate token estimates against observed usage.
+3. Validate guided installation from that artifact inside a clean consumer project rather than treating a framework clone as installation.
+4. Complete the Intelligent UX Generation Engine and its accessible, performance-governed resource registries.
 5. Ask the maintainer for local acceptance.
-6. Perform authenticated npm publication and public repository release through the high-risk Story 10.4 workflow only after acceptance.
+6. Preserve full history, produce the sanitized public tree, launch accurate documentation and calibrate token estimates.
+7. Perform authenticated npm publication through high-risk Story 12.5 as the final planned product action.
 
 Downstroke is not treated as ready just because it builds. It is ready when its native workflows, evidence, safety gates and package surface can prove it.

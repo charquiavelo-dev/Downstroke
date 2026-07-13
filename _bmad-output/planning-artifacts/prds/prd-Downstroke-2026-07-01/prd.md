@@ -2,7 +2,7 @@
 title: Downstroke
 status: final
 created: 2026-07-01
-updated: 2026-07-01
+updated: 2026-07-13
 sourceRequirements: ../../epics.md
 ---
 
@@ -10,7 +10,7 @@ sourceRequirements: ../../epics.md
 
 ## 0. Document Purpose
 
-This PRD is the canonical product contract for Downstroke. It defines user outcomes and capabilities for maintainers, project developers and downstream planning workflows. Implementation mechanisms belong in the architecture or addendum. The approved FR1-FR93 and NFR1-NFR50 inventory in `../../epics.md` is the reconciliation source while this draft is completed.
+This PRD is the canonical product contract for Downstroke. It defines user outcomes and capabilities for maintainers, project developers and downstream planning workflows. Implementation mechanisms belong in the architecture or addendum. The approved FR1-FR106 and NFR1-NFR55 inventory in `../../epics.md` is the reconciliation source while this draft is completed.
 
 ## 1. Vision
 
@@ -44,6 +44,7 @@ The product helps developers move from a human product description to an appropr
 
 - GitFlow and multi-repository governance.
 - Guided supported stacks, providers, maps, design systems and interactive experiences.
+- Guided consumer installation plus deterministic UX direction, motion, performance, reusable pattern and design-token capabilities before public distribution.
 - Managed migrations, npm distribution, public documentation and sanitized release workflows.
 
 ### Native Platform Expansion
@@ -70,10 +71,10 @@ The product helps developers move from a human product description to an appropr
 
 ## 6. Feature Groups and Release Gates
 
-1. Safe initialization and project diagnosis — FR1-FR5.
+1. Safe initialization, project diagnosis and consumer installation — FR1-FR5, FR94.
 2. Git and workspace governance — FR6-FR16.
 3. Supported stack and deployment guidance — FR17-FR35, FR51-FR55, FR69-FR71.
-4. Interactive and visual delivery — FR36-FR50.
+4. Interactive and visual delivery — FR36-FR50, FR95-FR106.
 5. LLM usage visibility — FR56-FR59.
 6. Native platform, safe project-knowledge migration and governed Knowledge Engine foundation — FR60-FR68, FR82-FR93.
 7. Package distribution and public documentation — FR72-FR81.
@@ -292,6 +293,32 @@ FR92: Downstroke audits project knowledge for stale stack packages, contradictor
 
 FR93: Downstroke can propose candidate knowledge from repeated observations, but never activates candidates without human approval and workflow evidence.
 
+FR94: A local Downstroke consumer installation runs from a package artifact in the target project, performs the required guided setup and validation, and never treats a cloned framework source repository as the installed product.
+
+FR95: Downstroke transforms incomplete UI requests into a traceable design direction after asking only the missing UX-relevant questions and supports common product surface types.
+
+FR96: Every generated screen is described by versioned, allowed-value visual parameters instead of free-form styling instructions.
+
+FR97: Downstroke provides reusable motion levels and effects implemented with compositor-friendly properties unless a documented exception is required.
+
+FR98: Every motion pattern automatically provides an equivalent reduced-motion experience and no content depends on animation for comprehension.
+
+FR99: Every generated screen declares and validates a rendering performance budget covering layers, blur, filters, GPU-safe animation, reserved space and lazy media.
+
+FR100: Downstroke provides reusable scroll patterns with documented purpose, performance cost, accessibility behavior and fallback.
+
+FR101: A screen can select at most one compatible signature interaction per viewport from a governed set of interaction patterns.
+
+FR102: Downstroke indexes reusable components and visual patterns in a searchable registry with stack, dependency, motion, performance, accessibility, preview and variant metadata.
+
+FR103: Downstroke catalogs external UI resources with license, provenance, compatibility, documentation, tags and maintenance status so selection does not imply unsafe copying or installation.
+
+FR104: Downstroke generates one versioned design-token source covering color, spacing, radius, elevation, typography, motion, z-index, opacity, duration and easing, with only justified target exports.
+
+FR105: Downstroke projects the single design-system source into human and supported LLM/tool artifacts without creating competing authorities.
+
+FR106: Downstroke maintains curated inspiration references classified by industry, layout, motion, components, color, interaction and complexity.
+
 ## 11. Cross-Cutting Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -393,6 +420,16 @@ NFR48: Worker outputs are claims until evidence policy validates them; no worker
 NFR49: Knowledge storage remains local, inspectable and deterministic in the MVP; embeddings, vector databases and web crawlers are optional future indexes, not authorities.
 
 NFR50: Generated summaries, LLM memory and RAG snippets cannot become accepted knowledge without source evidence and review.
+
+NFR51: UX direction, screen parameters, tokens and projections are deterministic, schema-versioned and traceable to approved input; unsupported free-form visual values fail validation.
+
+NFR52: Motion honors `prefers-reduced-motion`, preserves equivalent understanding and interaction, and defaults to `transform` and `opacity` rather than layout-triggering properties.
+
+NFR53: Generated interfaces prevent avoidable CLS, layout thrashing and repaint pressure, and fail their declared performance budget when limits are exceeded without an approved exception.
+
+NFR54: External UI resources and inspiration remain references until license, provenance, compatibility and maintenance state are verified; registry records cannot execute arbitrary install-time code.
+
+NFR55: Public npm publication is the final planned product action after local consumer installation, remaining product capabilities and public-release evidence pass; planning or package preparation never grants publish authority.
 
 ## 12. Success Metrics
 

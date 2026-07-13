@@ -6,4 +6,4 @@
 
 ## Deferred from: Story 2.5 token estimation review (2026-07-06)
 
-- Implement Story 10.7 only after all product and release workflows are complete: compare estimates with representative provider-observed usage, report calibration evidence, and determine whether planned work fits the currently available token budget.
+- Implement Story 12.4 after representative product and Intelligent UX Generation workflows are complete and before final npm publication: compare estimates with provider-observed usage, report calibration evidence, and determine whether planned work fits the currently available token budget.

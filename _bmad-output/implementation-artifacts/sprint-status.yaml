@@ -101,9 +101,28 @@ development_status:
   10-1-deliver-a-complete-repository-readme: done
   10-2-automate-native-downstroke-releases: review
   10-3-prepare-the-npm-package: review
-  10-4-publish-and-verify-the-npm-release: backlog
-  10-5-preserve-the-private-maintenance-repository: backlog
-  10-6-cut-a-sanitized-single-commit-public-release: backlog
-  10-7-launch-the-react-documentation-and-showcase-site: backlog
-  10-8-calibrate-token-estimates-against-observed-usage: backlog
+  10-4-validate-guided-consumer-installation: backlog
   epic-10-retrospective: optional
+
+  epic-11: backlog
+  11-1-create-the-ux-direction-engine: backlog
+  11-2-define-versioned-visual-parameters: backlog
+  11-3-establish-the-reduced-motion-contract: backlog
+  11-4-generate-governed-motion-effects: backlog
+  11-5-enforce-screen-performance-budgets: backlog
+  11-6-provide-reusable-scroll-patterns: backlog
+  11-7-select-one-signature-interaction: backlog
+  11-8-create-the-pattern-library-registry: backlog
+  11-9-catalog-external-ui-resources: backlog
+  11-10-generate-versioned-design-tokens: backlog
+  11-11-project-the-design-system-to-consumers: backlog
+  11-12-curate-the-inspiration-catalog: backlog
+  epic-11-retrospective: optional
+
+  epic-12: backlog
+  12-1-preserve-the-private-maintenance-repository: backlog
+  12-2-cut-a-sanitized-single-commit-public-release: backlog
+  12-3-launch-the-react-documentation-and-showcase-site: backlog
+  12-4-calibrate-token-estimates-against-observed-usage: backlog
+  12-5-publish-and-verify-the-npm-release: backlog
+  epic-12-retrospective: optional
