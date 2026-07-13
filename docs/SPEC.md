@@ -10,7 +10,7 @@ This is the canonical product and engineering contract. Replace every `<...>` va
 - Last reviewed: `2026-07-01`
 - Product/domain in focus: `modular AI-assisted software delivery`
 - Project artifact language: `English`; user communication may be Spanish.
-- Intended npm publisher account: `charquiavelo`; package name and scope remain release decisions.
+- Intended npm publisher account: `charquiavelo`; public package name: `downstroke`; license: `Apache-2.0`.
 
 ## Product
 
@@ -112,11 +112,12 @@ Keep product domains isolated. Shared packages contain only contracts or primiti
 | Experience fact | Repository | Valid provenance/trust; verified requires sanitized matching evidence; conflicting IDs fail | Local append-only JSONL plus deterministic ID index |
 | Workflow item | Repository | Versioned native item with status, ACs, tasks, risk, review mode, source and evidence references; high-risk review is always individual | Local `.downstroke/workflows/` JSON/JSONL records |
 | Workflow checkpoint | Repository | Controlled mode advances only through plan, review, implementation and verification checkpoints with explicit approval or pause | Local append-only checkpoint and decision records |
-| Execution task | Repository | Planner, scheduler, executor, verifier and recorder state are explicit; deterministic execution is attempted before worker orchestration | Local workflow/execution ledger |
+| Execution task | Repository | Objective, owner, dependencies, priority, estimate, risk, rollback, approvals and five-stage state are explicit; only passing verifier evidence completes work | Local hash-chained `.downstroke/executions/events.jsonl` ledger |
 | Release plan | Repository | Git tip, baseline tag, commit set, SemVer decision, channel, dist-tag, notes, changelog, package targets, checks, approvals and stable hash agree before preparation | Local `.downstroke/releases/` plan and append-only event records |
 | Native worker | Repository | Worker role, strict input/output schemas, allowed tools, mutation rights, finite budget, stop condition, evidence and audit requirements are declared before execution; built-ins are immutable and read-only | Local `.downstroke/workers/` registry and hash-chained audit events |
-| Knowledge lifecycle rule | Repository | Facts can expire, become stale, be invalidated or lose confidence only through explicit policy and evidence | Experience lifecycle records |
-| Knowledge record | Repository | Rules, decisions, preferences and stack notes include scope, status, trust, source evidence, lifecycle and deterministic ID | Local `.downstroke/knowledge/` records |
+| Public npm package | Framework maintainer | One Apache-2.0 `downstroke` tarball owns the binary, metadata and allowlist; internal workspaces remain private and bundled | Native pack evidence plus offline clean-install smoke checks |
+| Knowledge lifecycle rule | Repository | TTL, source-hash and exact stack-version drift derive stale state lazily; declared transitions remain append-only and evidenced | Local knowledge registry plus unified audit/health report |
+| Knowledge record | Repository | Rules, decisions, preferences and stack notes include scope, separate status/trust, source evidence, lifecycle and deterministic ID | Fixed `.downstroke/knowledge/manifest.json` plus append-only `records.jsonl` |
 | Stack package | Repository | Technology/version knowledge is version-bound, source-linked and stale when the detected project version changes | Local knowledge registry and health report |
 | Knowledge candidate | Repository | Observations can propose knowledge, but candidates never become active without human approval | Local candidate records plus workflow decision |
 
@@ -140,15 +141,16 @@ For each endpoint/event/tool define method or event name, auth/role, request sch
 | `downstroke workflow resume` | Project developer | Optional workflow item ID | Computes next action only from persisted workflow records; invalid/conflicted state blocks instead of guessing | Core and CLI workflow resume tests |
 | `downstroke worker list` | Project developer | Immutable built-in catalog plus valid local registrations | Executes no worker or tool; malformed local state fails rather than disappearing | Worker catalog and registry tests |
 | `downstroke worker register` | Project developer | Strict manifest, routing evidence and justification; preview then exact `--plan` plus `--yes` | Deterministic work selects the simpler path; mutation-capable or manipulated manifests block; registration grants no execution authority | Worker routing, registration and audit tests |
-| `downstroke run` | Project developer | Execution task, mode and optional worker manifest; preview then explicit approval for mutation | Uses deterministic planner/scheduler/executor/verifier/recorder first; worker orchestration is rejected unless justified and scoped | Runtime and workflow orchestration tests |
+| `downstroke run` | Project developer | Git-anchored execution task; preview then exact plan hash plus `--yes`, with separate high-risk approval | Runs only native `project.verify`; revalidates dependencies/workflow and records Planner through Recorder. Worker mode records immutable built-in preflight and blocks before invocation until a typed adapter exists | Core and CLI execution-ledger tests |
 | `downstroke release plan` | Framework maintainer | Git history, package metadata and release policy; read-only human/JSON plan | Blocks malformed commits, invalid baselines, dirty release-owned files, branch/tag/version collisions and metadata drift | Stable plan and blocked-state tests |
 | `downstroke release prepare` | Framework maintainer | Verified plan; preview then `--yes` for local release-owned files only | Atomically updates declared versions, lockfile metadata, changelog and local release state; cannot publish, push or tag | Idempotent preparation and blocked-publish tests |
-| `downstroke health` | Project developer | Repository scope and optional strict mode | Explains blockers, missing evidence, unresolved conflicts, failed gates and highest-risk workflow items without executing unsafe artifacts | Health engine tests and fixture reports |
+| `npm pack --workspace downstroke` | Framework maintainer | Built public workspace with staged private runtime packages | Produces one allowlisted tarball; verification rejects incomplete metadata or missing bundles | Package manifest test and offline help/init/doctor smoke evidence |
+| `downstroke health` | Project developer | Repository scope and optional strict mode | Explains blockers, missing evidence, unresolved conflicts, failed gates, lifecycle findings and highest-risk workflow items without executing unsafe artifacts | Health engine tests and fixture reports |
 | `downstroke stack detect` | Project developer | Local repository package/config files | Reports observed technologies, versions and uncertainty without executing arbitrary scripts | Stack detection tests |
-| `downstroke knowledge list` | Project developer | Repository-local knowledge registry | Shows accepted, proposed, stale, deprecated, invalidated and conflicted records | Knowledge registry tests |
-| `downstroke knowledge add` | Project developer | Knowledge record JSON or guided fields; preview then `--yes` | Rejects missing evidence for verified records; conflicts pause for decision | Knowledge write and conflict tests |
+| `downstroke knowledge list` | Project developer | Repository-local knowledge registry | Shows declared trust and lazily derived effective status, including stale, quarantined and conflicted records | Knowledge registry tests |
+| `downstroke knowledge add` | Project developer | Strict knowledge record JSON; preview then exact `--plan` plus `--yes` | Rejects unknown fields, unsafe provenance, deterministic-ID drift and missing transition evidence | Knowledge write and provenance tests |
 | `downstroke knowledge compile` | Project developer | Task type, optional stack/file scope and context budget | Produces deterministic bounded context with included/excluded knowledge IDs | Context compiler tests |
-| `downstroke knowledge audit` | Project developer | Repository-local registry and detected stack | Reports stale, conflicted, low-evidence and lifecycle-failed knowledge | Knowledge health tests |
+| `downstroke knowledge audit` | Project developer | Repository-local registry, source hashes, detected stack and release evidence | Reports stale, conflicted, quarantined, candidate and lifecycle/release findings with next safe actions | Knowledge health and strict-health tests |
 
 External integrations must define timeout, retry, rate-limit, fallback, secret ownership and observability behavior.
 

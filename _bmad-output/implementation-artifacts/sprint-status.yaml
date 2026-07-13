@@ -93,14 +93,14 @@ development_status:
   9-11-add-an-explicit-native-worker-runtime: review
   9-12-add-a-remote-module-registry: backlog
   9-13-automate-conflict-aware-managed-migrations: backlog
-  9-14-add-native-execution-engine: backlog
-  9-15-add-native-knowledge-lifecycle-and-health-engine: backlog
+  9-14-add-native-execution-engine: review
+  9-15-add-native-knowledge-lifecycle-and-health-engine: review
   epic-9-retrospective: optional
 
   epic-10: in-progress
-  10-1-deliver-a-complete-repository-readme: backlog
+  10-1-deliver-a-complete-repository-readme: done
   10-2-automate-native-downstroke-releases: review
-  10-3-prepare-the-npm-package: backlog
+  10-3-prepare-the-npm-package: review
   10-4-publish-and-verify-the-npm-release: backlog
   10-5-preserve-the-private-maintenance-repository: backlog
   10-6-cut-a-sanitized-single-commit-public-release: backlog

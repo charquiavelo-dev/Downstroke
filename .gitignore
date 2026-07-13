@@ -2,4 +2,5 @@ _bmad/config.user.toml
 .npm.keys
 node_modules/
 dist/
+apps/cli/LICENSE
 .codegraph/daemon.pid

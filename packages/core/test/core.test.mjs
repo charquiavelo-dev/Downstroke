@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyNativeReleasePreparation, applyNativeWorkerRegistration, applyTokenEconomyRoute, applyWorkflowItem, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, listNativeWorkers, nativeOnlySurfaces, nativeRuntimeResponsibilities, nativeWorkerCatalog, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planNativeRelease, planNativeWorkerRegistration, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus, validateNativeWorkerOutput, verifyNativeRelease } from "../dist/index.js";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyKnowledgeRecord, applyNativeExecution, applyNativeReleasePreparation, applyNativeWorkerRegistration, applyTokenEconomyRoute, applyWorkflowItem, auditProjectKnowledge, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, experienceManifest, governDecision, initializeExperience, inspectProject, installFiles, listKnowledgeRecords, listNativeWorkers, nativeOnlySurfaces, nativeRuntimeResponsibilities, nativeWorkerCatalog, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planKnowledgeRecord, planNativeExecution, planNativeRelease, planNativeWorkerRegistration, planTokenEconomyRoute, planWorkflowItem, queryCodeContext, readCommunicationPolicy, readGitPolicy, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, scanNativeOnlySurfaces, tokenUsageStatus, validateNativeWorkerOutput, verifyNativeRelease } from "../dist/index.js";
 
 const exec = promisify(execFile);
 process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -400,7 +400,7 @@ test("native release planning blocks unsafe baselines, branches, owned drift and
   const graphTool = JSON.parse(await readFile(join(graphGap, "packages", "tool", "package.json"), "utf8"));
   graphTool.dependencies = { "@fixture/helper": "0.1.0" };
   await writeFile(join(graphGap, "packages", "tool", "package.json"), `${JSON.stringify(graphTool, null, 2)}\n`);
-  assert.match((await planNativeRelease(graphGap, { channel: "stable", packages: ["packages/tool"] })).blockers.join(" "), /undeclared workspace package/);
+  assert.match((await planNativeRelease(graphGap, { channel: "stable", packages: ["packages/tool"] })).blockers.join(" "), /unpublished workspace package/);
 
   const stale = await releaseFixture();
   await writeFile(join(stale, "fix.txt"), "fix\n");
@@ -523,6 +523,108 @@ test("native worker registration is guarded, idempotent and hash-chain audited",
   assert.equal(JSON.parse(audit[0]).previousHash, null);
   assert.doesNotMatch(`${registry[0]}${audit[0]}`, new RegExp(root.replaceAll("\\", "\\\\"), "i"));
   assert.equal((await listNativeWorkers(root)).length, 8);
+});
+
+function executionRequest(overrides = {}) {
+  return {
+    id: "task.verify",
+    operation: "project.verify",
+    objective: "Verify the repository with its declared checks.",
+    owner: "maintainer",
+    dependencies: [],
+    priority: "normal",
+    estimateMinutes: 5,
+    risk: "normal",
+    rollbackReference: "docs/production-readiness.md",
+    ...overrides,
+  };
+}
+
+async function executionFixture(typecheckExit = 0) {
+  const root = await gitFixture();
+  await writeFile(join(root, "package.json"), `${JSON.stringify({ scripts: {
+    typecheck: `node -e "process.exit(${typecheckExit})"`,
+    test: "node -e \"process.exit(0)\"",
+    build: "node -e \"process.exit(0)\"",
+  } }, null, 2)}\n`);
+  await exec("git", ["add", "package.json"], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: add verification scripts"], { cwd: root });
+  return root;
+}
+
+test("native execution preview is stable and deterministic verification records all five stages", async () => {
+  const root = await executionFixture();
+  const request = executionRequest();
+  assert.equal((await planNativeExecution(root, { ...request, unknown: true })).status, "blocked");
+  assert.match((await planNativeExecution(root, executionRequest({ dependencies: ["task.missing"] }))).blockers.join(" "), /dependencies/i);
+  const highRisk = await planNativeExecution(root, executionRequest({ id: "task.high-risk", risk: "high" }));
+  assert.deepEqual(highRisk.requiredApprovals, ["execution", "high-risk-review"]);
+  assert.equal((await applyNativeExecution(root, highRisk, highRisk.planHash, { execution: true, highRisk: false })).executionStatus, "blocked");
+  const plan = await planNativeExecution(root, request);
+  assert.equal(plan.status, "ready");
+  assert.equal(plan.mode, "deterministic");
+  assert.deepEqual(plan.task, request);
+  assert.deepEqual(plan.stages.map(({ stage }) => stage), ["Planner", "Scheduler", "Executor", "Verifier", "Recorder"]);
+  assert.deepEqual(plan.requiredApprovals, ["execution"]);
+  assert.match(plan.planHash, /^[a-f0-9]{64}$/);
+  assert.deepEqual(await planNativeExecution(root, request), plan);
+  await assert.rejects(readFile(join(root, ".downstroke", "executions", "events.jsonl")));
+
+  assert.equal((await applyNativeExecution(root, plan, plan.planHash, { execution: true, highRisk: false })).executionStatus, "completed");
+  assert.equal((await applyNativeExecution(root, plan, plan.planHash, { execution: true, highRisk: false })).executionStatus, "completed");
+  const events = (await readFile(join(root, ".downstroke", "executions", "events.jsonl"), "utf8")).trim().split(/\r?\n/).map(JSON.parse);
+  assert.deepEqual(events.map(({ stage }) => stage), ["Planner", "Scheduler", "Executor", "Verifier", "Recorder"]);
+  assert.equal(events.at(-1).status, "completed");
+  assert.equal(events.filter(({ stage }) => stage === "Recorder").length, 1);
+  assert.equal(events.some(({ worker }) => worker), false);
+});
+
+test("native worker execution persists preflight and stops before invocation", async () => {
+  const root = await executionFixture();
+  const plan = await planNativeExecution(root, executionRequest({ id: "task.audit", mode: "worker", workerId: "downstroke.risk-auditor", justification: "Independent risk evidence is required before implementation." }));
+  assert.equal(plan.status, "ready");
+  assert.equal(plan.mode, "worker");
+  assert.equal(plan.selectedWorker.id, "downstroke.risk-auditor");
+  assert.ok(plan.selectedWorker.budget.maxSteps > 0);
+  assert.ok(plan.selectedWorker.evidenceRequirements.length > 0);
+
+  const result = await applyNativeExecution(root, plan, plan.planHash, { execution: true, highRisk: false });
+  assert.equal(result.executionStatus, "blocked");
+  assert.match(result.nextAction, /adapter/i);
+  const events = (await readFile(join(root, ".downstroke", "executions", "events.jsonl"), "utf8")).trim().split(/\r?\n/).map(JSON.parse);
+  assert.deepEqual(events.map(({ stage }) => stage), ["Planner", "Scheduler"]);
+  assert.equal(events.at(-1).status, "blocked");
+  assert.equal(events.at(0).worker.id, "downstroke.risk-auditor");
+  assert.equal(events.some(({ stage, status }) => stage === "Executor" || status === "completed"), false);
+  await assert.rejects(readFile(join(root, ".downstroke", "workers", "audit.jsonl")));
+});
+
+test("native execution records verification failure and rejects stale plans", async () => {
+  const root = await executionFixture(1);
+  const conflictPlan = await planWorkflowItem(root, {
+    item: { id: "story.execution-conflict", type: "story", title: "Conflicted execution", status: "blocked" },
+    conflict: { owner: "maintainer", sources: [{ path: "docs/a.md", hash: "a".repeat(64) }, { path: "docs/b.md", hash: "b".repeat(64) }], options: [{ id: "a", consequence: "Keep A" }, { id: "b", consequence: "Keep B" }], consequences: ["Execution must pause"] },
+  });
+  assert.equal((await applyWorkflowItem(root, conflictPlan)).status, "warn");
+  assert.match((await planNativeExecution(root, executionRequest({ id: "task.workflow-blocked", workflowItemId: "story.execution-conflict" }))).blockers.join(" "), /workflow/i);
+  const plan = await planNativeExecution(root, executionRequest({ id: "task.fail" }));
+  assert.equal((await applyNativeExecution(root, plan, "0".repeat(64), { execution: true, highRisk: false })).executionStatus, "blocked");
+  const result = await applyNativeExecution(root, plan, plan.planHash, { execution: true, highRisk: false });
+  assert.equal(result.executionStatus, "failed");
+  assert.match(result.nextAction, /check/i);
+  const events = (await readFile(join(root, ".downstroke", "executions", "events.jsonl"), "utf8")).trim().split(/\r?\n/).map(JSON.parse);
+  assert.equal(events.at(-1).stage, "Recorder");
+  assert.equal(events.at(-1).status, "failed");
+  assert.equal(events.some(({ status }) => status === "completed"), false);
+  assert.deepEqual(events.find(({ stage }) => stage === "Verifier").evidence, ["typecheck:exit=1"]);
+
+  const staleRoot = await executionFixture();
+  const stalePlan = await planNativeExecution(staleRoot, executionRequest({ id: "task.stale" }));
+  await writeFile(join(staleRoot, "change.txt"), "changed\n");
+  await exec("git", ["add", "change.txt"], { cwd: staleRoot });
+  await exec("git", ["commit", "-m", "chore: change head"], { cwd: staleRoot });
+  assert.equal((await applyNativeExecution(staleRoot, stalePlan, stalePlan.planHash, { execution: true, highRisk: false })).executionStatus, "blocked");
+  await assert.rejects(readFile(join(staleRoot, ".downstroke", "executions", "events.jsonl")));
 });
 
 test("experience initialization is local, secure and idempotent", async () => {
@@ -990,7 +1092,6 @@ test("context compiler includes safe accepted context and blocks leakage determi
   assert.equal((await applyCodeIntelligenceIndex(root, await planCodeIntelligenceIndex(root))).status, "ok");
   await mkdir(join(root, ".downstroke", "experience"), { recursive: true });
   await mkdir(join(root, ".downstroke", "workflows"), { recursive: true });
-  await mkdir(join(root, ".downstroke", "knowledge"), { recursive: true });
   const stamp = "2026-07-08T00:00:00.000Z";
   const fact = { id: "fact.rule.safe", kind: "rule", scope: "repo", status: "verified", value: { rule: "Use native context only" }, source: { type: "file", path: "docs/SPEC.md", hash: "a".repeat(64) }, confidence: 1, createdAt: stamp, updatedAt: stamp, evidence: { type: "file_hash", ref: "ev.safe" }, security: { trustLevel: "project", secretScan: "passed", injectionScan: "passed" } };
   const secret = { ...fact, id: "fact.secret", status: "observed", value: { token: "api_key=\"abcdefghijklmnopqrstuvwxyz\"" } };
@@ -998,17 +1099,94 @@ test("context compiler includes safe accepted context and blocks leakage determi
   await writeFile(join(root, ".downstroke", "workflows", "items.jsonl"), `${JSON.stringify({ id: "story.9.9", type: "story", title: "Compile context", status: "ready-for-dev", risk: "high", acceptanceCriteria: [], tasks: [], evidence: ["npm test"], deferredWork: ["Resolve unknown stack docs"], createdAt: stamp, updatedAt: stamp })}\n`);
   await writeFile(join(root, ".downstroke", "workflows", "decisions.jsonl"), "");
   await writeFile(join(root, ".downstroke", "workflows", "checkpoints.jsonl"), "");
-  await writeFile(join(root, ".downstroke", "knowledge", "records.jsonl"), [
-    { id: "kr.react", kind: "stack-note", status: "accepted", stack: ["TypeScript"], summary: "Prefer strict TypeScript boundaries", source: { path: "docs/SPEC.md", hash: "b".repeat(64) } },
-    { id: "kr.proposed", kind: "rule", status: "proposed", summary: "Draft rule", source: { path: "docs/SPEC.md" } },
-  ].map((item) => JSON.stringify(item)).join("\n"));
+  const acceptedKnowledge = await addKnowledge(root, { key: "stack.typescript", kind: "stack-note", scope: "repository", status: "accepted", trust: "observed", stack: ["TypeScript"], summary: "Prefer strict TypeScript boundaries", source: { type: "file", path: "README.md" }, evidenceRefs: ["review.typescript"], lifecycle: {}, transition: { reason: "Accepted for this repository.", evidenceRef: "workflow.review" } });
+  const proposedKnowledge = await addKnowledge(root, { key: "rule.draft", kind: "rule", scope: "repository", status: "proposed", trust: "inferred", summary: "Draft rule", source: { type: "file", path: "README.md" }, evidenceRefs: ["observation.draft"], lifecycle: {}, transition: { reason: "Observed once; review is pending." } });
 
   const first = await compileTaskContext(root, { taskId: "story.9.9", paths: ["src/app.ts"], stack: ["TypeScript"], budget: 16 });
   const second = await compileTaskContext(root, { taskId: "story.9.9", paths: ["src/app.ts"], stack: ["TypeScript"], budget: 16 });
   assert.equal(first.status, "blocked");
   assert.equal(first.stableHash, second.stableHash);
-  assert.equal(first.included.some(({ id }) => id === "kr.react"), true);
-  assert.equal(first.excluded.some(({ id, reason }) => id === "kr.proposed" && reason === "not-accepted"), true);
+  assert.equal(first.included.some(({ id }) => id === acceptedKnowledge.id), true);
+  assert.equal(first.excluded.some(({ id, reason }) => id === proposedKnowledge.id && reason === "not-accepted"), true);
   assert.equal(first.excluded.some(({ id, reason }) => id === "fact.secret" && reason === "secret-like-content"), true);
   assert.equal(JSON.stringify(first).includes("abcdefghijklmnopqrstuvwxyz"), false);
+});
+
+async function addKnowledge(root, input) {
+  const plan = await planKnowledgeRecord(root, input);
+  assert.equal(plan.status, "ready", plan.blockers.join("; "));
+  assert.equal((await applyKnowledgeRecord(root, plan, plan.planHash)).status, "ok");
+  return plan.record;
+}
+
+test("knowledge registry derives deterministic lifecycle status and compiler exclusions", async () => {
+  const root = await gitFixture();
+  await writeFile(join(root, "policy.md"), "Use strict boundaries.\n");
+  await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { typescript: "5.8.0" } }));
+  const base = { key: "rule.boundaries", kind: "rule", scope: "repository", status: "accepted", trust: "observed", summary: "Use strict boundaries.", source: { type: "file", path: "policy.md" }, evidenceRefs: ["review.policy"], transition: { reason: "Maintainer accepted the repository rule.", evidenceRef: "workflow.review" } };
+  const preview = await planKnowledgeRecord(root, { ...base, lifecycle: { expiresAt: "2026-07-14T00:00:00.000Z" } });
+  assert.equal(preview.status, "ready");
+  assert.match(preview.record.id, /^knowledge\.[a-f0-9]{64}$/);
+  assert.deepEqual((await planKnowledgeRecord(root, { ...base, lifecycle: { expiresAt: "2026-07-14T00:00:00.000Z" } })).record, preview.record);
+  await assert.rejects(readFile(join(root, ".downstroke", "knowledge", "records.jsonl")));
+  const firstApply = await applyKnowledgeRecord(root, preview, preview.planHash);
+  assert.equal(firstApply.status, "ok", firstApply.message);
+  const secondApply = await applyKnowledgeRecord(root, preview, preview.planHash);
+  assert.equal(secondApply.status, "ok", secondApply.message);
+  const stack = await addKnowledge(root, { ...base, key: "stack.typescript", kind: "stack-package", summary: "TypeScript package knowledge.", lifecycle: { stackPackage: { technology: "TypeScript", version: "5.8.0" } } });
+  assert.equal((await listKnowledgeRecords(root)).length, 2);
+
+  await writeFile(join(root, "policy.md"), "Changed.\n");
+  await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { typescript: "5.9.0" } }));
+  const audit = await auditProjectKnowledge(root, "2026-07-15T00:00:00.000Z");
+  assert.equal(audit.records.find(({ id }) => id === preview.record.id).effectiveStatus, "stale");
+  assert.equal(audit.records.find(({ id }) => id === stack.id).effectiveStatus, "stale");
+  assert.ok(audit.findings.some(({ code }) => code === "knowledge.expired"));
+  assert.ok(audit.findings.some(({ code }) => code === "knowledge.source-drift"));
+  assert.ok(audit.findings.some(({ code }) => code === "knowledge.stack-mismatch"));
+  const compiled = await compileTaskContext(root, { taskId: "task.knowledge", paths: [], stack: ["TypeScript"] });
+  assert.equal(compiled.included.some(({ id }) => id === preview.record.id || id === stack.id), false);
+  assert.ok(compiled.excluded.some(({ id, reason }) => id === preview.record.id && reason === "stale"));
+});
+
+test("knowledge conflicts and repeated observations remain visible without self-activation", async () => {
+  const root = await gitFixture();
+  for (const [name, content] of [["a.md", "Use tabs.\n"], ["b.md", "Use spaces.\n"], ["c.md", "Use tabs.\n"], ["d.md", "Use tabs.\n"]]) await writeFile(join(root, name), content);
+  const common = { key: "rule.indentation", kind: "rule", scope: "repository", trust: "observed", evidenceRefs: ["review.indentation"], lifecycle: {}, transition: { reason: "Repository observation.", evidenceRef: "workflow.review" } };
+  await addKnowledge(root, { ...common, status: "accepted", summary: "Use tabs.", source: { type: "file", path: "a.md" } });
+  await addKnowledge(root, { ...common, status: "accepted", summary: "Use spaces.", source: { type: "file", path: "b.md" } });
+  await addKnowledge(root, { ...common, status: "proposed", summary: "Use tabs.", source: { type: "file", path: "c.md" } });
+  await addKnowledge(root, { ...common, status: "proposed", summary: "Use tabs.", source: { type: "file", path: "d.md" } });
+  const audit = await auditProjectKnowledge(root, "2026-07-13T00:00:00.000Z");
+  assert.equal(audit.records.filter(({ effectiveStatus }) => effectiveStatus === "conflicted").length, 2);
+  assert.equal(audit.candidates.length, 1);
+  assert.equal(audit.candidates[0].status, "proposed");
+  assert.equal(audit.records.some(({ effectiveStatus }) => effectiveStatus === "accepted"), false);
+  const compiled = await compileTaskContext(root, { taskId: "task.conflict", paths: [] });
+  assert.equal(compiled.included.some(({ id }) => id.startsWith("knowledge.")), false);
+});
+
+test("knowledge preserves Experience provenance and quarantine without copying imported payloads", async () => {
+  const root = await gitFixture();
+  const record = await addKnowledge(root, {
+    key: "rule.imported-policy",
+    kind: "rule",
+    scope: "repository",
+    status: "quarantined",
+    trust: "observed",
+    summary: "Imported policy requires maintainer review.",
+    source: { type: "experience", path: "docs/imported-policy.md", hash: "a".repeat(64), experienceFactId: "fact.imported-policy" },
+    evidenceRefs: ["import.sha256:a"],
+    lifecycle: {},
+    transition: { reason: "Experience import remained quarantined." },
+  });
+  const audit = await auditProjectKnowledge(root, "2026-07-13T00:00:00.000Z");
+  const effective = audit.records.find(({ id }) => id === record.id);
+  assert.equal(effective.effectiveStatus, "quarantined");
+  assert.equal(effective.source.experienceFactId, "fact.imported-policy");
+  assert.equal(effective.source.path, "docs/imported-policy.md");
+  assert.equal(effective.source.hash, "a".repeat(64));
+  assert.equal(JSON.stringify(effective).includes("payload"), false);
+  const compiled = await compileTaskContext(root, { taskId: "task.import", paths: [] });
+  assert.ok(compiled.excluded.some(({ id, reason }) => id === record.id && reason === "quarantined"));
 });

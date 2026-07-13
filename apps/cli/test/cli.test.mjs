@@ -3,12 +3,14 @@ import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 import { nativeOnlySurfaces } from "@downstroke/core";
 import { run } from "../dist/index.js";
 
 const exec = promisify(execFile);
+const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 process.env.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
 
@@ -60,6 +62,21 @@ test("empty CLI entry shows native help without mutation", async () => {
   assert.match(output.join("\n"), /downstroke workflow add/);
   assert.match(output.join("\n"), /--approved --yes/);
   assert.deepEqual(await readdir(root), []);
+});
+
+test("public package is self-contained and internal workspaces stay private", async () => {
+  const manifest = JSON.parse(await readFile(join(repositoryRoot, "apps", "cli", "package.json"), "utf8"));
+  assert.equal(manifest.name, "downstroke");
+  assert.equal(manifest.license, "Apache-2.0");
+  assert.equal(manifest.bin.downstroke, "dist/index.js");
+  assert.equal(manifest.engines.node, ">=22");
+  assert.deepEqual(manifest.files, ["dist", "README.md", "LICENSE"]);
+  assert.deepEqual(manifest.bundleDependencies, ["@downstroke/agents", "@downstroke/core", "@downstroke/gates", "@downstroke/presets", "@downstroke/spec"]);
+  for (const name of ["agents", "core", "gates", "presets", "spec"]) {
+    const internal = JSON.parse(await readFile(join(repositoryRoot, "packages", name, "package.json"), "utf8"));
+    assert.equal(internal.private, true);
+    assert.equal(JSON.parse(await readFile(join(repositoryRoot, "apps", "cli", "node_modules", "@downstroke", name, "package.json"), "utf8")).name, internal.name);
+  }
 });
 
 test("doctor JSON reports legacy artifacts as migration risks", async () => {
@@ -397,6 +414,34 @@ test("worker commands list, preview and idempotently register inert local manife
   assert.equal(await run(["worker", "register", "--manifest", manifest, "--task-id", "task.simple", "--task-class", "deterministic", "--tool-proven", "--single-path", "--justification", "A function proves the result.", "--json"], root), 1);
 });
 
+test("run previews and applies an exact native project verification plan", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-run-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await exec("git", ["config", "user.name", "Downstroke Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { typecheck: "node -e \"process.exit(0)\"" } }));
+  await exec("git", ["add", "package.json"], { cwd: root });
+  await exec("git", ["commit", "-m", "chore: add verification fixture"], { cwd: root });
+  const args = ["run", "--task-id", "task.verify", "--objective", "Verify declared project checks.", "--owner", "maintainer", "--rollback", "docs/production-readiness.md", "--json"];
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try { assert.equal(await run(args, root), 0); }
+  finally { console.log = originalLog; }
+  const plan = JSON.parse(output.join("\n"));
+  assert.equal(plan.mode, "deterministic");
+  assert.equal(plan.task.objective, "Verify declared project checks.");
+  assert.deepEqual(plan.requiredApprovals, ["execution"]);
+  await assert.rejects(readFile(join(root, ".downstroke", "executions", "events.jsonl")));
+  assert.equal(await run([...args, "--plan", "0".repeat(64), "--yes"], root), 1);
+  const applied = [];
+  console.log = (value) => applied.push(String(value));
+  try { assert.equal(await run([...args, "--plan", plan.planHash, "--yes"], root), 0); }
+  finally { console.log = originalLog; }
+  assert.equal(JSON.parse(applied.join("\n")).result.executionStatus, "completed");
+  assert.equal(JSON.parse((await readFile(join(root, ".downstroke", "executions", "events.jsonl"), "utf8")).trim().split(/\r?\n/).at(-1)).status, "completed");
+});
+
 test("experience init and authorized fact writes stay repository-local and secret-free", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-experience-"));
   await exec("git", ["init", "-b", "main"], { cwd: root });
@@ -716,4 +761,49 @@ test("knowledge compile is read-only and reports deterministic context", async (
   assert.equal(report.task.id, "task.1");
   assert.match(report.stableHash, /^[a-f0-9]{64}$/);
   await assert.rejects(readFile(join(root, ".downstroke", "knowledge", "compiled.json")));
+});
+
+test("knowledge CLI previews exact writes and shares lifecycle findings with strict health", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-knowledge-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "policy.md"), "Use repository-local evidence.\n");
+  await writeFile(join(root, "package.json"), JSON.stringify({ scripts: {} }));
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  const record = JSON.stringify({
+    key: "rule.local-evidence",
+    kind: "rule",
+    scope: "repository",
+    status: "accepted",
+    trust: "observed",
+    summary: "Use repository-local evidence.",
+    source: { type: "file", path: "policy.md" },
+    evidenceRefs: ["review.policy"],
+    lifecycle: {},
+    transition: { reason: "Maintainer accepted the rule.", evidenceRef: "workflow.review" },
+  });
+  const previewOutput = [];
+  const originalLog = console.log;
+  console.log = (value) => previewOutput.push(String(value));
+  try { assert.equal(await run(["knowledge", "add", "--record", record, "--json"], root), 0); }
+  finally { console.log = originalLog; }
+  const preview = JSON.parse(previewOutput.join("\n"));
+  assert.equal(preview.status, "ready");
+  await assert.rejects(readFile(join(root, ".downstroke", "knowledge", "records.jsonl")));
+  assert.equal(await run(["knowledge", "add", "--record", record, "--plan", preview.planHash, "--yes"], root), 0);
+
+  const listOutput = [];
+  console.log = (value) => listOutput.push(String(value));
+  try { assert.equal(await run(["knowledge", "list", "--json"], root), 0); }
+  finally { console.log = originalLog; }
+  assert.equal(JSON.parse(listOutput.join("\n"))[0].effectiveStatus, "accepted");
+
+  await writeFile(join(root, "policy.md"), "Changed policy.\n");
+  const healthOutput = [];
+  console.log = (value) => healthOutput.push(String(value));
+  try { assert.equal(await run(["health", "--strict", "--json"], root), 1); }
+  finally { console.log = originalLog; }
+  const health = JSON.parse(healthOutput.join("\n"));
+  assert.ok(health.knowledge.findings.some(({ code }) => code === "knowledge.source-drift"));
+  assert.ok(health.blockers.some((item) => item.startsWith("knowledge.source-drift:")));
 });

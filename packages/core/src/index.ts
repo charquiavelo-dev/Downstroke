@@ -126,15 +126,26 @@ export type NativeReleasePlan = {
 };
 
 export type KnowledgeRecord = {
+  schemaVersion: 1;
   id: string;
-  kind: "rule" | "decision" | "preference" | "stack-note";
+  key: string;
+  kind: "rule" | "decision" | "preference" | "stack-note" | "stack-package";
+  scope: "repository" | "team" | "organization" | "global";
   status: "accepted" | "proposed" | "deprecated" | "stale" | "invalidated" | "conflicted" | "quarantined";
-  scope?: "repository" | "team" | "organization" | "global" | undefined;
+  trust: "verified" | "observed" | "inferred";
   stack?: string[] | undefined;
   tags?: string[] | undefined;
   summary: string;
-  source: { path: string; hash?: string; section?: string };
+  source: { type: "file" | "experience"; path: string; hash: string; section?: string; experienceFactId?: string };
+  evidenceRefs: string[];
+  lifecycle: { expiresAt?: string; stackPackage?: { technology: string; version: string } };
+  transition: { reason: string; evidenceRef?: string };
+  recordedAt: string;
 };
+export type KnowledgePlan = { status: "ready" | "blocked"; action: "append" | "skip"; record: KnowledgeRecord | null; blockers: string[]; planHash: string | null };
+export type KnowledgeFinding = { code: string; severity: "warn" | "block"; recordId?: string; message: string; nextAction: string };
+export type EffectiveKnowledgeRecord = KnowledgeRecord & { effectiveStatus: KnowledgeRecord["status"]; lifecycleReasons: string[] };
+export type KnowledgeAudit = { status: "ok" | "warn" | "blocked"; evaluatedAt: string; records: EffectiveKnowledgeRecord[]; candidates: KnowledgeRecord[]; findings: KnowledgeFinding[]; blockers: string[] };
 export type ContextCompileRequest = {
   taskId: string;
   paths: string[];
@@ -208,6 +219,56 @@ export type NativeWorkerRegistrationPlan = {
   blockers: string[];
   nextAction: string;
   planHash: string | null;
+};
+
+export type NativeExecutionMode = "deterministic" | "worker";
+export type NativeExecutionStatus = "running" | "blocked" | "failed" | "completed";
+export type NativeExecutionTask = {
+  id: string;
+  operation: "project.verify";
+  objective: string;
+  owner: string;
+  dependencies: string[];
+  priority: "low" | "normal" | "high";
+  estimateMinutes: number;
+  risk: "normal" | "high";
+  rollbackReference: string;
+  workflowItemId?: string;
+  mode?: NativeExecutionMode;
+  workerId?: string;
+  justification?: string;
+};
+export type NativeExecutionWorker = {
+  id: string;
+  manifestHash: string;
+  allowedTools: readonly NativeWorkerToolId[];
+  budget: NativeWorkerManifest["budget"];
+  stopCondition: NativeWorkerManifest["stopCondition"];
+  evidenceRequirements: readonly string[];
+};
+export type NativeExecutionPlan = {
+  schemaVersion: 1;
+  status: "ready" | "blocked";
+  head: string | null;
+  task: NativeExecutionTask | null;
+  mode: NativeExecutionMode;
+  stages: typeof nativeRuntimeResponsibilities;
+  selectedWorker: NativeExecutionWorker | null;
+  requiredApprovals: ("execution" | "high-risk-review")[];
+  workflow: WorkflowNextAction | null;
+  unmetDependencies: string[];
+  blockers: string[];
+  nextAction: string;
+  planHash: string | null;
+};
+export type NativeExecutionOutcome = {
+  id: "execution.run";
+  status: "ok" | "warn" | "fail";
+  taskId: string | null;
+  executionStatus: "completed" | "blocked" | "failed";
+  planHash: string | null;
+  evidence: string[];
+  nextAction: string;
 };
 
 export type GitPermission = {
@@ -635,7 +696,7 @@ export async function applyTokenEconomyRoute(root: string, plan: TokenRoutePlan)
 
 const contextCategories = ["identity", "active-rules", "relevant-facts", "evidence", "risks", "unknowns", "blocked-assumptions", "stack-notes"] as const;
 const knowledgeStatuses: KnowledgeRecord["status"][] = ["accepted", "proposed", "deprecated", "stale", "invalidated", "conflicted", "quarantined"];
-const knowledgeKinds: KnowledgeRecord["kind"][] = ["rule", "decision", "preference", "stack-note"];
+const knowledgeKinds: KnowledgeRecord["kind"][] = ["rule", "decision", "preference", "stack-note", "stack-package"];
 
 function emptyContextSections(): CompiledTaskContext["sections"] {
   return Object.fromEntries(contextCategories.map((category) => [category, []])) as unknown as CompiledTaskContext["sections"];
@@ -648,30 +709,181 @@ async function readJsonLines(root: string, path: string): Promise<unknown[]> {
   return file.content.toString("utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as unknown);
 }
 
+export const knowledgeManifest = Object.freeze({ schemaVersion: 1 as const, module: "downstroke-knowledge", storage: { driver: "local-jsonl", path: ".downstroke/knowledge/records.jsonl" }, candidateThreshold: 3, allowNetwork: false, allowShell: false });
+
+function knowledgeId(value: Pick<KnowledgeRecord, "key" | "kind" | "scope" | "summary" | "source">): string {
+  return `knowledge.${createHash("sha256").update(JSON.stringify(normalizeJson({ key: value.key, kind: value.kind, scope: value.scope, summary: value.summary, source: { type: value.source.type, path: value.source.path, experienceFactId: value.source.experienceFactId ?? null } }))).digest("hex")}`;
+}
+
 function parseKnowledgeRecord(value: unknown): KnowledgeRecord | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const input = value as Record<string, unknown>;
-  if (typeof input.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.id)) return undefined;
-  if (!knowledgeKinds.includes(input.kind as KnowledgeRecord["kind"]) || !knowledgeStatuses.includes(input.status as KnowledgeRecord["status"])) return undefined;
-  if (input.scope !== undefined && !["repository", "team", "organization", "global"].includes(String(input.scope))) return undefined;
-  if (input.stack !== undefined && (!Array.isArray(input.stack) || !input.stack.every((item) => typeof item === "string" && item.length <= 80))) return undefined;
-  if (input.tags !== undefined && (!Array.isArray(input.tags) || !input.tags.every((item) => typeof item === "string" && item.length <= 80))) return undefined;
-  if (typeof input.summary !== "string" || input.summary.trim().length === 0 || input.summary.length > 500 || secretLike(input.summary)) return undefined;
-  if (typeof input.source !== "object" || input.source === null) return undefined;
-  const source = input.source as Record<string, unknown>;
-  if (typeof source.path !== "string" || !safeExperiencePath(source.path)) return undefined;
-  if (source.hash !== undefined && (typeof source.hash !== "string" || !/^[a-f0-9]{64}$/i.test(source.hash))) return undefined;
-  if (source.section !== undefined && (typeof source.section !== "string" || source.section.length > 120)) return undefined;
-  return {
-    id: input.id,
-    kind: input.kind as KnowledgeRecord["kind"],
-    status: input.status as KnowledgeRecord["status"],
-    ...(input.scope === undefined ? {} : { scope: input.scope as KnowledgeRecord["scope"] }),
-    ...(input.stack === undefined ? {} : { stack: [...input.stack as string[]].sort() }),
-    ...(input.tags === undefined ? {} : { tags: [...input.tags as string[]].sort() }),
-    summary: input.summary.trim(),
-    source: { path: source.path, ...(typeof source.hash === "string" ? { hash: source.hash.toLowerCase() } : {}), ...(typeof source.section === "string" ? { section: source.section } : {}) },
+  if (!plainObject(value) || unknownKeys(value, ["schemaVersion", "id", "key", "kind", "scope", "status", "trust", "stack", "tags", "summary", "source", "evidenceRefs", "lifecycle", "transition", "recordedAt"]).length || value.schemaVersion !== 1) return undefined;
+  if (typeof value.key !== "string" || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(value.key) || value.key.length > 128) return undefined;
+  if (!knowledgeKinds.includes(value.kind as KnowledgeRecord["kind"]) || !knowledgeStatuses.includes(value.status as KnowledgeRecord["status"]) || !["repository", "team", "organization", "global"].includes(String(value.scope)) || !["verified", "observed", "inferred"].includes(String(value.trust))) return undefined;
+  if (value.stack !== undefined && (!Array.isArray(value.stack) || value.stack.some((item) => !boundedText(item, 80)) || new Set(value.stack).size !== value.stack.length)) return undefined;
+  if (value.tags !== undefined && (!Array.isArray(value.tags) || value.tags.some((item) => !boundedText(item, 80)) || new Set(value.tags).size !== value.tags.length)) return undefined;
+  if (!boundedText(value.summary, 500) || secretLike(value.summary) || absolutePathLike(value.summary)) return undefined;
+  if (!plainObject(value.source) || unknownKeys(value.source, ["type", "path", "hash", "section", "experienceFactId"]).length || !["file", "experience"].includes(String(value.source.type)) || typeof value.source.path !== "string" || !safeExperiencePath(value.source.path) || typeof value.source.hash !== "string" || !/^[a-f0-9]{64}$/i.test(value.source.hash)) return undefined;
+  if (value.source.section !== undefined && !boundedText(value.source.section, 120)) return undefined;
+  if (value.source.type === "experience" && (typeof value.source.experienceFactId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(value.source.experienceFactId))) return undefined;
+  if (!Array.isArray(value.evidenceRefs) || value.evidenceRefs.length > 32 || value.evidenceRefs.some((item) => !boundedText(item, 120)) || new Set(value.evidenceRefs).size !== value.evidenceRefs.length) return undefined;
+  if (!plainObject(value.lifecycle) || unknownKeys(value.lifecycle, ["expiresAt", "stackPackage"]).length) return undefined;
+  if (value.lifecycle.expiresAt !== undefined && (typeof value.lifecycle.expiresAt !== "string" || Number.isNaN(Date.parse(value.lifecycle.expiresAt)) || new Date(value.lifecycle.expiresAt).toISOString() !== value.lifecycle.expiresAt)) return undefined;
+  if (value.lifecycle.stackPackage !== undefined && (!plainObject(value.lifecycle.stackPackage) || unknownKeys(value.lifecycle.stackPackage, ["technology", "version"]).length || !boundedText(value.lifecycle.stackPackage.technology, 80) || !boundedText(value.lifecycle.stackPackage.version, 80))) return undefined;
+  if (!plainObject(value.transition) || unknownKeys(value.transition, ["reason", "evidenceRef"]).length || !boundedText(value.transition.reason, 240) || secretLike(value.transition.reason) || (value.transition.evidenceRef !== undefined && !boundedText(value.transition.evidenceRef, 120))) return undefined;
+  if (typeof value.recordedAt !== "string" || Number.isNaN(Date.parse(value.recordedAt)) || new Date(value.recordedAt).toISOString() !== value.recordedAt) return undefined;
+  const source: KnowledgeRecord["source"] = { type: value.source.type as "file" | "experience", path: value.source.path, hash: value.source.hash.toLowerCase(), ...(typeof value.source.section === "string" ? { section: value.source.section } : {}), ...(typeof value.source.experienceFactId === "string" ? { experienceFactId: value.source.experienceFactId } : {}) };
+  const record: KnowledgeRecord = {
+    schemaVersion: 1,
+    id: String(value.id), key: value.key, kind: value.kind as KnowledgeRecord["kind"], scope: value.scope as KnowledgeRecord["scope"], status: value.status as KnowledgeRecord["status"], trust: value.trust as KnowledgeRecord["trust"],
+    ...(value.stack === undefined ? {} : { stack: [...value.stack as string[]].sort() }), ...(value.tags === undefined ? {} : { tags: [...value.tags as string[]].sort() }), summary: value.summary.trim(), source,
+    evidenceRefs: [...value.evidenceRefs as string[]].sort(), lifecycle: { ...(typeof value.lifecycle.expiresAt === "string" ? { expiresAt: value.lifecycle.expiresAt } : {}), ...(plainObject(value.lifecycle.stackPackage) ? { stackPackage: { technology: String(value.lifecycle.stackPackage.technology), version: String(value.lifecycle.stackPackage.version) } } : {}) },
+    transition: { reason: value.transition.reason, ...(typeof value.transition.evidenceRef === "string" ? { evidenceRef: value.transition.evidenceRef } : {}) }, recordedAt: value.recordedAt,
   };
+  return typeof value.id === "string" && value.id === knowledgeId(record) ? record : undefined;
+}
+
+async function readKnowledgeHistory(root: string): Promise<KnowledgeRecord[]> {
+  const resolved = await gitRoot(root);
+  const records = await readLocalFile(resolved, ".downstroke/knowledge/records.jsonl");
+  if (records.kind === "missing") return [];
+  if (records.kind !== "file") throw new Error("Knowledge registry cannot be inspected safely");
+  const manifest = await readLocalFile(resolved, ".downstroke/knowledge/manifest.json");
+  if (manifest.kind !== "file" || JSON.stringify(normalizeJson(JSON.parse(manifest.content.toString("utf8")) as unknown)) !== JSON.stringify(normalizeJson(knowledgeManifest))) throw new Error("Knowledge manifest is missing or malformed");
+  return records.content.toString("utf8").split(/\r?\n/).filter(Boolean).map((line) => {
+    const record = parseKnowledgeRecord(JSON.parse(line) as unknown);
+    if (!record) throw new Error("Knowledge registry contains a malformed record");
+    return record;
+  });
+}
+
+export async function listKnowledgeRecords(root: string): Promise<KnowledgeRecord[]> {
+  const latest = new Map<string, KnowledgeRecord>();
+  for (const record of await readKnowledgeHistory(root)) latest.set(record.id, record);
+  return [...latest.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function knowledgePlanHash(plan: KnowledgePlan): string {
+  const { status: _status, action: _action, blockers: _blockers, planHash: _hash, ...stable } = plan;
+  return createHash("sha256").update(JSON.stringify(normalizeJson(stable))).digest("hex");
+}
+
+export async function planKnowledgeRecord(root: string, input: unknown): Promise<KnowledgePlan> {
+  const blockers: string[] = [];
+  if (!plainObject(input)) return { status: "blocked", action: "append", record: null, blockers: ["Knowledge record input must be an object"], planHash: null };
+  const allowed = ["schemaVersion", "id", "key", "kind", "scope", "status", "trust", "stack", "tags", "summary", "source", "evidenceRefs", "lifecycle", "transition", "recordedAt"];
+  const extra = unknownKeys(input, allowed);
+  if (extra.length) blockers.push(`Knowledge record input contains unknown fields: ${extra.join(", ")}`);
+  let resolved = root;
+  let recordedAt = typeof input.recordedAt === "string" ? input.recordedAt : "";
+  let source: Record<string, unknown> = plainObject(input.source) ? { ...input.source } : {};
+  try {
+    resolved = await gitRoot(root);
+    if (!recordedAt) {
+      const timestamp = await runGit(resolved, ["show", "-s", "--format=%cI", "HEAD"]);
+      if (timestamp.code !== 0) blockers.push("Knowledge record requires a committed Git HEAD");
+      else recordedAt = new Date(timestamp.stdout).toISOString();
+    }
+    if (source.type === "file" && typeof source.path === "string" && safeExperiencePath(source.path)) {
+      const file = await readLocalFile(resolved, source.path);
+      if (file.kind !== "file") blockers.push("Knowledge source file is missing or unreadable");
+      else source.hash = createHash("sha256").update(file.content).digest("hex");
+    }
+  } catch (error: unknown) { blockers.push(error instanceof Error ? error.message : "Knowledge repository cannot be inspected"); }
+  const candidate = { ...input, schemaVersion: 1, source, recordedAt } as Record<string, unknown>;
+  if (typeof candidate.id !== "string" && typeof candidate.key === "string" && typeof candidate.kind === "string" && typeof candidate.scope === "string" && typeof candidate.summary === "string" && plainObject(candidate.source)) {
+    candidate.id = knowledgeId({ key: candidate.key, kind: candidate.kind as KnowledgeRecord["kind"], scope: candidate.scope as KnowledgeRecord["scope"], summary: candidate.summary.trim(), source: candidate.source as KnowledgeRecord["source"] });
+  }
+  const record = parseKnowledgeRecord(candidate);
+  if (!record) blockers.push("Knowledge record is malformed or its deterministic id does not match");
+  if (record?.trust === "verified" && !record.evidenceRefs.length) blockers.push("Verified knowledge requires evidence references");
+  if (["accepted", "deprecated", "invalidated"].includes(record?.status ?? "") && !record?.transition.evidenceRef) blockers.push("Accepted and terminal knowledge transitions require workflow evidence");
+  let action: "append" | "skip" = "append";
+  try {
+    if (record) {
+      const existing = await readKnowledgeHistory(resolved);
+      if (existing.some((item) => JSON.stringify(normalizeJson(item)) === JSON.stringify(normalizeJson(record)))) action = "skip";
+    }
+  } catch (error: unknown) { if (!(error instanceof Error && /manifest/.test(error.message) && !(await exists(join(resolved, ".downstroke", "knowledge", "records.jsonl"))))) blockers.push(error instanceof Error ? error.message : "Knowledge registry cannot be inspected"); }
+  const plan: KnowledgePlan = { status: blockers.length ? "blocked" : "ready", action, record: blockers.length ? null : record ?? null, blockers, planHash: null };
+  if (plan.status === "ready") plan.planHash = knowledgePlanHash(plan);
+  return plan;
+}
+
+export async function applyKnowledgeRecord(root: string, plan: KnowledgePlan, expectedPlanHash: string): Promise<DoctorResult> {
+  if (plan.status !== "ready" || !plan.record || !plan.planHash || expectedPlanHash !== plan.planHash || knowledgePlanHash(plan) !== plan.planHash) return { id: "knowledge.record", status: "fail", message: "Knowledge plan is blocked, malformed or has the wrong hash", remediation: "Preview the knowledge record again" };
+  const resolved = await gitRoot(root);
+  try {
+    if ((await readKnowledgeHistory(resolved)).some((item) => JSON.stringify(normalizeJson(item)) === JSON.stringify(normalizeJson(plan.record)))) return { id: "knowledge.record", status: "ok", message: "Knowledge record already exists", evidence: plan.record.id };
+  } catch { return { id: "knowledge.record", status: "fail", message: "Knowledge registry cannot be validated", remediation: "Repair the registry and preview again" }; }
+  const fresh = await planKnowledgeRecord(resolved, plan.record);
+  if (fresh.status !== "ready" || fresh.planHash !== plan.planHash || fresh.action !== plan.action) return { id: "knowledge.record", status: "fail", message: "Knowledge state changed after preview", remediation: "Preview the knowledge record again" };
+  const base = join(resolved, ".downstroke", "knowledge");
+  await mkdir(base, { recursive: true });
+  const lockPath = join(base, "write.lock");
+  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    lock = await open(lockPath, "wx", 0o600);
+    if (!(await exists(join(base, "manifest.json")))) await writeFile(join(base, "manifest.json"), JSON.stringify(knowledgeManifest), { flag: "wx", mode: 0o600 });
+    if (plan.action === "append") await appendFile(join(base, "records.jsonl"), `${JSON.stringify(plan.record)}\n`, { encoding: "utf8", mode: 0o600 });
+    return { id: "knowledge.record", status: "ok", message: plan.action === "skip" ? "Knowledge record already exists" : "Knowledge record stored", evidence: plan.record.id };
+  } catch { return { id: "knowledge.record", status: "fail", message: "Knowledge record could not be stored", remediation: "Inspect the registry and preview again" }; }
+  finally { await lock?.close().catch(() => undefined); await unlink(lockPath).catch(() => undefined); }
+}
+
+export async function auditProjectKnowledge(root: string, evaluatedAt = new Date().toISOString()): Promise<KnowledgeAudit> {
+  const findings: KnowledgeFinding[] = [];
+  const blockers: string[] = [];
+  let records: KnowledgeRecord[] = [];
+  if (Number.isNaN(Date.parse(evaluatedAt)) || new Date(evaluatedAt).toISOString() !== evaluatedAt) return { status: "blocked", evaluatedAt, records: [], candidates: [], findings: [], blockers: ["Knowledge audit time is invalid"] };
+  try { records = await listKnowledgeRecords(root); }
+  catch { return { status: "blocked", evaluatedAt, records: [], candidates: [], findings: [{ code: "knowledge.lifecycle-invalid", severity: "block", message: "Knowledge registry validation failed", nextAction: "Repair or restore the registry" }], blockers: ["Knowledge registry validation failed"] }; }
+  const stack = await detectCodeStack(root).catch(() => ({ status: "blocked" as const, stack: [], packages: [], blockers: ["Stack detection failed"] }));
+  const effective: EffectiveKnowledgeRecord[] = [];
+  for (const record of records) {
+    const lifecycleReasons: string[] = [];
+    let effectiveStatus = record.status;
+    if (record.lifecycle.expiresAt && Date.parse(record.lifecycle.expiresAt) <= Date.parse(evaluatedAt)) { effectiveStatus = "stale"; lifecycleReasons.push("expired"); findings.push({ code: "knowledge.expired", severity: "warn", recordId: record.id, message: `${record.key} expired`, nextAction: "Refresh or invalidate the record with evidence" }); }
+    if (record.source.type === "file") {
+      try { const file = await readLocalFile(await gitRoot(root), record.source.path); if (file.kind !== "file" || createHash("sha256").update(file.content).digest("hex") !== record.source.hash) { effectiveStatus = "stale"; lifecycleReasons.push("source-drift"); findings.push({ code: "knowledge.source-drift", severity: "warn", recordId: record.id, message: `${record.key} source changed`, nextAction: "Review the changed source and append a refreshed record" }); } }
+      catch { effectiveStatus = "stale"; lifecycleReasons.push("source-unavailable"); }
+    }
+    const packagePolicy = record.lifecycle.stackPackage;
+    if (packagePolicy) {
+      const observed = stack.stack.find((item) => item.technology.toLowerCase() === packagePolicy.technology.toLowerCase());
+      if (observed?.version && observed.version !== packagePolicy.version) { effectiveStatus = "stale"; lifecycleReasons.push("stack-mismatch"); findings.push({ code: "knowledge.stack-mismatch", severity: "warn", recordId: record.id, message: `${record.key} expects ${packagePolicy.version} but observed ${observed.version}`, nextAction: "Review the stack package for the observed version" }); }
+      else if (!observed?.version) findings.push({ code: "knowledge.stack-unknown", severity: "warn", recordId: record.id, message: `${record.key} stack version is unavailable`, nextAction: "Restore stack evidence" });
+    }
+    if (record.status === "accepted" && !record.evidenceRefs.length) { const message = `${record.key} lacks evidence`; findings.push({ code: "knowledge.evidence-gap", severity: "block", recordId: record.id, message, nextAction: "Append an evidenced transition" }); blockers.push(message); }
+    effective.push({ ...record, effectiveStatus, lifecycleReasons });
+  }
+  const activeGroups = new Map<string, EffectiveKnowledgeRecord[]>();
+  for (const record of effective.filter((item) => item.effectiveStatus === "accepted")) {
+    const key = `${record.kind}:${record.scope}:${record.key}`;
+    activeGroups.set(key, [...activeGroups.get(key) ?? [], record]);
+  }
+  for (const group of activeGroups.values()) if (new Set(group.map((record) => record.summary)).size > 1) {
+    for (const record of group) { record.effectiveStatus = "conflicted"; record.lifecycleReasons.push("active-conflict"); }
+    const message = `Conflicting accepted knowledge for ${group[0]!.key}`;
+    findings.push({ code: "knowledge.conflict", severity: "block", recordId: group[0]!.id, message, nextAction: "Record the human-owned resolution and invalidate the losing candidate" }); blockers.push(message);
+  }
+  const candidates: KnowledgeRecord[] = [];
+  const observationGroups = new Map<string, EffectiveKnowledgeRecord[]>();
+  for (const record of effective.filter((item) => ["observed", "verified"].includes(item.trust) && !["quarantined", "invalidated", "deprecated"].includes(item.effectiveStatus))) {
+    const key = `${record.kind}:${record.scope}:${record.key}:${record.summary}`;
+    observationGroups.set(key, [...observationGroups.get(key) ?? [], record]);
+  }
+  for (const group of observationGroups.values()) if (new Set(group.map((item) => `${item.source.path}:${item.source.hash}:${item.evidenceRefs.join(",")}`)).size >= knowledgeManifest.candidateThreshold) {
+    const first = group[0]!;
+    const candidate: KnowledgeRecord = { ...first, id: `knowledge.${createHash("sha256").update(`candidate:${first.kind}:${first.scope}:${first.key}:${first.summary}`).digest("hex")}`, status: "proposed", trust: "inferred", evidenceRefs: [...new Set(group.flatMap((item) => item.evidenceRefs))].sort(), transition: { reason: "Repeated distinct observations reached the native candidate threshold." } };
+    candidates.push(candidate);
+    findings.push({ code: "knowledge.candidate", severity: "warn", recordId: candidate.id, message: `Proposed candidate available for ${candidate.key}`, nextAction: "Review and explicitly add an accepted evidenced record if appropriate" });
+  }
+  try {
+    const releases = await readReleaseEvents(await gitRoot(root));
+    const latest = releases.at(-1);
+    if (latest?.state === "failed" || latest?.state === "prepared") { const message = latest.state === "failed" ? "Latest release verification failed" : "Prepared release lacks ready verification"; findings.push({ code: "release.evidence", severity: "block", message, nextAction: "Run native release verification and resolve its evidence" }); blockers.push(message); }
+  } catch { findings.push({ code: "release.lifecycle-invalid", severity: "block", message: "Release evidence state is malformed", nextAction: "Repair release evidence before readiness" }); blockers.push("Release evidence state is malformed"); }
+  return { status: blockers.length ? "blocked" : findings.length ? "warn" : "ok", evaluatedAt, records: effective.sort((a, b) => a.id.localeCompare(b.id)), candidates: candidates.sort((a, b) => a.id.localeCompare(b.id)), findings, blockers };
 }
 
 function contextSource(source: { path?: string; hash?: string; section?: string } | undefined): ContextReference["source"] | undefined {
@@ -764,10 +976,9 @@ export async function compileTaskContext(root: string, input: ContextCompileRequ
   } catch { addContextReference(compiled, { id: "code.unavailable", category: "unknowns", summary: "Code intelligence state is unavailable" }, categoryBudget); }
 
   try {
-    const records = (await readJsonLines(root, ".downstroke/knowledge/records.jsonl")).map(parseKnowledgeRecord);
-    for (const record of records.sort((left, right) => String(left?.id).localeCompare(String(right?.id)))) {
-      if (!record) { excludeContext(compiled, { id: "knowledge.<malformed>", reason: "malformed" }); continue; }
-      if (record.status !== "accepted") { excludeContext(compiled, { id: record.id, reason: record.status === "quarantined" ? "quarantined" : record.status === "conflicted" ? "conflicted" : record.status === "stale" || record.status === "deprecated" || record.status === "invalidated" ? "stale" : "not-accepted", source: record.source }); continue; }
+    const records = (await auditProjectKnowledge(root)).records;
+    for (const record of records) {
+      if (record.effectiveStatus !== "accepted") { excludeContext(compiled, { id: record.id, reason: record.effectiveStatus === "quarantined" ? "quarantined" : record.effectiveStatus === "conflicted" ? "conflicted" : record.effectiveStatus === "stale" || record.effectiveStatus === "deprecated" || record.effectiveStatus === "invalidated" ? "stale" : "not-accepted", source: record.source }); continue; }
       if (!knowledgeRelevant(record, input)) { excludeContext(compiled, { id: record.id, reason: "not-relevant", source: record.source }); continue; }
       addContextReference(compiled, { id: record.id, category: knowledgeCategory(record.kind), summary: `${record.kind}: ${record.summary}`, source: record.source }, categoryBudget);
     }
@@ -965,19 +1176,24 @@ export async function planNativeRelease(root: string, input: NativeReleaseReques
       if (rootManifest.private !== true || !Array.isArray(rootManifest.workspaces) || !rootManifest.workspaces.every((path) => typeof path === "string" && safeReleasePath(path) && !/[?*]/.test(path))) {
         blockers.push("The private root must declare explicit workspace paths");
       } else {
-        const workspaceNames = new Map<string, string>();
+        const workspaceNames = new Map<string, { path: string; version: string | null; private: boolean }>();
         for (const path of rootManifest.workspaces as string[]) {
           const workspace = await readJsonObject(join(resolved, ...path.split("/"), "package.json"));
           if (typeof workspace.name !== "string") blockers.push(`${path}/package.json has no package name`);
-          else workspaceNames.set(workspace.name, path);
+          else workspaceNames.set(workspace.name, { path, version: typeof workspace.version === "string" ? workspace.version : null, private: workspace.private === true });
         }
         const selectedNames = new Set(packages.map((item) => item.name));
         for (const [path, manifest] of selectedManifests) for (const key of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
           if (typeof manifest[key] !== "object" || manifest[key] === null || Array.isArray(manifest[key])) continue;
+          const bundled = new Set(Array.isArray(manifest.bundleDependencies) ? manifest.bundleDependencies.filter((name): name is string => typeof name === "string") : []);
           for (const [name, specifier] of Object.entries(manifest[key] as Record<string, unknown>)) {
-            if (!workspaceNames.has(name)) continue;
-            if (!selectedNames.has(name)) blockers.push(`${path} depends on undeclared workspace package ${name}`);
-            else if (specifier !== packageVersion) blockers.push(`${path} must use the exact internal version for ${name}`);
+            const workspace = workspaceNames.get(name);
+            if (!workspace) continue;
+            if (selectedNames.has(name)) {
+              if (specifier !== packageVersion) blockers.push(`${path} must use the exact internal version for ${name}`);
+            } else if (!bundled.has(name)) blockers.push(`${path} depends on unpublished workspace package ${name} without bundling it`);
+            else if (!workspace.private) blockers.push(`${path} bundled workspace ${name} must be private`);
+            else if (specifier !== workspace.version) blockers.push(`${path} must pin bundled workspace ${name} to ${workspace.version ?? "its declared version"}`);
           }
         }
       }
@@ -1221,6 +1437,15 @@ export async function verifyNativeRelease(root: string, plan: NativeReleasePlan)
         const sourceManifest = await readJsonObject(join(resolved, ...item.path.split("/"), "package.json"));
         const allowlist = Array.isArray(sourceManifest.files) && sourceManifest.files.every((entry) => typeof entry === "string" && safeReleasePath(entry)) ? sourceManifest.files as string[] : [];
         if (!allowlist.length) throw new Error(`${item.name} must declare a package files allowlist`);
+        const bundled = Array.isArray(sourceManifest.bundleDependencies) && sourceManifest.bundleDependencies.every((name) => typeof name === "string") ? sourceManifest.bundleDependencies as string[] : [];
+        if (item.name === "downstroke") {
+          const bin = typeof sourceManifest.bin === "object" && sourceManifest.bin !== null ? (sourceManifest.bin as Record<string, unknown>).downstroke : undefined;
+          const engine = typeof sourceManifest.engines === "object" && sourceManifest.engines !== null ? (sourceManifest.engines as Record<string, unknown>).node : undefined;
+          if (sourceManifest.license !== "Apache-2.0" || typeof sourceManifest.description !== "string" || !sourceManifest.description || typeof bin !== "string" || !safeReleasePath(bin) || engine !== ">=22") throw new Error("downstroke package metadata is incomplete or invalid");
+          if (!["dist", "README.md", "LICENSE"].every((path) => allowlist.includes(path))) throw new Error("downstroke package files allowlist is incomplete");
+          const internal = typeof sourceManifest.dependencies === "object" && sourceManifest.dependencies !== null ? Object.keys(sourceManifest.dependencies as Record<string, unknown>).filter((name) => name.startsWith("@downstroke/")) : [];
+          if (!internal.length || internal.some((name) => !bundled.includes(name))) throw new Error("downstroke package has an unbundled internal dependency");
+        }
         const result = await runLocalCommand(npm, ["pack", join(resolved, ...item.path.split("/")), "--json", "--pack-destination", packRoot, "--ignore-scripts"], resolved);
         if (result.code !== 0) throw new Error(`npm pack failed for ${item.name}: ${result.stderr || result.stdout}`);
         const output = JSON.parse(result.stdout) as unknown;
@@ -1229,25 +1454,32 @@ export async function verifyNativeRelease(root: string, plan: NativeReleasePlan)
         const packedPaths = Array.isArray(packed.files) ? packed.files.map((entry) => typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>).path : undefined) : [];
         if (!packedPaths.length || packedPaths.some((path) => typeof path !== "string" || !safeReleasePath(path))) throw new Error(`npm pack returned unsafe file evidence for ${item.name}`);
         const automatic = /^(?:package\.json|readme(?:\.[^/]+)?|licen[cs]e(?:\.[^/]+)?|notice(?:\.[^/]+)?)$/i;
-        const unexpected = (packedPaths as string[]).filter((path) => !automatic.test(path) && !allowlist.some((allowed) => path === allowed || path.startsWith(`${allowed.replace(/\/$/, "")}/`)));
+        const unexpected = (packedPaths as string[]).filter((path) => !automatic.test(path) && !allowlist.some((allowed) => path === allowed || path.startsWith(`${allowed.replace(/\/$/, "")}/`)) && !bundled.some((name) => path.startsWith(`node_modules/${name}/`)));
         if (unexpected.length) throw new Error(`${item.name} packed files outside its allowlist: ${unexpected.join(", ")}`);
+        const packedBundles = Array.isArray(packed.bundled) ? packed.bundled.filter((name): name is string => typeof name === "string") : [];
+        if (bundled.some((name) => !packedBundles.includes(name))) throw new Error(`${item.name} tarball is missing bundled dependencies`);
         const tarball = join(packRoot, packed.filename as string);
         tarballs.push(tarball);
         evidence.push(`files:${item.name}:${(packedPaths as string[]).sort().join(",")}`);
         evidence.push(`tarball:${basename(tarball)}:${createHash("sha256").update(await readFile(tarball)).digest("hex")}`);
       }
       await writeFile(join(installRoot, "package.json"), `${JSON.stringify({ name: "downstroke-release-verification", private: true }, null, 2)}\n`);
-      const installed = await runLocalCommand(npm, ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs], installRoot);
+      const installed = await runLocalCommand(npm, ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs], installRoot);
       if (installed.code !== 0) throw new Error(`clean install failed: ${installed.stderr || installed.stdout}`);
       for (const item of plan.packages) {
         const installedRoot = join(installRoot, "node_modules", ...item.name.split("/"));
         const installedManifest = await readJsonObject(join(installedRoot, "package.json"));
         if (installedManifest.version !== plan.nextVersion) throw new Error(`${item.name} clean-install version drifted`);
         const downstrokeBin = typeof installedManifest.bin === "object" && installedManifest.bin !== null ? (installedManifest.bin as Record<string, unknown>).downstroke : undefined;
-        if (item.name === "downstroke-cli" && typeof downstrokeBin === "string") {
+        if (item.name === "downstroke" && typeof downstrokeBin === "string") {
           const smoke = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "--help"], installRoot);
           if (smoke.code !== 0) throw new Error(`downstroke CLI smoke failed: ${smoke.stderr || smoke.stdout}`);
-          evidence.push("cli-smoke:passed");
+          const fixture = join(installRoot, "fixture");
+          await mkdir(fixture);
+          const init = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "init", "--preset", "lite"], fixture);
+          const doctor = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "doctor"], fixture);
+          if (init.code !== 0 || doctor.code !== 0) throw new Error(`downstroke clean-fixture smoke failed: ${init.stderr || doctor.stderr || init.stdout || doctor.stdout}`);
+          evidence.push("cli-smoke:help,init,doctor");
         }
       }
       evidence.push("clean-install:passed");
@@ -1526,6 +1758,225 @@ export function validateNativeWorkerOutput(value: unknown): { status: "ok" | "bl
     claims.push({ id: candidate.id, status: candidate.status as "observed" | "inferred", statement: candidate.statement, evidenceRefs: candidate.evidenceRefs });
   }
   return { status: blockers.length ? "blocked" : "ok", claims, blockers };
+}
+
+type NativeExecutionEvent = {
+  schemaVersion: 1;
+  taskId: string;
+  planHash: string;
+  stage: typeof nativeRuntimeResponsibilities[number]["stage"];
+  status: NativeExecutionStatus;
+  evidence: string[];
+  nextAction: string;
+  recordedAt: string;
+  previousHash: string | null;
+  recordHash: string;
+  task?: NativeExecutionTask;
+  worker?: NativeExecutionWorker;
+};
+
+function executionHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(normalizeJson(value))).digest("hex");
+}
+
+function parseNativeExecutionTask(value: unknown): { task: NativeExecutionTask | null; blockers: string[] } {
+  const blockers: string[] = [];
+  if (!plainObject(value)) return { task: null, blockers: ["Execution task must be an object"] };
+  const allowed = ["id", "operation", "objective", "owner", "dependencies", "priority", "estimateMinutes", "risk", "rollbackReference", "workflowItemId", "mode", "workerId", "justification"];
+  const extra = unknownKeys(value, allowed);
+  if (extra.length) blockers.push(`Execution task contains unknown fields: ${extra.join(", ")}`);
+  if (typeof value.id !== "string" || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(value.id) || value.id.length > 96) blockers.push("Execution task id is invalid");
+  if (value.operation !== "project.verify") blockers.push("Execution operation must be the native project.verify capability");
+  if (!boundedText(value.objective, 400) || secretLike(String(value.objective)) || absolutePathLike(String(value.objective))) blockers.push("Execution objective is invalid");
+  if (typeof value.owner !== "string" || !/^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(value.owner)) blockers.push("Execution owner is invalid");
+  const dependencies = Array.isArray(value.dependencies) ? value.dependencies : [];
+  if (!Array.isArray(value.dependencies) || dependencies.length > 32 || dependencies.some((item) => typeof item !== "string" || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(item)) || new Set(dependencies).size !== dependencies.length || dependencies.includes(value.id)) blockers.push("Execution dependencies are invalid");
+  if (!["low", "normal", "high"].includes(String(value.priority))) blockers.push("Execution priority is invalid");
+  if (!Number.isInteger(value.estimateMinutes) || Number(value.estimateMinutes) < 1 || Number(value.estimateMinutes) > 10080) blockers.push("Execution estimateMinutes must be between 1 and 10080");
+  if (!["normal", "high"].includes(String(value.risk))) blockers.push("Execution risk is invalid");
+  if (!boundedText(value.rollbackReference, 240) || absolutePathLike(String(value.rollbackReference)) || secretLike(String(value.rollbackReference)) || isAbsolute(String(value.rollbackReference)) || String(value.rollbackReference).split(/[\\/]/).includes("..")) blockers.push("Execution rollbackReference must be a safe repository-relative reference");
+  for (const key of ["workflowItemId", "workerId"] as const) if (value[key] !== undefined && (typeof value[key] !== "string" || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(value[key]))) blockers.push(`Execution ${key} is invalid`);
+  if (value.mode !== undefined && !["deterministic", "worker"].includes(String(value.mode))) blockers.push("Execution mode is invalid");
+  if (value.justification !== undefined && (!boundedText(value.justification, 400) || secretLike(String(value.justification)) || absolutePathLike(String(value.justification)))) blockers.push("Execution justification is invalid");
+  if (blockers.length || typeof value.id !== "string" || typeof value.objective !== "string" || typeof value.owner !== "string" || typeof value.rollbackReference !== "string") return { task: null, blockers };
+  const task: NativeExecutionTask = {
+    id: value.id,
+    operation: "project.verify",
+    objective: value.objective,
+    owner: value.owner,
+    dependencies: dependencies as string[],
+    priority: value.priority as NativeExecutionTask["priority"],
+    estimateMinutes: Number(value.estimateMinutes),
+    risk: value.risk as NativeExecutionTask["risk"],
+    rollbackReference: value.rollbackReference,
+    ...(typeof value.workflowItemId === "string" ? { workflowItemId: value.workflowItemId } : {}),
+    ...(typeof value.mode === "string" ? { mode: value.mode as NativeExecutionMode } : {}),
+    ...(typeof value.workerId === "string" ? { workerId: value.workerId } : {}),
+    ...(typeof value.justification === "string" ? { justification: value.justification } : {}),
+  };
+  return { task, blockers };
+}
+
+function parseNativeExecutionWorker(value: unknown): NativeExecutionWorker | undefined {
+  if (!plainObject(value) || unknownKeys(value, ["id", "manifestHash", "allowedTools", "budget", "stopCondition", "evidenceRequirements"]).length) return undefined;
+  const manifest = nativeWorkerCatalog.find((candidate) => candidate.id === value.id);
+  if (!manifest || value.manifestHash !== nativeWorkerHash(manifest)) return undefined;
+  const expected: NativeExecutionWorker = { id: manifest.id, manifestHash: nativeWorkerHash(manifest), allowedTools: manifest.allowedTools, budget: manifest.budget, stopCondition: manifest.stopCondition, evidenceRequirements: manifest.evidenceRequirements };
+  return JSON.stringify(normalizeJson(value)) === JSON.stringify(normalizeJson(expected)) ? expected : undefined;
+}
+
+async function readNativeExecutionEvents(root: string): Promise<NativeExecutionEvent[]> {
+  try {
+    const values = (await readFile(join(root, ".downstroke", "executions", "events.jsonl"), "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as unknown);
+    const records: NativeExecutionEvent[] = [];
+    let previous: string | null = null;
+    for (const value of values) {
+      if (!plainObject(value) || unknownKeys(value, ["schemaVersion", "taskId", "planHash", "stage", "status", "evidence", "nextAction", "recordedAt", "previousHash", "recordHash", "task", "worker"]).length || value.schemaVersion !== 1 || typeof value.taskId !== "string" || !/^[a-f0-9]{64}$/.test(String(value.planHash)) || !nativeRuntimeResponsibilities.some(({ stage }) => stage === value.stage) || !["running", "blocked", "failed", "completed"].includes(String(value.status)) || !Array.isArray(value.evidence) || value.evidence.some((item) => typeof item !== "string" || item.length > 240 || secretLike(item) || absolutePathLike(item)) || !boundedText(value.nextAction, 400) || secretLike(String(value.nextAction)) || absolutePathLike(String(value.nextAction)) || typeof value.recordedAt !== "string" || Number.isNaN(Date.parse(value.recordedAt)) || new Date(value.recordedAt).toISOString() !== value.recordedAt || (value.previousHash !== null && !/^[a-f0-9]{64}$/.test(String(value.previousHash))) || !/^[a-f0-9]{64}$/.test(String(value.recordHash))) throw new Error("Execution ledger contains a malformed record");
+      if (value.task !== undefined && !parseNativeExecutionTask(value.task).task) throw new Error("Execution ledger contains a malformed task");
+      if (value.worker !== undefined && !parseNativeExecutionWorker(value.worker)) throw new Error("Execution ledger contains a malformed worker preflight");
+      const record = value as NativeExecutionEvent;
+      const { recordHash, ...stable } = record;
+      if (record.previousHash !== previous || executionHash(stable) !== recordHash) throw new Error("Execution ledger hash chain is invalid");
+      previous = recordHash;
+      records.push(record);
+    }
+    return records;
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "READ_ERROR";
+    if (code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+function nativeExecutionPlanHash(plan: NativeExecutionPlan): string {
+  const { planHash: _hash, status: _status, blockers: _blockers, nextAction: _nextAction, ...stable } = plan;
+  return executionHash(stable);
+}
+
+export async function planNativeExecution(root: string, input: unknown): Promise<NativeExecutionPlan> {
+  const parsed = parseNativeExecutionTask(input);
+  const blockers = [...parsed.blockers];
+  const task = parsed.task;
+  const mode: NativeExecutionMode = task?.mode ?? (task?.workerId ? "worker" : "deterministic");
+  if (mode === "deterministic" && task?.workerId) blockers.push("Deterministic execution cannot select a worker");
+  if (mode === "worker" && (!task?.workerId || !task.justification)) blockers.push("Worker execution requires a built-in workerId and bounded justification");
+  const workerManifest = mode === "worker" && task?.workerId ? nativeWorkerCatalog.find((candidate) => candidate.id === task.workerId) : undefined;
+  if (mode === "worker" && task?.workerId && !workerManifest) blockers.push("Execution worker must be an immutable built-in manifest");
+  const selectedWorker: NativeExecutionWorker | null = workerManifest ? {
+    id: workerManifest.id,
+    manifestHash: nativeWorkerHash(workerManifest),
+    allowedTools: workerManifest.allowedTools,
+    budget: workerManifest.budget,
+    stopCondition: workerManifest.stopCondition,
+    evidenceRequirements: workerManifest.evidenceRequirements,
+  } : null;
+  let head: string | null = null;
+  let events: NativeExecutionEvent[] = [];
+  let workflow: WorkflowNextAction | null = null;
+  try {
+    const resolved = await gitRoot(root);
+    const revision = await runGit(resolved, ["rev-parse", "HEAD"]);
+    if (revision.code !== 0) blockers.push("Execution requires a committed Git HEAD");
+    else head = revision.stdout;
+    events = await readNativeExecutionEvents(resolved);
+    if (task?.workflowItemId) {
+      workflow = await resolveWorkflowNextAction(resolved, task.workflowItemId);
+      if (workflow.status === "blocked") blockers.push(`Workflow blocks execution: ${workflow.reason}`);
+    }
+  } catch (error: unknown) {
+    blockers.push(error instanceof Error ? error.message : "Execution repository cannot be inspected");
+  }
+  const completed = new Set(events.filter((event) => event.stage === "Recorder" && event.status === "completed").map((event) => event.taskId));
+  const unmetDependencies = task ? task.dependencies.filter((dependency) => !completed.has(dependency)) : [];
+  if (unmetDependencies.length) blockers.push(`Execution dependencies are incomplete: ${unmetDependencies.join(", ")}`);
+  const requiredApprovals: ("execution" | "high-risk-review")[] = task?.risk === "high" ? ["execution", "high-risk-review"] : ["execution"];
+  const plan: NativeExecutionPlan = {
+    schemaVersion: 1,
+    status: blockers.length ? "blocked" : "ready",
+    head,
+    task,
+    mode,
+    stages: nativeRuntimeResponsibilities,
+    selectedWorker,
+    requiredApprovals,
+    workflow,
+    unmetDependencies,
+    blockers,
+    nextAction: blockers.length ? "Resolve the reported execution blockers and preview again." : "Review the exact plan hash, then apply with --plan and --yes.",
+    planHash: null,
+  };
+  if (plan.status === "ready") plan.planHash = nativeExecutionPlanHash(plan);
+  return plan;
+}
+
+function executionOutcome(plan: NativeExecutionPlan, executionStatus: "completed" | "blocked" | "failed", evidence: string[], nextAction: string): NativeExecutionOutcome {
+  return { id: "execution.run", status: executionStatus === "completed" ? "ok" : executionStatus === "blocked" ? "warn" : "fail", taskId: plan.task?.id ?? null, executionStatus, planHash: plan.planHash, evidence, nextAction };
+}
+
+export async function applyNativeExecution(root: string, plan: NativeExecutionPlan, expectedPlanHash: string, approvals: { execution: boolean; highRisk: boolean }): Promise<NativeExecutionOutcome> {
+  if (plan.status !== "ready" || !plan.task || !plan.head || !plan.planHash || expectedPlanHash !== plan.planHash || nativeExecutionPlanHash(plan) !== plan.planHash) return executionOutcome(plan, "blocked", plan.blockers, "Preview the execution task again and supply its exact plan hash.");
+  if (!approvals.execution || (plan.task.risk === "high" && !approvals.highRisk)) return executionOutcome(plan, "blocked", ["Required execution approval is missing"], "Provide explicit execution and any required high-risk approval.");
+  let resolved: string;
+  try { resolved = await gitRoot(root); }
+  catch { return executionOutcome(plan, "blocked", ["Execution repository is unavailable"], "Restore the repository and preview again."); }
+  let existing: NativeExecutionEvent[];
+  try { existing = await readNativeExecutionEvents(resolved); }
+  catch { return executionOutcome(plan, "blocked", ["Execution ledger integrity validation failed"], "Repair or restore the execution ledger, then preview again."); }
+  const completed = existing.find((event) => event.taskId === plan.task!.id && event.planHash === plan.planHash && event.stage === "Recorder" && event.status === "completed");
+  if (completed) return executionOutcome(plan, "completed", completed.evidence, "No action required; the exact execution already completed.");
+  const fresh = await planNativeExecution(resolved, plan.task);
+  if (fresh.status !== "ready" || fresh.planHash !== plan.planHash || fresh.head !== plan.head) return executionOutcome(plan, "blocked", fresh.blockers, "Repository or workflow state changed; preview execution again.");
+  const base = join(resolved, ".downstroke", "executions");
+  await mkdir(base, { recursive: true });
+  const lockPath = join(base, "run.lock");
+  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    lock = await open(lockPath, "wx", 0o600);
+    const events = await readNativeExecutionEvents(resolved);
+    let previousHash = events.at(-1)?.recordHash ?? null;
+    const append = async (stage: NativeExecutionEvent["stage"], status: NativeExecutionStatus, evidence: string[], nextAction: string, first = false): Promise<void> => {
+      const stable = {
+        schemaVersion: 1 as const,
+        taskId: plan.task!.id,
+        planHash: plan.planHash!,
+        stage,
+        status,
+        evidence,
+        nextAction,
+        recordedAt: new Date().toISOString(),
+        previousHash,
+        ...(first ? { task: plan.task!, ...(plan.selectedWorker ? { worker: plan.selectedWorker } : {}) } : {}),
+      };
+      const record = { ...stable, recordHash: executionHash(stable) };
+      await appendFile(join(base, "events.jsonl"), `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
+      previousHash = record.recordHash;
+    };
+    await append("Planner", "running", [`operation:${plan.task.operation}`, `head:${plan.head}`], "Schedule declared dependencies.", true);
+    if (plan.mode === "worker") {
+      const nextAction = "Add a concrete typed native worker adapter, then preview a new execution plan.";
+      await append("Scheduler", "blocked", [`worker:${plan.selectedWorker!.id}`, `manifest:${plan.selectedWorker!.manifestHash}`], nextAction);
+      return executionOutcome(plan, "blocked", [`worker-preflight:${plan.selectedWorker!.id}`], nextAction);
+    }
+    await append("Scheduler", "running", ["dependencies:ready"], "Execute the allowlisted native operation.");
+    await append("Executor", "running", ["capability:project.verify"], "Verify structured check evidence.");
+    const inspection = await inspectProject(resolved);
+    const verification = await runProjectChecks(resolved, inspection.scripts);
+    const evidence = verification.checks.map((check) => `${check.script}:exit=${check.exitCode}`);
+    if (verification.status !== "verified") {
+      const nextAction = verification.status === "not-run" ? "Add at least one declared typecheck, test or build script and preview again." : "Fix the failed project check and preview execution again.";
+      await append("Verifier", "failed", evidence.length ? evidence : ["checks:not-run"], nextAction);
+      await append("Recorder", "failed", evidence.length ? evidence : ["checks:not-run"], nextAction);
+      return executionOutcome(plan, "failed", evidence.length ? evidence : ["checks:not-run"], nextAction);
+    }
+    await append("Verifier", "completed", evidence, "Record the verified outcome.");
+    await append("Recorder", "completed", evidence, "No action required; execution completed with verified evidence.");
+    return executionOutcome(plan, "completed", evidence, "No action required; execution completed with verified evidence.");
+  } catch {
+    return executionOutcome(plan, "blocked", ["Execution could not acquire or update its local ledger"], "Inspect the execution ledger and preview again.");
+  } finally {
+    await lock?.close().catch(() => undefined);
+    await unlink(lockPath).catch(() => undefined);
+  }
 }
 
 export async function readGitPolicy(root: string): Promise<GitPolicy | null> {

@@ -16,11 +16,11 @@ That focus is not a hard limit. The core value is repository-local discipline: d
 
 ## Status
 
-Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import, native workflow state, schema-bound worker contracts and local release planning, preparation and verification.
+Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import, native workflow state, schema-bound worker contracts, deterministic execution tasks, governed knowledge lifecycle and local release planning, preparation and verification.
 
 The CLI can be built, linked and exercised locally today. It is not published to the npm registry yet, and the framework has not reached its complete native acceptance milestone. Local testing is useful now for the implemented commands; it must not be mistaken for release readiness.
 
-The public release milestone is intentionally strict. Downstroke is considered complete for maintainer acceptance only after the native platform, package preparation, clean-install checks and final token calibration pass the repository gates.
+The public release milestone is intentionally strict. Native package preparation and clean-install checks now pass locally; final token calibration and maintainer acceptance still gate publication.
 
 ## Philosophy
 
@@ -51,6 +51,7 @@ These rules reduce hidden state, make failures diagnosable and let a later devel
 - Imports Markdown, YAML and JSON project knowledge as source-linked observed facts.
 - Detects unsafe imports, prompt-injection patterns, secrets, unsupported formats and material conflicts.
 - Stores native workflow items, controlled checkpoints, decisions and deterministic resume state.
+- Previews and records explicit execution tasks, then runs the repository's declared verification checks through a five-stage native lifecycle.
 - Keeps external construction artifacts as maintenance-only evidence, not product runtime dependencies.
 
 ## Install and run locally today
@@ -96,7 +97,7 @@ During package development, npm can expose the workspace binary as `downstroke`:
 
 ```bash
 npm run build
-npm link -w downstroke-cli
+npm link -w downstroke
 downstroke
 ```
 
@@ -112,7 +113,7 @@ downstroke init --preset lite
 downstroke doctor --run-checks
 ```
 
-Remove the development link with `npm unlink -g downstroke-cli` when the test is complete.
+Remove the development link with `npm unlink -g downstroke` when the test is complete.
 
 ### Link only inside one test project
 
@@ -124,7 +125,7 @@ npx downstroke doctor
 
 Use a disposable project for the first write test. Preview commands first, inspect their output, and only then repeat with `--yes` where authorization is required.
 
-The public command `npm install -g downstroke` is **not available yet**. The release stories must first validate package naming, workspace dependency publication, metadata, tarball contents, clean installation, binary wiring and provenance. Until then, use one of the local development paths above.
+The public command `npm install -g downstroke` is **not available yet**. The Apache-2.0 `downstroke` package and binary are prepared and install from one verified local tarball without unpublished workspace dependencies, but registry publication remains a separate high-risk story. Until then, use one of the local development paths above.
 
 ## First complete local walkthrough
 
@@ -282,7 +283,20 @@ downstroke worker register --manifest '<json>' --task-id task.audit --task-class
 
 Every manifest declares strict input/output schemas, allowed native capabilities, mutation rights, finite budgets, stop conditions, evidence and audit requirements. Registration is preview-first, repository-local and idempotent. Built-in workers are read-only, and a manifest never becomes tool-execution authority.
 
-Deterministic or single-path work rejects worker registration and returns the simpler route. Scheduling, invocation, fan-out, retries, provider calls and `downstroke run` remain Story 9.14; the current worker surface executes nothing.
+Deterministic or single-path work rejects worker registration and returns the simpler route. Registration remains inert: `downstroke run` can select a built-in manifest for an audited preflight, but it blocks before invocation until a concrete typed native adapter exists.
+
+### `run`
+
+Preview an explicit execution task and apply the exact plan:
+
+```bash
+downstroke run --task-id task.verify --objective "Verify declared project checks" --owner maintainer --rollback docs/production-readiness.md --json
+downstroke run --task-id task.verify --objective "Verify declared project checks" --owner maintainer --rollback docs/production-readiness.md --plan <hash> --yes --json
+```
+
+The first native operation is `project.verify`. Planner, Scheduler, Executor, Verifier and Recorder run sequentially by composing existing project inspection and `typecheck`, `test` and `build` verification; arbitrary command input is not accepted. Preview is read-only, apply revalidates the exact Git-anchored plan, events are hash-chained under `.downstroke/executions/`, and only passing verifier evidence can record completion.
+
+Worker mode requires a built-in worker ID and justification. It records the selected immutable manifest, hash, tools, budget, stop condition and evidence requirements, then remains blocked before Executor because Downstroke does not yet have a concrete native worker adapter. It never simulates worker output or grants execution authority to a registered manifest.
 
 ### `cadence`
 
@@ -361,6 +375,22 @@ downstroke experience import --path docs/SPEC.md --yes
 Operational Experience stores facts with provenance, trust, scope, status and evidence. Imported documents become observed or inferred knowledge; generated output cannot become verified truth without independent evidence.
 
 Unsafe imports are rejected or quarantined. Material conflicts are retained with evidence and require human resolution.
+
+### `knowledge`
+
+Preview and add strict repository knowledge, then inspect or compile its effective state:
+
+```bash
+downstroke knowledge add --record '<json>' --json
+downstroke knowledge add --record '<json>' --plan <plan-hash> --yes
+downstroke knowledge list
+downstroke knowledge audit
+downstroke knowledge compile --task-id story.1 --path src/app.ts --budget 16
+```
+
+The local `.downstroke/knowledge/` registry uses a fixed manifest and append-only records. IDs and plans are deterministic; writes require the current exact plan hash. TTL expiry, source drift and exact observed stack-version mismatch are evaluated lazily when knowledge is listed, audited, compiled or included in health.
+
+Accepted records with the same explicit key, kind and scope conflict when their summaries differ. Three distinct evidence-bearing observations can produce a proposed candidate, but Downstroke never accepts or verifies it automatically. Stale, conflicted, quarantined, invalidated, deprecated and proposed records are withheld from active compiled context. Experience-backed records preserve only relative provenance, fact ID, evidence hash, status and trust—not imported payloads.
 
 ### `communication`
 
@@ -497,7 +527,7 @@ The exact plan is shown before managed writes. Existing unmanaged files are skip
 
 ### `downstroke` is not found
 
-Rebuild and link the CLI workspace with `npm run build` and `npm link -w downstroke-cli`. Open a new shell and retry. If the link remains unavailable, use `node /absolute/path/to/Downstroke/apps/cli/dist/index.js`.
+Rebuild and link the CLI workspace with `npm run build` and `npm link -w downstroke`. Open a new shell and retry. If the link remains unavailable, use `node /absolute/path/to/Downstroke/apps/cli/dist/index.js`.
 
 ### The code index is stale
 
@@ -518,10 +548,11 @@ Inspect both sources and their evidence. Downstroke intentionally does not selec
 ## Current limits
 
 - No package is available from the public npm registry yet.
-- Local linking exercises implemented commands but is not a clean-install or tarball proof.
+- The local `downstroke` tarball passes an offline clean install plus help, init and doctor smoke checks; no npm registry version has been published.
 - Token estimates remain heuristic until the final calibration story.
 - Token routing records policy outcomes only; it does not call a provider or schedule workers.
-- Worker execution, scheduling, fan-out and the complete knowledge lifecycle remain roadmap work; the current worker catalog and local registration are inert contracts only.
+- Deterministic `project.verify` execution is available; generic operations, worker invocation, fan-out, retries and provider calls are intentionally unavailable.
+- Knowledge is a strict local registry; embeddings, vector search, crawlers, semantic conflict inference, background expiry services and autonomous activation are intentionally unavailable.
 - Code intelligence is bounded and heuristic; the language toolchain remains authoritative.
 - Downstroke does not install or run external agent frameworks as product runtime dependencies.
 
@@ -554,15 +585,15 @@ npm test
 npm run build
 ```
 
-The test suite currently covers safe file operations, project inspection, native-only scans, cadence, governance, Git policy, token estimates, Operational Experience, safe import, native workflow state and local native release planning, preparation and verification.
+The test suite currently covers safe file operations, project inspection, native-only scans, cadence, governance, Git policy, token estimates, Operational Experience, safe import, native workflow state, deterministic execution, governed knowledge lifecycle and local native release planning, preparation and verification.
 
 ## Release direction
 
 The release path is:
 
 1. Complete native platform capabilities.
-2. Resolve the explicit public package manifest and metadata in Story 10.3.
-3. Use the verified native release plan to prove tarball contents and clean installation.
+2. Use the Apache-2.0 `downstroke` package manifest and native release verification to prove tarball contents and offline clean installation.
+3. Keep internal workspaces private and bundled inside the one public tarball.
 4. Calibrate token estimates against observed usage.
 5. Ask the maintainer for local acceptance.
 6. Perform authenticated npm publication and public repository release through the high-risk Story 10.4 workflow only after acceptance.

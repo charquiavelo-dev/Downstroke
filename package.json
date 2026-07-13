@@ -1,5 +1,5 @@
 {
-  "name": "downstroke",
+  "name": "downstroke-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "apps/cli"
   ],
   "scripts": {
-    "build": "npm run build -w @downstroke/core && npm run build -w @downstroke/spec && npm run build -w @downstroke/agents && npm run build -w @downstroke/gates && npm run build -w @downstroke/presets && npm run build -w downstroke-cli",
-    "typecheck": "npm run typecheck -w @downstroke/core && npm run typecheck -w @downstroke/spec && npm run typecheck -w @downstroke/agents && npm run typecheck -w @downstroke/gates && npm run typecheck -w @downstroke/presets && npm run typecheck -w downstroke-cli",
+    "build": "npm run build -w @downstroke/core && npm run build -w @downstroke/spec && npm run build -w @downstroke/agents && npm run build -w @downstroke/gates && npm run build -w @downstroke/presets && npm run build -w downstroke",
+    "typecheck": "npm run typecheck -w @downstroke/core && npm run typecheck -w @downstroke/spec && npm run typecheck -w @downstroke/agents && npm run typecheck -w @downstroke/gates && npm run typecheck -w @downstroke/presets && npm run typecheck -w downstroke",
     "test": "npm run build && node --test packages/core/test/*.test.mjs apps/cli/test/*.test.mjs"
   },
   "engines": {
