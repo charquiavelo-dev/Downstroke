@@ -10,6 +10,12 @@
 6. Write the Downstroke brief/quick spec only as deep as the slice needs.
 7. Build one verified path before adding secondary screens.
 
+## Stack Support Model
+
+Downstroke is optimized first for React, TypeScript, Node.js, React Native, Expo, backend services and .NET/Blazor. These stacks get stronger defaults and more specific guidance.
+
+Other languages and frameworks are still valid Downstroke projects. Use the universal workflow, the project's real build/test/lint commands and repository-local evidence. Do not force an unsupported stack into a React, Node or .NET shape just to match these guides. Promote a new ecosystem only after repeated real projects prove the same rules, checks and scaffolding are useful.
+
 ## React / Next.js Start
 
 Use this default when building a web app, dashboard, SaaS tool or public site.

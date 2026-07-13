@@ -75,6 +75,109 @@ test("doctor JSON reports legacy artifacts as migration risks", async () => {
   assert.equal(JSON.stringify(report).includes(root), false);
 });
 
+test("health strict turns warnings into release blockers without mutation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-health-"));
+  await run(["init", "--preset", "lite"], root);
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["health", "--strict", "--json"], root), 1);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const report = JSON.parse(output.join("\n"));
+  assert.equal(report.status, "fail");
+  assert.equal(report.strict, true);
+  assert.ok(report.blockers.some((blocker) => blocker.includes("planning.cadence")));
+  await assert.rejects(readFile(join(root, ".downstroke", "planning.json")));
+});
+
+test("health reports blocked high-risk workflow items", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-health-workflow-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  await run(["init", "--preset", "lite"], root);
+  const item = JSON.stringify({ id: "story.risk", type: "story", title: "Risky change", status: "blocked", risk: "high" });
+  assert.equal(await run(["workflow", "add", "--item", item, "--yes"], root), 0);
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["health", "--json"], root), 1);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const report = JSON.parse(output.join("\n"));
+  assert.equal(report.status, "fail");
+  assert.deepEqual(report.workflow, [{ id: "story.risk", title: "Risky change", status: "blocked", risk: "high" }]);
+  assert.ok(report.blockers.some((blocker) => blocker.includes("workflow.story.risk")));
+});
+
+test("health reports unresolved workflow conflicts", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-health-conflict-"));
+  await exec("git", ["init", "-b", "main"], { cwd: root });
+  await writeFile(join(root, "README.md"), "fixture\n");
+  await exec("git", ["add", "README.md"], { cwd: root });
+  await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
+  await run(["init", "--preset", "lite"], root);
+  const item = JSON.stringify({ id: "story.conflict", type: "story", title: "Conflict", status: "blocked" });
+  const conflict = JSON.stringify({
+    owner: "maintainer",
+    sources: [{ path: "a.md", hash: "a".repeat(64) }, { path: "b.md", hash: "b".repeat(64) }],
+    options: [{ id: "a", consequence: "Keep A" }, { id: "b", consequence: "Keep B" }],
+    consequences: ["Pause"],
+  });
+  assert.equal(await run(["workflow", "add", "--item", item, "--conflict", conflict, "--yes"], root), 1);
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["health", "--json"], root), 1);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const report = JSON.parse(output.join("\n"));
+  assert.equal(report.conflicts.length, 1);
+  assert.equal(report.conflicts[0].itemId, "story.conflict");
+  assert.ok(report.blockers.some((blocker) => blocker.includes("unresolved conflict")));
+});
+
+test("cleanup previews and archives legacy workflow state only with authorization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-cleanup-"));
+  await mkdir(join(root, "_bmad", "bmm"), { recursive: true });
+  await mkdir(join(root, "docs", "stories"), { recursive: true });
+  await writeFile(join(root, "_bmad", "bmm", "config.yaml"), "legacy\n");
+  await writeFile(join(root, "docs", "stories", "001.md"), "story\n");
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["cleanup", "--json"], root), 0);
+  } finally {
+    console.log = originalLog;
+  }
+
+  const preview = JSON.parse(output.join("\n"));
+  assert.equal(preview.status, "ready");
+  assert.deepEqual(preview.archiveTargets.map((target) => target.source), ["_bmad", "docs/stories"]);
+  assert.deepEqual(preview.rewrittenActiveDocs, []);
+  assert.ok(preview.nativeParity.includes(".downstroke/workflows"));
+  assert.deepEqual(preview.quarantineTargets, ["docs/legacy/downstroke-cleanup/bmad", "docs/legacy/downstroke-cleanup/docs-stories"]);
+  assert.equal(preview.applies, false);
+  assert.match(await readFile(join(root, "_bmad", "bmm", "config.yaml"), "utf8"), /legacy/);
+
+  assert.equal(await run(["cleanup", "--yes"], root), 0);
+  await assert.rejects(readFile(join(root, "_bmad", "bmm", "config.yaml"), "utf8"));
+  assert.match(await readFile(join(root, "docs", "legacy", "downstroke-cleanup", "bmad", "bmm", "config.yaml"), "utf8"), /legacy/);
+  assert.match(await readFile(join(root, "docs", "legacy", "downstroke-cleanup", "docs-stories", "001.md"), "utf8"), /story/);
+});
+
 test("setup-agents is a deterministic deprecated no-op", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
   await mkdir(join(root, "scripts"));

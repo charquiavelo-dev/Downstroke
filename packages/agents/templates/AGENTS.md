@@ -106,6 +106,8 @@ Mark deliberate simplifications only when there is a real ceiling:
 
 ## Stack Defaults
 
+These are defaults, not a language gate. Downstroke works best here first, but other stacks may still use native workflows, rules, evidence, health checks and project experience. For unsupported stacks, use the project's real commands and avoid forcing React, Node or .NET structure onto it.
+
 ### Web
 
 - React or Next.js.

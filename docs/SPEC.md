@@ -32,9 +32,10 @@ A developer can safely initialize or inspect an existing project, install only t
 ### Scope
 
 - In: `lite preset initialization, project inspection, health diagnosis, safe copy-if-missing operations and guided greenfield stack selection within supported ecosystems`
+- In: `generic repository discipline for other languages when the project exposes files, scripts and reviewable evidence`
 - Required before public release: `native workflows, communication policy, simplicity gates, code intelligence, operational experience and safe import of existing project knowledge` (Epic 9).
 - External construction tools are maintenance-only inputs. They are not runtime dependencies, generated-project requirements, public product concepts or permanent fallbacks.
-- Deferred: `additional language ecosystems beyond the supported web, mobile, backend and .NET paths`.
+- Deferred: `first-class language-specific presets, scaffolding and deep code intelligence beyond the supported web, mobile, backend and .NET paths`.
 - Planned after the framework is functionally validated: `npm distribution followed by a React documentation and showcase site` (Epic 10).
 - Token-estimate calibration is the final planned feature: compare estimates with observed provider usage and report whether remaining work fits the available token budget only after the product and release workflows are complete.
 - The public release is cut from a sanitized allowlisted tree with one initial commit only after the complete development history is verified in a private maintenance repository.

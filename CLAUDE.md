@@ -82,6 +82,8 @@ Artifacts go in `_bmad-output/`.
 
 ## Stack Defaults
 
+These are defaults, not a language gate. Other stacks may still use Downstroke workflows, evidence, health checks and project experience; use their real commands and do not force them into React, Node or .NET structure.
+
 - Web: React or Next.js, TypeScript strict, Tailwind.
 - Mobile: React Native + Expo, TypeScript strict, NativeWind when appropriate.
 - Backend: NestJS for new production APIs; Express for small existing services.

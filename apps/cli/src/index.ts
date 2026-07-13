@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { mkdir, readFile, rename, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyTokenEconomyRoute, applyWorkflowItem, cadenceChoices, checkFiles, communicationModes, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
@@ -9,6 +11,126 @@ const requirements = [
   { id: "claude.exists", path: "CLAUDE.md", severity: "warn" },
 ] as const;
 
+type HealthWorkflowItem = { id: string; title: string; status: string; risk: string };
+type HealthWorkflowConflict = { id: string; itemId: string; owner: string; status: string };
+type CleanupTarget = { source: string; archive: string; reason: string };
+type CleanupPlan = {
+  status: "ready" | "blocked";
+  nativeParity: string[];
+  importedHashes: string[];
+  rewrittenActiveDocs: string[];
+  quarantineTargets: string[];
+  archiveTargets: CleanupTarget[];
+  blockers: string[];
+};
+
+const cleanupSources = [
+  { source: "_bmad", reason: "legacy workflow source" },
+  { source: "_bmad-output", reason: "legacy workflow output" },
+  { source: ".codegraph", reason: "legacy code-intelligence source" },
+  { source: ".agents/skills/caveman", reason: "legacy communication skill" },
+  { source: ".agents/skills/ponytail", reason: "legacy simplicity skill" },
+  { source: "docs/stories", reason: "non-native Markdown workflow state" },
+] as const;
+
+async function readHealthWorkflowItems(cwd: string): Promise<{ items: HealthWorkflowItem[]; blockers: string[] }> {
+  try {
+    const content = await readFile(join(cwd, ".downstroke", "workflows", "items.jsonl"), "utf8");
+    const items: HealthWorkflowItem[] = [];
+    for (const line of content.split(/\r?\n/).filter(Boolean)) {
+      const parsed = JSON.parse(line) as unknown;
+      if (typeof parsed !== "object" || parsed === null) return { items, blockers: ["workflow.items: malformed workflow item record"] };
+      const record = parsed as Record<string, unknown>;
+      if (typeof record.id !== "string" || typeof record.title !== "string" || typeof record.status !== "string" || typeof record.risk !== "string") return { items, blockers: ["workflow.items: malformed workflow item record"] };
+      if (record.risk === "high" || record.status === "blocked") items.push({ id: record.id, title: record.title, status: record.status, risk: record.risk });
+    }
+    return { items: items.sort((left, right) => left.id.localeCompare(right.id)), blockers: [] };
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "READ_ERROR";
+    return code === "ENOENT" ? { items: [], blockers: [] } : { items: [], blockers: [`workflow.items: unreadable (${code})`] };
+  }
+}
+
+async function readHealthWorkflowConflicts(cwd: string): Promise<{ conflicts: HealthWorkflowConflict[]; blockers: string[] }> {
+  try {
+    const content = await readFile(join(cwd, ".downstroke", "workflows", "decisions.jsonl"), "utf8");
+    const conflicts: HealthWorkflowConflict[] = [];
+    for (const line of content.split(/\r?\n/).filter(Boolean)) {
+      const parsed = JSON.parse(line) as unknown;
+      if (typeof parsed !== "object" || parsed === null) return { conflicts, blockers: ["workflow.decisions: malformed decision record"] };
+      const record = parsed as Record<string, unknown>;
+      if (typeof record.id !== "string" || typeof record.itemId !== "string" || typeof record.owner !== "string" || typeof record.status !== "string") return { conflicts, blockers: ["workflow.decisions: malformed decision record"] };
+      if (record.status === "pending") conflicts.push({ id: record.id, itemId: record.itemId, owner: record.owner, status: record.status });
+    }
+    return { conflicts: conflicts.sort((left, right) => left.id.localeCompare(right.id)), blockers: [] };
+  } catch (error: unknown) {
+    const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "READ_ERROR";
+    return code === "ENOENT" ? { conflicts: [], blockers: [] } : { conflicts: [], blockers: [`workflow.decisions: unreadable (${code})`] };
+  }
+}
+
+async function readImportedHashes(cwd: string): Promise<string[]> {
+  try {
+    const content = await readFile(join(cwd, ".downstroke", "experience", "facts.jsonl"), "utf8");
+    const hashes = new Set<string>();
+    for (const line of content.split(/\r?\n/).filter(Boolean)) {
+      const parsed = JSON.parse(line) as unknown;
+      if (typeof parsed !== "object" || parsed === null) continue;
+      const source = (parsed as Record<string, unknown>).source;
+      if (typeof source !== "object" || source === null) continue;
+      const hash = (source as Record<string, unknown>).hash;
+      if (typeof hash === "string" && /^[a-f0-9]{64}$/i.test(hash)) hashes.add(hash.toLowerCase());
+    }
+    return [...hashes].sort();
+  } catch {
+    return [];
+  }
+}
+
+function cleanupArchivePath(source: string): string {
+  return `docs/legacy/downstroke-cleanup/${source.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
+async function planCleanup(cwd: string): Promise<CleanupPlan> {
+  const targets: CleanupTarget[] = [];
+  const blockers: string[] = [];
+  for (const item of cleanupSources) {
+    try {
+      await stat(join(cwd, ...item.source.split("/")));
+      const archive = cleanupArchivePath(item.source);
+      try {
+        await stat(join(cwd, ...archive.split("/")));
+        blockers.push(`${archive} already exists`);
+      } catch (error: unknown) {
+        const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "READ_ERROR";
+        if (code === "ENOENT") targets.push({ source: item.source, archive, reason: item.reason });
+        else blockers.push(`${archive} could not be inspected (${code})`);
+      }
+    } catch (error: unknown) {
+      const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "READ_ERROR";
+      if (code !== "ENOENT") blockers.push(`${item.source} could not be inspected (${code})`);
+    }
+  }
+  const archiveTargets = targets.sort((left, right) => left.source.localeCompare(right.source));
+  return {
+    status: blockers.length ? "blocked" : "ready",
+    nativeParity: ["AGENTS.md", "CLAUDE.md", "docs/SPEC.md", "docs/process/downstroke-workflow.md", ".downstroke/workflows"],
+    importedHashes: await readImportedHashes(cwd),
+    rewrittenActiveDocs: [],
+    quarantineTargets: archiveTargets.map((target) => target.archive),
+    archiveTargets,
+    blockers,
+  };
+}
+
+async function applyCleanup(cwd: string, targets: CleanupTarget[]): Promise<void> {
+  for (const target of targets) {
+    const archive = join(cwd, ...target.archive.split("/"));
+    await mkdir(dirname(archive), { recursive: true });
+    await rename(join(cwd, ...target.source.split("/")), archive);
+  }
+}
+
 export async function run(argv: string[], cwd = process.cwd(), _environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
   const command = argv[0];
   const { values, positionals } = parseArgs({
@@ -18,6 +140,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "dry-run": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       "run-checks": { type: "boolean", default: false },
+      strict: { type: "boolean", default: false },
       yes: { type: "boolean", default: false },
       "review-mode": { type: "string" },
       "block-size": { type: "string" },
@@ -80,6 +203,8 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "  downstroke init --preset lite --dry-run",
       "  downstroke init --preset lite",
       "  downstroke doctor --run-checks",
+      "  downstroke health --strict --run-checks",
+      "  downstroke cleanup --dry-run",
       "",
       "Native state",
       "  downstroke cadence --review-mode one-at-a-time --yes",
@@ -132,6 +257,60 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       }
     }
     return verification.status === "failed" || results.some((result) => result.status === "fail") ? 1 : 0;
+  }
+
+  if (command === "health") {
+    const inspection = await inspectProject(cwd);
+    const workflow = await readHealthWorkflowItems(cwd);
+    const conflicts = await readHealthWorkflowConflicts(cwd);
+    const results = [
+      ...await checkFiles(cwd, requirements),
+      ...await diagnoseLegacyAgentStack(cwd),
+      await diagnosePlanningCadence(cwd),
+    ];
+    const verification = values["run-checks"]
+      ? await runProjectChecks(cwd, inspection.scripts)
+      : { status: "not-run", checks: [] } as const;
+    const blockers = [
+      ...results.filter((result) => result.status === "fail" || values.strict && result.status === "warn").map((result) => `${result.id}: ${result.message}${result.remediation ? ` next=${result.remediation}` : ""}`),
+      ...workflow.blockers,
+      ...conflicts.blockers,
+      ...workflow.items.filter((item) => item.status === "blocked").map((item) => `workflow.${item.id}: blocked high-risk item ${item.title}`),
+      ...conflicts.conflicts.map((conflict) => `workflow.${conflict.itemId}: unresolved conflict ${conflict.id} owner=${conflict.owner}`),
+      ...(verification.status === "failed" ? verification.checks.filter((check) => check.exitCode !== 0).map((check) => `check.${check.script}: failed with exit ${check.exitCode}`) : []),
+    ];
+    const status = blockers.length ? "fail" : results.some((result) => result.status === "warn") ? "warn" : "ok";
+    if (values.json) console.log(JSON.stringify({ status, strict: values.strict, inspection, verification, results, workflow: workflow.items, conflicts: conflicts.conflicts, blockers }, null, 2));
+    else {
+      console.log(`HEALTH ${status} strict=${values.strict ? "on" : "off"}`);
+      console.log(`STACK ${inspection.stacks.join(", ") || "unknown"}`);
+      console.log(`VERIFY ${verification.status}`);
+      for (const item of workflow.items) console.log(`WORKFLOW ${item.risk} ${item.status} ${item.id} ${item.title}`);
+      for (const conflict of conflicts.conflicts) console.log(`CONFLICT ${conflict.status} ${conflict.id} item=${conflict.itemId} owner=${conflict.owner}`);
+      for (const blocker of blockers) console.log(`BLOCKER ${blocker}`);
+      if (!blockers.length && results.some((result) => result.status === "warn")) console.log("NEXT Resolve warnings before release or rerun with --strict to gate them.");
+    }
+    return status === "fail" ? 1 : 0;
+  }
+
+  if (command === "cleanup") {
+    const plan = await planCleanup(cwd);
+    if (values.json) {
+      console.log(JSON.stringify({ ...plan, applies: values.yes && !values["dry-run"] && plan.status === "ready" }, null, 2));
+    } else {
+      console.log(`CLEANUP ${plan.status} targets=${plan.archiveTargets.length}`);
+      console.log(`NATIVE PARITY ${plan.nativeParity.join(", ")}`);
+      console.log(`IMPORTED HASHES ${plan.importedHashes.length}`);
+      console.log(`REWRITTEN ACTIVE DOCS ${plan.rewrittenActiveDocs.length}`);
+      for (const target of plan.quarantineTargets) console.log(`QUARANTINE ${target}`);
+      for (const target of plan.archiveTargets) console.log(`ARCHIVE ${target.source} -> ${target.archive} reason=${target.reason}`);
+      for (const blocker of plan.blockers) console.log(`BLOCKED ${blocker}`);
+      if (plan.status === "ready" && plan.archiveTargets.length && (!values.yes || values["dry-run"])) console.log("Run again with --yes to archive these legacy sources.");
+    }
+    if (!values.yes || values["dry-run"] || plan.status === "blocked" || !plan.archiveTargets.length) return plan.status === "blocked" ? 1 : 0;
+    await applyCleanup(cwd, plan.archiveTargets);
+    if (!values.json) console.log("OK Cleanup archived legacy sources");
+    return 0;
   }
 
   if (command === "setup-agents") {
@@ -650,7 +829,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     return result.status === "ok" ? 0 : 1;
   }
 
-  console.error("Usage: downstroke <init|doctor|setup-agents|cadence|communication|simplicity|code|stack|govern|estimate|status|git-policy|experience|workflow> [options]");
+  console.error("Usage: downstroke <init|doctor|health|cleanup|setup-agents|cadence|communication|simplicity|code|stack|govern|estimate|status|git-policy|experience|workflow> [options]");
   return 1;
 }
 

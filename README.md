@@ -8,6 +8,12 @@ The framework is built around one idea: software delivery should be resumable, i
 Downstroke = native workflows + operational experience + communication policy + simplicity gates + code intelligence
 ```
 
+## Stack posture
+
+Downstroke is strongest out of the box for modern React, TypeScript, Node.js, React Native, Expo, PostgreSQL, .NET and Blazor projects. Those stacks get the clearest defaults, start guides and detection paths.
+
+That focus is not a hard limit. The core value is repository-local discipline: durable workflow state, project rules, evidence, health checks, operational experience and explicit human decisions. Those pieces can help almost any language or framework as long as the project exposes files, commands and reviewable evidence. Unsupported stacks should be treated as generic projects: Downstroke can preserve decisions and run available checks, but language-specific scaffolding, code intelligence and recommendations may be weaker until that ecosystem is promoted by repeated real use.
+
 ## Status
 
 Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import and native workflow state.
@@ -100,6 +106,8 @@ After linking, move to a disposable project and verify the command:
 cd /path/to/a/disposable-project
 downstroke doctor
 downstroke init --preset lite --dry-run
+downstroke health --strict
+downstroke cleanup --dry-run
 downstroke init --preset lite
 downstroke doctor --run-checks
 ```
@@ -130,6 +138,7 @@ downstroke init --preset lite --dry-run
 # Initialize project discipline
 downstroke init --preset lite
 downstroke doctor --run-checks
+downstroke health --strict --run-checks
 
 # Persist review policy and durable knowledge
 downstroke cadence --review-mode one-at-a-time --yes
@@ -173,6 +182,8 @@ Start
   downstroke init --preset lite --dry-run
   downstroke init --preset lite
   downstroke doctor --run-checks
+  downstroke health --strict --run-checks
+  downstroke cleanup --dry-run
 
 Native state
   downstroke cadence --review-mode one-at-a-time --yes
@@ -210,11 +221,38 @@ downstroke doctor --run-checks
 
 - project lifecycle stage;
 - detected stack signals;
+- generic-project status when a language is not first-class yet;
 - package scripts available for verification;
 - required discipline files;
 - legacy migration artifacts;
 - planning cadence status;
 - optional real check execution.
+
+### `health`
+
+Report release-oriented readiness from the same native project signals:
+
+```bash
+downstroke health
+downstroke health --strict
+downstroke health --strict --run-checks
+downstroke health --json
+```
+
+`health --strict` treats warnings as blockers. Use it before release work when legacy artifacts, missing cadence, failed checks or non-native workflow state should stop progress instead of only being advisory.
+
+### `cleanup`
+
+Preview and archive known legacy or non-native workflow state:
+
+```bash
+downstroke cleanup --dry-run
+downstroke cleanup
+downstroke cleanup --yes
+downstroke cleanup --json
+```
+
+Cleanup never deletes matched sources. It moves known legacy paths such as `_bmad`, `_bmad-output`, `.codegraph`, legacy local skills and `docs/stories` into `docs/legacy/downstroke-cleanup/`. Preview first; apply only with `--yes`.
 
 ### `cadence`
 
