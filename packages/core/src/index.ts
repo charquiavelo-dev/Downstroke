@@ -2133,6 +2133,13 @@ function evidence(path: string, read: LocalRead): string {
 const legacySources = [
   { id: "legacy.code-intel", paths: [".codegraph"], label: "Legacy code-intelligence artifacts" },
   { id: "legacy.workflow", paths: ["_bmad", "_bmad-output"], label: "Legacy workflow artifacts" },
+  {
+    id: "workflow.markdown-stories",
+    paths: ["docs/stories"],
+    label: "Non-native Markdown story workflow state",
+    foundMessage: "Markdown story workflow state detected; native workflow state belongs in .downstroke/workflows",
+    remediation: "Move workflow source-of-truth into .downstroke/workflows; keep Markdown only as optional human-readable summary",
+  },
   { id: "legacy.communication", paths: [".agents/skills/caveman", "skills/caveman"], label: "Legacy communication instructions" },
   { id: "legacy.simplicity", paths: [".agents/skills/ponytail"], label: "Legacy simplicity instructions" },
 ] as const;
@@ -2149,21 +2156,24 @@ async function inspectLegacyPath(path: string): Promise<"present" | "missing" | 
 }
 
 export async function diagnoseLegacyAgentStack(root: string): Promise<DoctorResult[]> {
-  return Promise.all(legacySources.map(async ({ id, paths, label }) => {
+  return Promise.all(legacySources.map(async (source) => {
+    const { id, paths, label } = source;
     const inspected = await Promise.all(paths.map(async (path) => ({ path, state: await inspectLegacyPath(join(root, path)) })));
     const found = inspected.find(({ state }) => state === "present");
     const unreadable = inspected.find(({ state }) => state === "unreadable");
+    const foundMessage = "foundMessage" in source ? source.foundMessage : undefined;
+    const remediation = "remediation" in source ? source.remediation : undefined;
     return {
       id,
       status: found ? "warn" : unreadable ? "fail" : "ok",
       message: found
-        ? `${label} detected; preserve for native migration`
+        ? foundMessage ?? `${label} detected; preserve for native migration`
         : unreadable
           ? `${label} could not be inspected`
           : `No active ${label.toLowerCase()} detected`,
       evidence: found?.path ?? (unreadable ? `${unreadable.path} unreadable` : `${paths[0]} not found`),
       remediation: found
-        ? "Preserve this source for native migration; do not execute or delete it"
+        ? remediation ?? "Preserve this source for native migration; do not execute or delete it"
         : unreadable
           ? "Restore read access and run doctor again"
           : "No action required",

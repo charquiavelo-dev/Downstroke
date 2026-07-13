@@ -20,6 +20,16 @@ This project uses a reusable, specification-driven engineering baseline. Repeate
 
 If docs and code disagree, inspect code, document the conflict and avoid behavior changes until the product decision is clear.
 
+## Agent Startup Contract
+
+Before making the first meaningful change in this repository:
+
+1. Read this file, `docs/SPEC.md` and `docs/process/downstroke-workflow.md`.
+2. Run or inspect `downstroke doctor` output.
+3. Treat `.downstroke/workflows/` as the only workflow state.
+4. Do not create Markdown story files, external-method backlogs or assistant-specific planning folders unless the user explicitly asks for human-readable documentation in addition to native workflow state.
+5. Do not infer process from unrelated folders, old imports, personal memory or another project's conventions.
+
 ## Required Project Bootstrap
 
 Every new project must start with:
@@ -67,6 +77,8 @@ Use Downstroke workflows for meaningful changes:
 - Deployment, production launch, rollback or data migration decisions.
 
 Workflow state belongs in `.downstroke/workflows/`.
+
+Create or update workflow items with `downstroke workflow add`; inspect the next action with `downstroke workflow resume`. Controlled checkpoints are approved by rerunning `workflow add` with the same item payload, `--controlled`, the matching `--phase`, `--approved` and `--yes`.
 
 Lightweight workflow is acceptable for small fixes: one brief, one quick spec, one acceptance checklist. Do not create ceremony that does not protect the work.
 

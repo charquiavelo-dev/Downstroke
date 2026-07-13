@@ -80,6 +80,7 @@ test("legacy agent stack diagnosis treats artifacts as migration risks", async (
   const root = await mkdtemp(join(tmpdir(), "downstroke-stack-"));
   await mkdir(join(root, ".codegraph"));
   await mkdir(join(root, "_bmad", "bmm"), { recursive: true });
+  await mkdir(join(root, "docs", "stories"), { recursive: true });
   await mkdir(join(root, ".agents", "skills", "caveman"), { recursive: true });
   await mkdir(join(root, ".agents", "skills", "ponytail"), { recursive: true });
   await writeFile(join(root, ".codegraph", "codegraph.db"), Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(84)]));
@@ -92,11 +93,13 @@ test("legacy agent stack diagnosis treats artifacts as migration risks", async (
   assert.deepEqual(results.map(({ id, status }) => ({ id, status })), [
     { id: "legacy.code-intel", status: "warn" },
     { id: "legacy.workflow", status: "warn" },
+    { id: "workflow.markdown-stories", status: "warn" },
     { id: "legacy.communication", status: "warn" },
     { id: "legacy.simplicity", status: "warn" },
   ]);
   assert.ok(results.every((result) => result.evidence && result.remediation));
   assert.equal(results.some((result) => /install|npx/i.test(result.remediation ?? "")), false);
+  assert.match(results.find((result) => result.id === "workflow.markdown-stories")?.remediation ?? "", /\.downstroke\/workflows/);
 });
 
 test("legacy absence is healthy and native-only scan rejects contaminated public surfaces", async () => {

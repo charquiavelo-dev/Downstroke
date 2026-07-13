@@ -90,7 +90,9 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
       "  downstroke knowledge compile --task-id task.1 --path src/index.ts --json",
       "  downstroke stack detect --json",
       "  downstroke experience init",
-      "  downstroke workflow resume",
+      "  downstroke workflow add --item '{\"id\":\"story.1\",\"type\":\"story\",\"title\":\"Add feature\",\"status\":\"ready-for-dev\"}'",
+      "  downstroke workflow resume --item-id story.1",
+      "  downstroke workflow add --item '<same item json>' --controlled --phase plan --approved --yes",
       "",
       "Safety",
       "  Preview first. Use --yes for authorized writes. Use --json for automation.",
@@ -508,7 +510,16 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     if (action === "resume") {
       const result = await resolveWorkflowNextAction(cwd, values["item-id"]);
       if (values.json) console.log(JSON.stringify(result, null, 2));
-      else console.log(`WORKFLOW NEXT ${result.status} ${result.itemId ?? "none"} ${result.action} ${result.reason}`);
+      else {
+        console.log(`WORKFLOW NEXT ${result.status} ${result.itemId ?? "none"} ${result.action} ${result.reason}`);
+        if (result.status === "ready" && result.itemId && result.action.startsWith("approve-")) {
+          const phase = result.action.replace("approve-", "");
+          console.log(`NEXT COMMAND downstroke workflow add --item '<same item json>' --controlled --phase ${phase} --approved --yes`);
+        }
+        if (result.status === "blocked" && result.itemId && result.action === "resolve-conflict") {
+          console.log(`NEXT COMMAND downstroke workflow resolve --item-id ${result.itemId} --select <option> --owner <owner> --rationale <text> --yes`);
+        }
+      }
       return result.status === "blocked" ? 1 : 0;
     }
     if (action === "resolve") {

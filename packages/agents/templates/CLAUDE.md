@@ -15,6 +15,10 @@ Treat this project as production software: real users, real data, real money, re
 5. Relevant native workflow item in `.downstroke/workflows/`
 6. `docs/proven-project-rules.md` when the task crosses architecture, data, UI, operations or tooling boundaries.
 
+## Startup Contract
+
+Before the first meaningful change, read the first four files above and inspect `downstroke doctor` output. Native workflow state lives only in `.downstroke/workflows/`; do not create Markdown story files, external-method backlogs or assistant-specific planning folders unless the user explicitly asks for extra human documentation. Do not infer process from unrelated folders, old imports, personal memory or another project's conventions.
+
 ## Source Of Truth
 
 - `docs/SPEC.md`: product and technical contract.
@@ -73,6 +77,8 @@ Use Downstroke workflows for:
 - Production readiness and deployment decisions.
 
 Workflow state goes in `.downstroke/workflows/`.
+
+Use `downstroke workflow add` for workflow records and `downstroke workflow resume` for the next action. To approve a controlled checkpoint, rerun `workflow add` with the same item payload, `--controlled`, the matching `--phase`, `--approved` and `--yes`.
 
 ## Stack Defaults
 

@@ -23,6 +23,9 @@ test("lite init creates its canonical documents", async () => {
     "docs/process/downstroke-workflow.md",
   ].map((path) => readFile(join(root, ...path.split("/")), "utf8")));
   assert.equal(/codegraph|bmad|caveman|ponytail|breakdown stack|bootstrap-agents/i.test(generated.join("\n")), false);
+  assert.match(generated.join("\n"), /\.downstroke\/workflows/);
+  assert.match(generated.join("\n"), /Do not infer process/);
+  assert.match(generated.join("\n"), /Do not create Markdown story files/);
   assert.equal(await run(["doctor", "--json"], root), 0);
 });
 
@@ -36,6 +39,8 @@ test("empty CLI entry shows native help without mutation", async () => {
   } finally { console.log = originalLog; }
   assert.match(output.join("\n"), /Downstroke/);
   assert.match(output.join("\n"), /downstroke init --preset lite/);
+  assert.match(output.join("\n"), /downstroke workflow add/);
+  assert.match(output.join("\n"), /--approved --yes/);
   assert.deepEqual(await readdir(root), []);
 });
 
@@ -312,6 +317,14 @@ test("workflow resume reports controlled checkpoints and conflicts", async () =>
     assert.equal(await run(["workflow", "resume", "--item-id", "story.controlled", "--json"], root), 0);
   } finally { console.log = originalLog; }
   assert.equal(JSON.parse(output.join("\n")).action, "approve-plan");
+
+  const resumeOutput = [];
+  console.log = (value) => resumeOutput.push(String(value));
+  try {
+    assert.equal(await run(["workflow", "resume", "--item-id", "story.controlled"], root), 0);
+  } finally { console.log = originalLog; }
+  assert.match(resumeOutput.join("\n"), /NEXT COMMAND downstroke workflow add/);
+  assert.match(resumeOutput.join("\n"), /--phase plan --approved --yes/);
 
   const conflict = JSON.stringify({
     owner: "maintainer",

@@ -70,7 +70,7 @@ Use the local CLI directly:
 node apps/cli/dist/index.js init --preset lite --dry-run
 node apps/cli/dist/index.js doctor
 node apps/cli/dist/index.js doctor --run-checks
-node apps/cli/dist/index.js workflow resume
+node apps/cli/dist/index.js workflow resume --item-id story.1
 ```
 
 ### Run the compiled CLI directly
@@ -148,6 +148,7 @@ downstroke code impact --path src/index.ts
 downstroke simplicity
 downstroke workflow add --item '{"id":"story.1","type":"story","title":"First controlled change","status":"ready-for-dev"}' --controlled --phase plan --yes
 downstroke workflow resume --item-id story.1
+downstroke workflow add --item '{"id":"story.1","type":"story","title":"First controlled change","status":"ready-for-dev"}' --controlled --phase plan --approved --yes
 ```
 
 Replace `src/index.ts` with a file that exists in the test project. On PowerShell, JSON quoting may require escaped double quotes or a JSON value stored in a variable.
@@ -175,8 +176,10 @@ Start
 
 Native state
   downstroke cadence --review-mode one-at-a-time --yes
+  downstroke workflow add --item '{"id":"story.1","type":"story","title":"Add feature","status":"ready-for-dev"}'
   downstroke experience init
-  downstroke workflow resume
+  downstroke workflow resume --item-id story.1
+  downstroke workflow add --item '<same item json>' --controlled --phase plan --approved --yes
 
 Safety
   Preview first. Use --yes for authorized writes. Use --json for automation.
@@ -353,6 +356,7 @@ downstroke workflow add --item '{"id":"story.1","type":"story","title":"First st
 downstroke workflow add --item '{"id":"story.1","type":"story","title":"First story","status":"ready-for-dev"}' --yes
 downstroke workflow add --item '{"id":"story.controlled","type":"story","title":"Controlled story","status":"ready-for-dev"}' --controlled --phase plan --yes
 downstroke workflow resume --item-id story.controlled
+downstroke workflow add --item '{"id":"story.controlled","type":"story","title":"Controlled story","status":"ready-for-dev"}' --controlled --phase plan --approved --yes
 ```
 
 Workflow state lives under `.downstroke/workflows/` and includes:

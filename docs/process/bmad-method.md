@@ -1,10 +1,14 @@
-# BMAD Method
+# BMAD Method Legacy Reference
 
-BMAD is the project workflow for intent -> spec -> architecture -> story -> implementation -> QA evidence.
+This file is historical context for projects that still carry BMAD-era planning language. It is not the active Downstroke workflow.
+
+Active workflow state belongs in `.downstroke/workflows/` and is operated through `downstroke workflow add`, `downstroke workflow resume` and `downstroke workflow resolve`. For current projects, follow `docs/process/downstroke-workflow.md`.
+
+Do not create BMAD story files, Markdown backlogs or `docs/stories/` as source-of-truth workflow state unless the user explicitly asks for optional human-readable documentation in addition to native Downstroke workflow records.
 
 ## Human Review Cadence
 
-Before generating multiple stories or tasks, ask:
+Before generating multiple native workflow items, ask:
 
 ```txt
 Como queres revisar este trabajo?
@@ -19,7 +23,7 @@ Como queres revisar este trabajo?
 - `por-sprint`: ask sprint length, real capacity and WIP; confirm the sprint objective and risks before generation.
 - `solo-al-final`: mark everything as draft until explicit acceptance.
 
-Store the current decision in `docs/SPEC.md`. A future Downstroke CLI stores it in `.downstroke/planning.json`. High-risk auth, money, permissions, destructive data, migrations and production tasks always receive individual review.
+Store the current decision in `docs/SPEC.md` and `.downstroke/planning.json`. High-risk auth, money, permissions, destructive data, migrations and production tasks always receive individual review.
 
 ## Required For
 
