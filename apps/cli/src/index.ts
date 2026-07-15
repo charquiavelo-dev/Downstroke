@@ -2,7 +2,7 @@
 import { mkdir, readFile, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyKnowledgeRecord, applyNativeExecution, applyNativeReleasePreparation, applyNativeWorkerRegistration, applyTokenEconomyRoute, applyWorkflowItem, auditProjectKnowledge, cadenceChoices, checkFiles, communicationModes, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, legacyCleanupSources, listNativeWorkers, nativeReleaseChannels, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planKnowledgeRecord, planNativeExecution, planNativeRelease, planNativeWorkerRegistration, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readNativeReleasePlan, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, verifyNativeRelease, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type NativeExecutionMode, type NativeReleaseChannel, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
+import { applyCadenceUpdate, applyCodeIntelligenceIndex, applyCommunicationPolicy, applyExperienceFact, applyExperienceImport, applyGitPolicy, applyKnowledgeRecord, applyNativeExecution, applyNativeReleasePreparation, applyNativeWorkerRegistration, applyTokenEconomyRoute, applyWorkflowItem, auditProjectKnowledge, cadenceChoices, checkFiles, communicationModes, compileTaskContext, detectCodeStack, diagnoseLegacyAgentStack, diagnosePlanningCadence, estimateTokenUsage, evaluateCommunicationProtection, evaluateSimplicityGates, governDecision, initializeExperience, inspectProject, installFiles, legacyCleanupSources, listNativeWorkers, nativeReleaseChannels, planCadenceUpdate, planCodeIntelligenceIndex, planCommunicationPolicy, planExperienceFact, planExperienceImport, planGitPolicy, planKnowledgeRecord, planNativeExecution, planNativeRelease, planNativeWorkerRegistration, planTokenEconomyRoute, planWorkflowItem, protectedCommunicationCategories, queryCodeContext, readCommunicationPolicy, readGitPolicy, readNativeReleasePlan, readPlanningCadence, resolveWorkflowConflict, resolveWorkflowNextAction, runProjectChecks, tokenEconomyModes, tokenTaskClasses, tokenUsageStatus, verifyNativeRelease, workflowPhases, type CommunicationMode, type DecisionKind, type GitPolicy, type NativeExecutionMode, type NativeReleaseChannel, type PlanningCadence, type ReviewMode, type TokenEconomyMode, type TokenTaskClass, type WorkflowPhase } from "@downstroke/core";
 import { liteFiles } from "@downstroke/presets";
 
 const requirements = [
@@ -124,7 +124,19 @@ async function applyCleanup(cwd: string, targets: CleanupTarget[]): Promise<void
   }
 }
 
-export async function run(argv: string[], cwd = process.cwd(), _environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
+type Question = (prompt: string) => Promise<string>;
+
+function hasOption(argv: string[], name: string): boolean {
+  return argv.some((value) => value === `--${name}` || value.startsWith(`--${name}=`));
+}
+
+async function requiredAnswer(question: Question, prompt: string): Promise<string> {
+  const answer = (await question(prompt)).trim();
+  if (!answer) throw new Error(`${prompt.trim()} requires an answer`);
+  return answer;
+}
+
+export async function run(argv: string[], cwd = process.cwd(), _environment: Readonly<Record<string, string | undefined>> = process.env, question?: Question): Promise<number> {
   const command = argv[0];
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -235,10 +247,80 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
   }
 
   if (command === "init") {
-    if (values.preset !== "lite") throw new Error(`Unknown preset: ${values.preset}`);
-    const actions = await installFiles(cwd, liteFiles, values["dry-run"]);
-    for (const item of actions) console.log(`${item.action.toUpperCase()} ${item.target}`);
-    return 0;
+    const inspection = await inspectProject(cwd);
+    if (inspection.projectKind === "maintenance-checkout") {
+      console.error("This is the Downstroke maintenance checkout. Pack and install Downstroke into a separate consumer project, then run init there.");
+      return 1;
+    }
+    let preset = hasOption(argv, "preset") ? values.preset : undefined;
+    let reviewMode = values["review-mode"];
+    let blockSize = values["block-size"];
+    let sprintDays = values["sprint-days"];
+    let capacityHours = values["capacity-hours"];
+    let wipLimit = values["wip-limit"];
+    if (question) {
+      const target = await requiredAnswer(question, `Initialize ${cwd}? [y/N] `);
+      if (!/^y(?:es)?$/i.test(target)) return 1;
+      preset ??= await requiredAnswer(question, "Preset [lite]: ") || "lite";
+      reviewMode ??= await requiredAnswer(question, `Review mode (${cadenceChoices.join(", ")}): `);
+      if (reviewMode === "blocks") blockSize ??= await requiredAnswer(question, "Stories per review block: ");
+      if (reviewMode === "sprint") {
+        sprintDays ??= await requiredAnswer(question, "Sprint length in working days: ");
+        capacityHours ??= await requiredAnswer(question, "Capacity hours per sprint: ");
+        wipLimit ??= await requiredAnswer(question, "WIP limit: ");
+      }
+    }
+    const missing = [
+      !preset && "--preset lite",
+      !reviewMode && `--review-mode <${cadenceChoices.join("|")}>`,
+      reviewMode === "blocks" && !blockSize && "--block-size <number>",
+      reviewMode === "sprint" && !sprintDays && "--sprint-days <number>",
+      reviewMode === "sprint" && !capacityHours && "--capacity-hours <number>",
+      reviewMode === "sprint" && !wipLimit && "--wip-limit <number>",
+    ].filter(Boolean);
+    if (missing.length) {
+      console.error(`init requires explicit non-interactive choices: ${missing.join(", ")}`);
+      return 1;
+    }
+    if (preset !== "lite") throw new Error(`Unknown preset: ${preset}`);
+    if (!cadenceChoices.includes(reviewMode as ReviewMode)) {
+      console.error(`Unknown review mode: ${reviewMode}`);
+      return 1;
+    }
+    const actions = await installFiles(cwd, liteFiles, true);
+    const existingSpec = await stat(join(cwd, "docs", "SPEC.md")).then(() => true, () => false);
+    const cadenceInput: Omit<PlanningCadence, "highRiskReview" | "lastReviewedStory"> = {
+      reviewMode: reviewMode as ReviewMode,
+      ...(blockSize === undefined ? {} : { blockSize: Number(blockSize) }),
+      ...(sprintDays === undefined ? {} : { sprintLengthDays: Number(sprintDays) }),
+      ...(capacityHours === undefined ? {} : { grossCapacityHoursPerSprint: Number(capacityHours) }),
+      ...(wipLimit === undefined ? {} : { wipLimit: Number(wipLimit) }),
+    };
+    const preflight = existingSpec ? await planCadenceUpdate(cwd, cadenceInput) : undefined;
+    if (preflight?.status === "blocked") {
+      preflight.blockers.forEach((blocker) => console.error(`BLOCKED ${blocker}`));
+      return 1;
+    }
+    if (!values.json) {
+      for (const item of actions) console.log(`${item.action.toUpperCase()} ${item.target}`);
+      console.log(`CADENCE ${JSON.stringify(cadenceInput)}`);
+    }
+    const authorized = values.yes || question && /^y(?:es)?$/i.test(await requiredAnswer(question, "Apply these changes? [y/N] "));
+    if (values["dry-run"] || !authorized) {
+      if (values.json) console.log(JSON.stringify({ status: "preview", projectKind: inspection.projectKind, actions, cadence: cadenceInput }, null, 2));
+      else console.log("Preview only. Run again with --yes to authorize these changes.");
+      return 0;
+    }
+    await installFiles(cwd, liteFiles);
+    const cadencePlan = preflight ?? await planCadenceUpdate(cwd, cadenceInput);
+    if (cadencePlan.status === "blocked") {
+      cadencePlan.blockers.forEach((blocker) => console.error(`BLOCKED ${blocker}`));
+      return 1;
+    }
+    const result = await applyCadenceUpdate(cwd, cadencePlan);
+    if (values.json) console.log(JSON.stringify({ status: "applied", projectKind: inspection.projectKind, actions, cadence: cadencePlan.next, result }, null, 2));
+    else console.log(`${result.status.toUpperCase()} ${result.message}`);
+    return result.status === "ok" ? 0 : 1;
   }
 
   if (command === "doctor") {
@@ -254,6 +336,7 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
     if (values.json) console.log(JSON.stringify({ inspection, verification, results }, null, 2));
     else {
       console.log(`STAGE ${inspection.stage}`);
+      console.log(`PROJECT ${inspection.projectKind}`);
       console.log(`STACK ${inspection.stacks.join(", ") || "unknown"}`);
       console.log(`ORIGIN ${inspection.originInference}`);
       console.log(`VERIFY ${verification.status}`);
@@ -1025,5 +1108,17 @@ export async function run(argv: string[], cwd = process.cwd(), _environment: Rea
 }
 
 if (process.argv[1]?.endsWith("index.js")) {
-  process.exitCode = await run(process.argv.slice(2));
+  let close: (() => void) | undefined;
+  let question: Question | undefined;
+  if (process.stdin.isTTY && process.stdout.isTTY && !process.argv.includes("--json")) {
+    const { createInterface } = await import("node:readline/promises");
+    const readline = createInterface({ input: process.stdin, output: process.stdout });
+    close = () => readline.close();
+    question = (prompt) => readline.question(prompt);
+  }
+  try {
+    process.exitCode = await run(process.argv.slice(2), process.cwd(), process.env, question);
+  } finally {
+    close?.();
+  }
 }

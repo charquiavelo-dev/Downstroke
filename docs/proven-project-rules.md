@@ -313,3 +313,12 @@ This baseline becomes framework modules only through repetition:
 6. Only then publish/install as a framework.
 
 If only one project needs it, keep it project-specific. If multiple real projects need it, propose a versioned module with installation, doctor and migration coverage.
+
+## 18. CLI Consumer Installation Lessons
+
+- A framework source checkout is a maintenance environment, not a consumer project. Classify it with product-specific manifest and directory markers, not generic `.git`, `apps` or monorepo signals.
+- Resolve templates from the installed package, but resolve every target from the invocation working directory.
+- Interactive onboarding and automation share one deterministic plan. Automation must provide decisions explicitly; `--yes` authorizes writes but never invents missing product choices.
+- Collect and validate all answers, preview exact actions, then mutate. Existing user-owned files remain unchanged unless the preview names an owned update.
+- Test the packed artifact in a separate offline fixture. A source-tree invocation can hide unpublished workspace dependencies and stale staged-package copies.
+- Lifecycle scripts are not onboarding. Installation stays inert; the user invokes initialization explicitly in the target project.

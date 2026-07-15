@@ -36,7 +36,7 @@ A developer can safely initialize or inspect an existing project, install only t
 - Required before public release: `native workflows, communication policy, simplicity gates, code intelligence, operational experience and safe import of existing project knowledge` (Epic 9).
 - External construction tools are maintenance-only inputs. They are not runtime dependencies, generated-project requirements, public product concepts or permanent fallbacks.
 - Deferred: `first-class language-specific presets, scaffolding and deep code intelligence beyond the supported web, mobile, backend and .NET paths`.
-- Planned after the framework is functionally validated: `guided local consumer installation` (Epic 10), followed by the Intelligent UX Generation Engine (Epic 11), sanitized public artifacts, React documentation, token calibration and final npm publication (Epic 12).
+- Guided local consumer installation is implemented in Epic 10. The Intelligent UX Generation Engine (Epic 11), native reliability and security hardening (Epic 13), optional headless content engine (Epic 14), optional operations dashboard (Epic 15), sanitized public artifacts, React documentation, token calibration and final npm publication remain planned. Story 12.5 stays the final action despite its earlier epic number.
 - Token-estimate calibration compares estimates with representative observed provider usage before final npm publication and reports whether remaining work fits the available token budget.
 - The public release is cut from a sanitized allowlisted tree with one initial commit only after the complete development history is verified in a private maintenance repository.
 - Success signal: `init and doctor pass against empty and existing fixtures while preserving user files`
@@ -48,9 +48,12 @@ This milestone is reached only when:
 - Every planned product capability through Epics 1-9 is implemented, reviewed and verified, including Stories 9.11-9.15.
 - README completion (Story 10.1), native release automation (Story 10.2), local npm package preparation (Story 10.3) and guided consumer installation (Story 10.4) are done.
 - The Intelligent UX Generation Engine (Epic 11) is implemented, reviewed and verified before public release work begins.
+- Required Native Reliability, Security and Evidence Hardening gates (Epic 13) pass before public release work begins.
+- The owner explicitly accepts or completes the optional Headless Content Engine and Operations Dashboard scope (Epics 14-15); neither module is silently installed into consumers.
 - All runtime, templates, generated projects, CLI help and active public documentation are Downstroke-native; maintenance tools remain excluded from release output.
 - A clean local tarball installation passes init, doctor, help, build, typecheck, tests and native-only scans without unpublished workspace dependencies.
 - No story remains in backlog, ready-for-dev, in-progress or review within the milestone scope, and no unresolved high/medium release finding remains.
+- Story 12.5 remains blocked until every required Epic 13-15 gate is complete or an optional module is explicitly deferred with recorded rationale.
 
 When these gates pass, announce the milestone explicitly and ask the owner to perform local acceptance. Epic 12 public-history, documentation and calibration work begins only after that acceptance, and npm publication remains the final Story 12.5 action.
 
@@ -69,6 +72,7 @@ Number every rule so code, tests and Downstroke workflow items can reference it.
 | `BR-007` | Downstroke Native Releases deterministically plans version, channel, notes, changelog, package metadata and verification from repository evidence; planning or preparation authority never grants publish, push, tag or history-rewrite authority. | Native release plan, scoped authorization and append-only release state | Stable-plan, blocked-publish and clean-artifact tests |
 | `BR-008` | Generated UX decisions are schema-versioned, traceable to approved context and constrained by accessibility and performance budgets; external references never become implementation authority by discovery alone. | UX schemas, registries and generation validation | Deterministic direction, reduced-motion, budget and provenance checks |
 | `BR-009` | Public npm publication is the final planned product action and requires every prior epic, public artifact and release check to pass with fresh high-risk authorization. | Release prerequisite gate and scoped publication capability | Blocked early publish and verified clean registry install |
+| `BR-010` | Consumer initialization runs from the target directory, distinguishes the framework maintenance checkout, collects missing decisions before mutation and preserves user-owned files. | Guided `init`, narrow checkout classification and packed-artifact verification | Interactive, non-interactive, preservation and clean-fixture tests |
 
 ## User Flows
 

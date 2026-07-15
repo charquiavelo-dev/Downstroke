@@ -90,8 +90,19 @@ test("inspection distinguishes an AI-assisted implemented React project", async 
   const result = await inspectProject(root);
 
   assert.equal(result.stage, "implemented");
+  assert.equal(result.projectKind, "consumer");
   assert.deepEqual(result.stacks, ["Node.js", "React"]);
   assert.match(result.originInference, /cannot be proven/);
+});
+
+test("inspection narrowly identifies the Downstroke maintenance checkout", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-maintenance-"));
+  await mkdir(join(root, "apps", "cli"), { recursive: true });
+  await mkdir(join(root, "packages", "core"), { recursive: true });
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "downstroke-workspace" }));
+  assert.equal((await inspectProject(root)).projectKind, "maintenance-checkout");
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "consumer-workspace" }));
+  assert.equal((await inspectProject(root)).projectKind, "consumer");
 });
 
 test("verification stays not-run when the project exposes no checks", async () => {

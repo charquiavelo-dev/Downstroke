@@ -238,6 +238,40 @@ FR105: Downstroke projects the single design-system source into human and suppor
 
 FR106: Downstroke maintains curated inspiration references classified by industry, layout, motion, components, color, interaction and complexity.
 
+FR107: Downstroke resumes interrupted execution from persisted checkpoints, prevents duplicate side effects with idempotency evidence and escalates repeated equivalent failures.
+
+FR108: Completion status requires acceptance-criterion evidence and cannot be established by an agent assertion alone.
+
+FR109: Downstroke classifies supported security findings by CWE and severity while redacting and quarantining secret-like material.
+
+FR110: Downstroke verifies proposed dependency identity, provenance and vulnerability evidence before installation authority can be granted.
+
+FR111: Downstroke can compare independent provider reviews without inventing consensus or making external models mandatory for deterministic operation.
+
+FR112: Downstroke identifies low-signal test and documentation inflation through the existing simplicity and health contracts.
+
+FR113: Downstroke provides bounded context-compaction and session-handoff guidance from repository-owned state.
+
+FR114: Downstroke reports provider-neutral delivery effectiveness from observed cycle, rework, verification, quality and token evidence without fabricating ROI.
+
+FR115: A project can opt into a headless content capability only after approving its stack, storage, ownership, migration, backup and rollback plan.
+
+FR116: The optional content capability enforces remote authentication, server-side RBAC, ownership and append-only audit evidence.
+
+FR117: Downstroke detects content and API contracts as provenance-linked proposals; uncertain component or static-data inference never auto-migrates application code.
+
+FR118: Approved code and content schema changes synchronize through one canonical versioned contract with preview, conflict preservation and rollback.
+
+FR119: The optional content capability manages validated drafts, publication, history, restore and governed media operations.
+
+FR120: Approved content types can expose versioned REST and optional GraphQL/webhook contracts with field permissions, validation, rate limits and generated reference schemas.
+
+FR121: Content API changes are traced to known UI consumers and create controlled workflow proposals before breaking contracts change.
+
+FR122: An optional isolated operations dashboard projects existing CLI/core authority for development, health, security, release, collaboration, documentation and analytics views.
+
+FR123: Dashboard components reuse approved design-system registry patterns and are added only for proven consumers rather than prebuilding a universal component catalog.
+
 ### Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.
@@ -432,6 +466,9 @@ FR60-FR68, FR82-FR93: Epic 9 - Evidence-gated native platform evolution.
 FR72-FR74, FR94: Epic 10 - Local release readiness and consumer installation.
 FR95-FR106: Epic 11 - Intelligent UX generation.
 FR75-FR81: Epic 12 - Public distribution and documentation, ending with npm publication.
+FR107-FR114: Epic 13 - Native reliability, security and evidence hardening.
+FR115-FR121: Epic 14 - Optional headless content engine.
+FR122-FR123: Epic 15 - Optional operations dashboard.
 
 ### Story Coverage Map
 
@@ -447,6 +484,9 @@ FR75-FR81: Epic 12 - Public distribution and documentation, ending with npm publ
 - 10.1: FR72; 10.2: FR74; 10.3: FR73-FR74; 10.4: FR94.
 - 11.1: FR95; 11.2: FR96; 11.3: FR98; 11.4: FR97; 11.5: FR99; 11.6: FR100; 11.7: FR101; 11.8: FR102; 11.9: FR103; 11.10: FR104; 11.11: FR105; 11.12: FR106.
 - 12.1: FR78; 12.2: FR77, FR79-FR81; 12.3: FR76; 12.4: FR56-FR59; 12.5: FR75.
+- 13.1: FR107; 13.2: FR108; 13.3: FR109; 13.4: FR110; 13.5: FR111; 13.6: FR112; 13.7: FR113; 13.8: FR114.
+- 14.1: FR115; 14.2: FR116; 14.3: FR117; 14.4: FR118; 14.5: FR119; 14.6-14.7: FR120; 14.8: FR121.
+- 15.1-15.6: FR122; 15.7: FR123.
 
 ## Epic List
 
@@ -497,6 +537,18 @@ Developers can turn incomplete UI intent into deterministic, accessible and perf
 ### Epic 12: Public Distribution and Documentation
 Developers can evaluate Downstroke through sanitized public artifacts and accurate documentation before the maintainer performs the final explicitly authorized npm publication.
 **FRs covered:** FR75-FR81.
+
+### Epic 13: Native Reliability, Security and Evidence Hardening
+Developers can trust long-running and AI-assisted work because retries, completion claims, dependencies and reviews are evidence-bound, resumable and resistant to duplicate effects.
+**FRs covered:** FR107-FR114.
+
+### Epic 14: Optional Headless Content Engine
+Product teams can opt into governed content management that preserves application ownership and exposes secure content APIs without forcing every component into a CMS.
+**FRs covered:** FR115-FR121.
+
+### Epic 15: Optional Operations Dashboard
+Teams can operate Downstroke and the optional CMS through an isolated dashboard that projects existing native capabilities rather than duplicating authority.
+**FRs covered:** FR122-FR123.
 
 ## Epic 1: Installable and Verifiable MVP
 
@@ -1654,7 +1706,7 @@ So that users can install the approved version as Downstroke's final planned pro
 
 **Acceptance Criteria:**
 
-**Given** any incomplete prior epic or Story 12.1-12.4
+**Given** any incomplete prior epic, Story 12.1-12.4 or required Epic 13-15 gate
 **When** publication is proposed
 **Then** the operation blocks and identifies the incomplete prerequisite.
 
@@ -1689,3 +1741,215 @@ So that users can install the approved version as Downstroke's final planned pro
 **Given** a failed or defective publication
 **When** recovery is planned
 **Then** Downstroke never automatically unpublishes or reuses a version and instead proposes deprecation, dist-tag correction or a new patch with fresh approval.
+
+## Epic 13: Native Reliability, Security and Evidence Hardening
+
+Developers can trust long-running and AI-assisted work because retries, completion claims, dependencies and reviews are evidence-bound, resumable and resistant to duplicate effects.
+
+### Story 13.1: Add Durable Execution and Stuck Detection
+
+As a developer, I want resumable execution with bounded retries, So that interruptions never duplicate completed mutations or loop indefinitely.
+
+**Acceptance Criteria:**
+**Given** the same step fails three times with equivalent evidence **When** retry planning runs **Then** execution pauses for human decision and preserves the hash chain.
+**Given** a restart **When** execution resumes **Then** completed idempotency keys and checkpoints prevent duplicate side effects.
+**Given** a long-running task **When** state is restored **Then** the exact stage, inputs, evidence and remaining work are reconstructed without trusting model memory.
+
+### Story 13.2: Require Completion Proof and Verify Claims
+
+As a maintainer, I want completion claims checked against declared evidence, So that passing assertions cannot substitute for delivered outcomes.
+
+**Acceptance Criteria:**
+**Given** an agent claims completion **When** verification runs **Then** every acceptance criterion maps to repository or command evidence.
+**Given** evidence is missing, stale or contradictory **When** status is evaluated **Then** the item remains incomplete and both claims are retained.
+**Given** repeated equivalent unsupported claims **When** loop detection runs **Then** execution stops and requests a human decision.
+
+### Story 13.3: Classify Security Findings and Quarantine Secrets
+
+As a security reviewer, I want native findings mapped to security standards, So that AI-generated risks are actionable and cannot contaminate trusted knowledge.
+
+**Acceptance Criteria:**
+**Given** supported source files **When** security analysis runs **Then** findings include severity, CWE, evidence, confidence and a bounded remediation.
+**Given** secret-like material **When** detected **Then** raw values are redacted, quarantined and excluded from verified knowledge and logs.
+**Given** unsupported language or uncertain analysis **When** reporting completes **Then** coverage limitations remain explicit rather than producing a clean claim.
+
+### Story 13.4: Verify Dependency Identity and Vulnerability Risk
+
+As a developer, I want dependency suggestions verified before installation, So that hallucinated, typosquatted or vulnerable packages are blocked early.
+
+**Acceptance Criteria:**
+**Given** a proposed npm, PyPI or Cargo package **When** verification runs **Then** registry existence, exact identity, provenance, publication age and maintainer signals are reported without installing it.
+**Given** typosquatting or suspicious provenance **When** evaluated **Then** the proposal blocks pending explicit review.
+**Given** an existing dependency tree **When** an authoritative audit is available **Then** vulnerabilities, exploitability, affected versions and safe upgrade evidence are normalized.
+
+### Story 13.5: Run Independent Cross-Harness Reviews
+
+As a maintainer, I want independent review engines compared, So that one model cannot silently validate its own mistakes.
+
+**Acceptance Criteria:**
+**Given** configured distinct providers **When** cross-review runs **Then** each receives the same bounded artifact and records model identity, findings and evidence independently.
+**Given** reviews disagree **When** comparison runs **Then** disagreements remain visible and no consensus is invented.
+**Given** providers are unavailable **When** review is requested **Then** deterministic local review remains usable and the missing cross-review is reported, not simulated.
+
+### Story 13.6: Detect Low-Signal Test and Documentation Inflation
+
+As a reviewer, I want quality gates to identify low-signal generated churn, So that apparent productivity does not hide maintenance cost.
+
+**Acceptance Criteria:**
+**Given** changed tests **When** analysis runs **Then** duplicate assertions, unreachable coverage claims and tests without behavioral value are flagged with evidence.
+**Given** documentation churn **When** no contract, behavior or decision changed **Then** the gate reports probable low-signal churn without deleting user work.
+**Given** a finding **When** surfaced **Then** the smallest removal or consolidation is recommended through the existing simplicity gate.
+
+### Story 13.7: Guide Context Compaction and Session Handoffs
+
+As a developer, I want bounded context guidance, So that long workflows remain resumable without copying entire conversations.
+
+**Acceptance Criteria:**
+**Given** a task context budget **When** usage approaches configured thresholds **Then** Downstroke recommends continue, compact or restart using repository state.
+**Given** a handoff **When** context is compiled **Then** accepted rules, current workflow state, evidence, unknowns and next action are included while stale or secret material is excluded.
+
+### Story 13.8: Measure AI Delivery Effectiveness
+
+As a maintainer, I want provider-neutral productivity and quality observations, So that token usage is not mistaken for value.
+
+**Acceptance Criteria:**
+**Given** completed tasks with observed evidence **When** metrics are calculated **Then** cycle time, rework, verification failures, quality trend and token range remain separately reported.
+**Given** insufficient or incompatible samples **When** ROI is requested **Then** the result remains uncertain and never fabricates monetary savings.
+
+## Epic 14: Optional Headless Content Engine
+
+Product teams can opt into governed content management that detects existing contracts, preserves application ownership and exposes secure content APIs without forcing every component into a CMS.
+
+### Story 14.1: Define the Optional CMS Boundary and Canonical Schema
+
+As a project owner, I want an explicit CMS capability plan, So that storage, framework and ownership decisions are approved before dependencies or migrations are added.
+
+**Acceptance Criteria:**
+**Given** CMS setup **When** planning begins **Then** project stack, database, ORM, deployment, backup, ownership and rollback are detected or requested.
+**Given** no approved CMS need **When** Downstroke initializes **Then** no dashboard, database or CMS dependency is installed.
+**Given** approval **When** schema is created **Then** one versioned Downstroke content contract is authoritative and target-specific ORM files are projections.
+
+### Story 14.2: Add First-Run Authentication and Server-Enforced RBAC
+
+As an administrator, I want secure first-run setup and permissions, So that remote content management never operates anonymously.
+
+**Acceptance Criteria:**
+**Given** no administrator **When** first-run setup completes **Then** one super administrator is created atomically and setup is locked.
+**Given** any non-loopback host **When** the dashboard is requested **Then** authentication is mandatory regardless of local convenience configuration.
+**Given** a content or admin mutation **When** authorized **Then** server-side role, permission, ownership, session and audit checks apply; high-risk auth work is reviewed individually.
+
+### Story 14.3: Detect Content Contracts as Reviewable Proposals
+
+As a developer, I want existing schemas and routes detected, So that Downstroke can propose content types without guessing from UI labels.
+
+**Acceptance Criteria:**
+**Given** supported Prisma, Drizzle, TypeORM, EF Core, Strapi, Payload, Next.js, NestJS, Express or GraphQL sources **When** scanning runs **Then** provenance-linked content and endpoint candidates are produced without executing project code.
+**Given** TypeScript props or static literals **When** inference is uncertain **Then** candidates require confirmation and are never auto-migrated.
+**Given** rejected or changed candidates **When** rescanned **Then** prior decisions and source drift remain traceable.
+
+### Story 14.4: Synchronize Code and Content Schemas Safely
+
+As a developer, I want conflict-aware schema synchronization, So that approved code and CMS changes converge without rewriting application code silently.
+
+**Acceptance Criteria:**
+**Given** an approved schema change **When** synchronization is planned **Then** exact projections, migrations, API impact, backups and rollback are previewed.
+**Given** code and CMS changed the same contract **When** hashes diverge **Then** both versions are retained and human resolution is required.
+**Given** content edits **When** saved **Then** data changes do not rewrite component source; generated schema files remain bounded owned projections.
+
+### Story 14.5: Manage Versioned Content and Media
+
+As an editor, I want schema-driven content and media workflows, So that drafts, publication and assets are safe and understandable.
+
+**Acceptance Criteria:**
+**Given** a confirmed content type **When** editing **Then** validation, draft, preview, publish, history, diff and restore states are available according to role.
+**Given** media upload **When** accepted **Then** type, size, storage provider, metadata, usage and deletion impact are validated.
+**Given** bulk or destructive actions **When** proposed **Then** impact, backup and explicit confirmation are required.
+
+### Story 14.6: Expose Governed REST Content APIs
+
+As an application developer, I want generated REST contracts, So that approved content types can be consumed consistently.
+
+**Acceptance Criteria:**
+**Given** a published content type **When** REST is enabled **Then** versioned list/detail and authorized mutation contracts include validation, pagination, filtering and stable error schemas.
+**Given** public access **When** queried **Then** only published entries and explicitly exposed fields are returned.
+**Given** schema change **When** it is breaking **Then** impact, compatibility and migration are resolved before the public contract changes.
+
+### Story 14.7: Add Optional GraphQL, Webhooks and API Reference
+
+As an application developer, I want optional advanced content interfaces, So that GraphQL and integrations exist only when justified.
+
+**Acceptance Criteria:**
+**Given** GraphQL is not selected **When** CMS is installed **Then** no GraphQL runtime or playground is added.
+**Given** GraphQL or webhooks are approved **When** generated **Then** depth, authorization, rate, retry, signature and idempotency limits are explicit.
+**Given** enabled APIs **When** reference is produced **Then** OpenAPI or GraphQL schemas match executable contracts and secrets are excluded.
+
+### Story 14.8: Track API-to-UI Contract Impact
+
+As a developer, I want content API changes traced to consumers, So that breaking UI work becomes controlled workflow rather than a runtime surprise.
+
+**Acceptance Criteria:**
+**Given** a schema change **When** impact analysis runs **Then** known typed, fetch and model consumers are listed with evidence and uncertainty.
+**Given** affected consumers **When** remediation is proposed **Then** a workflow item contains risk, files, acceptance criteria and verification; no fix is applied automatically.
+
+## Epic 15: Optional Operations Dashboard
+
+Maintainers and project teams can operate Downstroke and the optional CMS through an isolated, role-aware dashboard that projects existing native capabilities rather than duplicating their authority.
+
+### Story 15.1: Create the Isolated Dashboard Shell
+
+As an operator, I want a responsive admin shell, So that enabled capabilities are discoverable without affecting the product UI.
+
+**Acceptance Criteria:**
+**Given** dashboard enablement **When** rendered **Then** only real routes appear and admin tokens/styles are isolated from the consumer application.
+**Given** mobile, keyboard or screen-reader use **When** navigating **Then** landmarks, focus, collapse behavior and status labels remain usable.
+**Given** the source checkout or a project without dashboard enablement **When** inspected **Then** no dashboard route is implied to exist.
+
+### Story 15.2: Project Native Development Workflows
+
+As a developer, I want read-first views for stack, code, workflow, token and knowledge state, So that the dashboard uses existing native contracts.
+
+**Acceptance Criteria:**
+**Given** native state **When** viewed **Then** stack, code index, impact, workflow, token and knowledge data are projections of existing CLI/core results.
+**Given** a mutation **When** requested in the UI **Then** the same preview, plan hash, authorization and evidence rules as the CLI apply.
+
+### Story 15.3: Project Security, Audit and Health Evidence
+
+As an operator, I want unified health and security views, So that findings retain provenance and next actions.
+
+**Acceptance Criteria:**
+**Given** doctor, health, cleanup, security or dependency evidence **When** displayed **Then** severity, source, timestamp, coverage and remediation are preserved.
+**Given** user or permission activity **When** audited **Then** actor, action, resource, result and time are append-only and secrets are redacted.
+
+### Story 15.4: Project Release and Deployment Evidence
+
+As a maintainer, I want release and pipeline visibility, So that operational status is clear without broadening deployment authority.
+
+**Acceptance Criteria:**
+**Given** release or CI evidence **When** viewed **Then** plans, checks, artifacts and environments are read-only by default.
+**Given** prepare, deploy, rollback or publish **When** requested **Then** provider capability, impact, rollback and fresh authorization are required; npm publication still occurs only in Story 12.5.
+
+### Story 15.5: Add Bounded Collaboration and Documentation Views
+
+As a team member, I want activity, comments, notifications and searchable docs, So that operational context is available without inventing a second workflow system.
+
+**Acceptance Criteria:**
+**Given** collaboration is enabled **When** events or comments are recorded **Then** they reference existing resources, actors and permissions.
+**Given** documentation **When** browsed **Then** bundled versioned sources are authoritative and planned features are clearly labeled.
+
+### Story 15.6: Add Opt-In Analytics Connectors and Native Metrics
+
+As a product owner, I want governed analytics views, So that external traffic data and Downstroke effectiveness can be evaluated without leaking credentials.
+
+**Acceptance Criteria:**
+**Given** GA4, Plausible or Mixpanel is selected **When** configured **Then** credentials remain server-side, scopes are minimal and provider failure has a documented fallback.
+**Given** no connector is selected **When** dashboard runs **Then** no analytics SDK, cookie or remote request is added.
+**Given** native metrics **When** reported **Then** retention, aggregation, export and privacy boundaries are explicit and raw event collection is minimized.
+
+### Story 15.7: Project Approved Patterns into Dashboard Components
+
+As a UI developer, I want dashboard surfaces composed from approved primitives and patterns, So that accessibility and consistency do not require a speculative universal component library.
+
+**Acceptance Criteria:**
+**Given** a dashboard screen **When** composed **Then** it reuses Epic 11 registry patterns and existing primitives before adding a component.
+**Given** a missing component **When** at least two real consumers and required states are proven **Then** it can enter the registry with accessibility, responsive, performance and documentation evidence.
+**Given** a proposal to prebuild every possible component **When** reviewed **Then** it is rejected until real consumers justify the scope.

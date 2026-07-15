@@ -1476,10 +1476,13 @@ export async function verifyNativeRelease(root: string, plan: NativeReleasePlan)
           if (smoke.code !== 0) throw new Error(`downstroke CLI smoke failed: ${smoke.stderr || smoke.stdout}`);
           const fixture = join(installRoot, "fixture");
           await mkdir(fixture);
-          const init = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "init", "--preset", "lite"], fixture);
+          await writeFile(join(fixture, "AGENTS.md"), "consumer-owned\n");
+          const init = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "init", "--preset", "lite", "--review-mode", "one-at-a-time", "--yes"], fixture);
           const doctor = await runLocalCommand(process.execPath, [join(installedRoot, downstrokeBin), "doctor"], fixture);
           if (init.code !== 0 || doctor.code !== 0) throw new Error(`downstroke clean-fixture smoke failed: ${init.stderr || doctor.stderr || init.stdout || doctor.stdout}`);
-          evidence.push("cli-smoke:help,init,doctor");
+          const cadence = await readJsonObject(join(fixture, ".downstroke", "planning.json"));
+          if (cadence.reviewMode !== "one-at-a-time" || await readFile(join(fixture, "AGENTS.md"), "utf8") !== "consumer-owned\n") throw new Error("downstroke clean-fixture state or user-file preservation failed");
+          evidence.push("cli-smoke:help,init,cadence,doctor,preservation");
         }
       }
       evidence.push("clean-install:passed");
@@ -2103,6 +2106,7 @@ export async function applyGitPolicy(root: string, plan: GitPolicyPlan): Promise
 }
 
 export type ProjectInspection = {
+  projectKind: "consumer" | "maintenance-checkout";
   stage: "empty" | "documented" | "scaffolded" | "implemented";
   stacks: string[];
   scripts: string[];
@@ -3690,6 +3694,7 @@ export async function inspectProject(root: string): Promise<ProjectInspection> {
   const signals: string[] = [];
   const stacks = new Set<string>();
   let scripts: string[] = [];
+  let manifestName: string | undefined;
 
   if (names.has("AGENTS.md") || names.has("CLAUDE.md")) signals.push("agent-instructions");
   if (names.has("_bmad") || names.has("_bmad-output")) signals.push("legacy-workflow");
@@ -3697,10 +3702,12 @@ export async function inspectProject(root: string): Promise<ProjectInspection> {
 
   if (names.has("package.json")) {
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      name?: string;
       scripts?: Record<string, string>;
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
+    manifestName = manifest.name;
     scripts = Object.keys(manifest.scripts ?? {});
     const dependencies = { ...manifest.dependencies, ...manifest.devDependencies };
     stacks.add("Node.js");
@@ -3731,6 +3738,11 @@ export async function inspectProject(root: string): Promise<ProjectInspection> {
           : "scaffolded";
 
   return {
+    projectKind: manifestName === "downstroke-workspace"
+      && await exists(join(root, "apps", "cli"))
+      && await exists(join(root, "packages", "core"))
+      ? "maintenance-checkout"
+      : "consumer",
     stage,
     stacks: [...stacks].sort(),
     scripts: scripts.sort(),

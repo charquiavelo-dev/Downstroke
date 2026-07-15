@@ -18,9 +18,9 @@ That focus is not a hard limit. The core value is repository-local discipline: d
 
 Downstroke is under active development before public npm release. The repository already includes the executable CLI, native project inspection, Git policy, token estimates, Operational Experience storage, safe project-knowledge import, native workflow state, schema-bound worker contracts, deterministic execution tasks, governed knowledge lifecycle and local release planning, preparation and verification.
 
-The CLI can be built, linked and exercised locally today. It is not published to the npm registry yet, and the framework has not reached its complete native acceptance milestone. Local testing is useful now for the implemented commands; it must not be mistaken for release readiness.
+The CLI can be built, packed, installed and exercised locally today. Guided consumer initialization now collects review cadence, previews exact changes and preserves existing files. It is not published to the npm registry yet, and the framework has not reached its complete native acceptance milestone.
 
-The public release milestone is intentionally strict. Native package preparation and clean-install checks now pass locally. Remaining planned work adds guided consumer onboarding, the Intelligent UX Generation Engine, sanitized public artifacts, documentation and token calibration before the final separately authorized npm publication.
+The public release milestone is intentionally strict. Native package preparation, guided consumer onboarding and clean-install checks pass locally. The backlog now also includes native reliability/security hardening plus opt-in headless CMS and operations-dashboard modules derived from IFND research. These modules preserve the CLI/core authority and add no consumer dependency unless selected. Intelligent UX, sanitized public artifacts, documentation and token calibration still precede the final separately authorized npm publication.
 
 ## Philosophy
 
@@ -56,7 +56,7 @@ These rules reduce hidden state, make failures diagnosable and let a later devel
 
 ## Install and run locally today
 
-Cloning this repository is the contributor and framework-maintenance path, not the intended consumer installation experience. Story 10.4 will validate guided onboarding from the packed artifact inside a separate target project before public release.
+Cloning this repository is the contributor and framework-maintenance path, not the consumer installation path. Run consumer onboarding from a packed or installed binary inside the target project; `init` blocks the Downstroke maintenance checkout.
 
 Requirements:
 
@@ -76,7 +76,7 @@ The final command opens the Downstroke entry screen. No external agent framework
 Use the local CLI directly:
 
 ```bash
-node apps/cli/dist/index.js init --preset lite --dry-run
+node apps/cli/dist/index.js init --preset lite --review-mode one-at-a-time --dry-run
 node apps/cli/dist/index.js doctor
 node apps/cli/dist/index.js doctor --run-checks
 node apps/cli/dist/index.js workflow resume --item-id story.1
@@ -108,10 +108,10 @@ After linking, move to a disposable project and verify the command:
 ```bash
 cd /path/to/a/disposable-project
 downstroke doctor
-downstroke init --preset lite --dry-run
+downstroke init
 downstroke health --strict
 downstroke cleanup --dry-run
-downstroke init --preset lite
+downstroke init --preset lite --review-mode one-at-a-time --yes
 downstroke doctor --run-checks
 ```
 
@@ -136,10 +136,10 @@ This sequence exercises the implemented framework without claiming unfinished re
 ```bash
 # Inspect without writing
 downstroke doctor
-downstroke init --preset lite --dry-run
+downstroke init --preset lite --review-mode one-at-a-time --dry-run
 
 # Initialize project discipline
-downstroke init --preset lite
+downstroke init --preset lite --review-mode one-at-a-time --yes
 downstroke doctor --run-checks
 downstroke health --strict --run-checks
 

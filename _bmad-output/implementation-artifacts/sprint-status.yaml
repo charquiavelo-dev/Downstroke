@@ -101,7 +101,7 @@ development_status:
   10-1-deliver-a-complete-repository-readme: done
   10-2-automate-native-downstroke-releases: review
   10-3-prepare-the-npm-package: review
-  10-4-validate-guided-consumer-installation: backlog
+  10-4-validate-guided-consumer-installation: review
   epic-10-retrospective: optional
 
   epic-11: backlog
@@ -126,3 +126,35 @@ development_status:
   12-4-calibrate-token-estimates-against-observed-usage: backlog
   12-5-publish-and-verify-the-npm-release: backlog
   epic-12-retrospective: optional
+
+  epic-13: backlog
+  13-1-add-durable-execution-and-stuck-detection: backlog
+  13-2-require-completion-proof-and-verify-claims: backlog
+  13-3-classify-security-findings-and-quarantine-secrets: backlog
+  13-4-verify-dependency-identity-and-vulnerability-risk: backlog
+  13-5-run-independent-cross-harness-reviews: backlog
+  13-6-detect-low-signal-test-and-documentation-inflation: backlog
+  13-7-guide-context-compaction-and-session-handoffs: backlog
+  13-8-measure-ai-delivery-effectiveness: backlog
+  epic-13-retrospective: optional
+
+  epic-14: backlog
+  14-1-define-the-optional-cms-boundary-and-canonical-schema: backlog
+  14-2-add-first-run-authentication-and-server-enforced-rbac: backlog
+  14-3-detect-content-contracts-as-reviewable-proposals: backlog
+  14-4-synchronize-code-and-content-schemas-safely: backlog
+  14-5-manage-versioned-content-and-media: backlog
+  14-6-expose-governed-rest-content-apis: backlog
+  14-7-add-optional-graphql-webhooks-and-api-reference: backlog
+  14-8-track-api-to-ui-contract-impact: backlog
+  epic-14-retrospective: optional
+
+  epic-15: backlog
+  15-1-create-the-isolated-dashboard-shell: backlog
+  15-2-project-native-development-workflows: backlog
+  15-3-project-security-audit-and-health-evidence: backlog
+  15-4-project-release-and-deployment-evidence: backlog
+  15-5-add-bounded-collaboration-and-documentation-views: backlog
+  15-6-add-opt-in-analytics-connectors-and-native-metrics: backlog
+  15-7-project-approved-patterns-into-dashboard-components: backlog
+  epic-15-retrospective: optional

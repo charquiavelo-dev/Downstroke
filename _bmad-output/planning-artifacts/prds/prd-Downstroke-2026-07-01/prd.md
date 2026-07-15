@@ -319,6 +319,40 @@ FR105: Downstroke projects the single design-system source into human and suppor
 
 FR106: Downstroke maintains curated inspiration references classified by industry, layout, motion, components, color, interaction and complexity.
 
+FR107: Downstroke resumes interrupted execution from persisted checkpoints, prevents duplicate side effects with idempotency evidence and escalates repeated equivalent failures.
+
+FR108: Completion status requires acceptance-criterion evidence and cannot be established by an agent assertion alone.
+
+FR109: Downstroke classifies supported security findings by CWE and severity while redacting and quarantining secret-like material.
+
+FR110: Downstroke verifies proposed dependency identity, provenance and vulnerability evidence before installation authority can be granted.
+
+FR111: Downstroke can compare independent provider reviews without inventing consensus or making external models mandatory for deterministic operation.
+
+FR112: Downstroke identifies low-signal test and documentation inflation through the existing simplicity and health contracts.
+
+FR113: Downstroke provides bounded context-compaction and session-handoff guidance from repository-owned state.
+
+FR114: Downstroke reports provider-neutral delivery effectiveness from observed cycle, rework, verification, quality and token evidence without fabricating ROI.
+
+FR115: A project can opt into a headless content capability only after approving its stack, storage, ownership, migration, backup and rollback plan.
+
+FR116: The optional content capability enforces remote authentication, server-side RBAC, ownership and append-only audit evidence.
+
+FR117: Downstroke detects content and API contracts as provenance-linked proposals; uncertain component or static-data inference never auto-migrates application code.
+
+FR118: Approved code and content schema changes synchronize through one canonical versioned contract with preview, conflict preservation and rollback.
+
+FR119: The optional content capability manages validated drafts, publication, history, restore and governed media operations.
+
+FR120: Approved content types can expose versioned REST and optional GraphQL/webhook contracts with field permissions, validation, rate limits and generated reference schemas.
+
+FR121: Content API changes are traced to known UI consumers and create controlled workflow proposals before breaking contracts change.
+
+FR122: An optional isolated operations dashboard projects existing CLI/core authority for development, health, security, release, collaboration, documentation and analytics views.
+
+FR123: Dashboard components reuse approved design-system registry patterns and are added only for proven consumers rather than prebuilding a universal component catalog.
+
 ## 11. Cross-Cutting Non-Functional Requirements
 
 NFR1: TypeScript remains strict, Node uses ESM and production code contains no `any`.

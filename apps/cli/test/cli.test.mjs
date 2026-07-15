@@ -33,7 +33,7 @@ function workerManifest() {
 
 test("lite init creates its canonical documents", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-"));
-  assert.equal(await run(["init", "--preset", "lite"], root), 0);
+  assert.equal(await run(["init", "--preset", "lite", "--review-mode", "one-at-a-time", "--yes"], root), 0);
   assert.match(await readFile(join(root, "docs", "process", "downstroke-workflow.md"), "utf8"), /Downstroke Workflow/);
   await assert.rejects(readFile(join(root, "docs", "process", "bmad-method.md")));
   const generated = await Promise.all([
@@ -47,6 +47,35 @@ test("lite init creates its canonical documents", async () => {
   assert.match(generated.join("\n"), /Do not infer process/);
   assert.match(generated.join("\n"), /Do not create Markdown story files/);
   assert.equal(await run(["doctor", "--json"], root), 0);
+});
+
+test("init requires explicit choices without mutating a non-interactive consumer", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-init-"));
+  assert.equal(await run(["init", "--preset", "lite"], root), 1);
+  assert.deepEqual(await readdir(root), []);
+});
+
+test("guided init previews and applies cadence while preserving user files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-guided-"));
+  await writeFile(join(root, "AGENTS.md"), "user-owned\n");
+  const answers = ["yes", "lite", "one-at-a-time", "yes"];
+  assert.equal(await run(["init"], root, process.env, async () => answers.shift() ?? ""), 0);
+  assert.equal(await readFile(join(root, "AGENTS.md"), "utf8"), "user-owned\n");
+  assert.equal(JSON.parse(await readFile(join(root, ".downstroke", "planning.json"), "utf8")).reviewMode, "one-at-a-time");
+});
+
+test("explicit init JSON preview remains read-only and machine-readable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "downstroke-cli-json-init-"));
+  const output = [];
+  const originalLog = console.log;
+  console.log = (value) => output.push(String(value));
+  try {
+    assert.equal(await run(["init", "--preset", "lite", "--review-mode", "blocks", "--block-size", "3", "--dry-run", "--json"], root), 0);
+  } finally { console.log = originalLog; }
+  const preview = JSON.parse(output.join("\n"));
+  assert.equal(preview.status, "preview");
+  assert.equal(preview.cadence.blockSize, 3);
+  assert.deepEqual(await readdir(root), []);
 });
 
 test("empty CLI entry shows native help without mutation", async () => {
@@ -110,9 +139,9 @@ test("doctor JSON reports legacy artifacts as migration risks", async () => {
   assert.equal(JSON.stringify(report).includes(root), false);
 });
 
-test("health strict turns warnings into release blockers without mutation", async () => {
+test("health strict recognizes cadence configured during initialization", async () => {
   const root = await mkdtemp(join(tmpdir(), "downstroke-cli-health-"));
-  await run(["init", "--preset", "lite"], root);
+  await run(["init", "--preset", "lite", "--review-mode", "one-at-a-time", "--yes"], root);
   const output = [];
   const originalLog = console.log;
   console.log = (value) => output.push(String(value));
@@ -125,8 +154,8 @@ test("health strict turns warnings into release blockers without mutation", asyn
   const report = JSON.parse(output.join("\n"));
   assert.equal(report.status, "fail");
   assert.equal(report.strict, true);
-  assert.ok(report.blockers.some((blocker) => blocker.includes("planning.cadence")));
-  await assert.rejects(readFile(join(root, ".downstroke", "planning.json")));
+  assert.equal(report.blockers.some((blocker) => blocker.includes("planning.cadence")), false);
+  assert.equal(JSON.parse(await readFile(join(root, ".downstroke", "planning.json"), "utf8")).reviewMode, "one-at-a-time");
 });
 
 test("health reports blocked high-risk workflow items", async () => {
@@ -135,7 +164,7 @@ test("health reports blocked high-risk workflow items", async () => {
   await writeFile(join(root, "README.md"), "fixture\n");
   await exec("git", ["add", "README.md"], { cwd: root });
   await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
-  await run(["init", "--preset", "lite"], root);
+  await run(["init", "--preset", "lite", "--review-mode", "one-at-a-time", "--yes"], root);
   const item = JSON.stringify({ id: "story.risk", type: "story", title: "Risky change", status: "blocked", risk: "high" });
   assert.equal(await run(["workflow", "add", "--item", item, "--yes"], root), 0);
   const output = [];
@@ -159,7 +188,7 @@ test("health reports unresolved workflow conflicts", async () => {
   await writeFile(join(root, "README.md"), "fixture\n");
   await exec("git", ["add", "README.md"], { cwd: root });
   await exec("git", ["-c", "user.name=Downstroke Test", "-c", "user.email=test@example.invalid", "commit", "-m", "chore: initialize fixture"], { cwd: root });
-  await run(["init", "--preset", "lite"], root);
+  await run(["init", "--preset", "lite", "--review-mode", "one-at-a-time", "--yes"], root);
   const item = JSON.stringify({ id: "story.conflict", type: "story", title: "Conflict", status: "blocked" });
   const conflict = JSON.stringify({
     owner: "maintainer",
