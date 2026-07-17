@@ -1,0 +1,27 @@
+{
+  "name": "downstroke-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/spec",
+    "packages/agents",
+    "packages/gates",
+    "packages/presets",
+    "packages/cms-contracts",
+    "apps/cli"
+  ],
+  "scripts": {
+    "build": "npm run build -w @downstroke/cms-contracts && npm run build -w @downstroke/core && npm run build -w @downstroke/spec && npm run build -w @downstroke/agents && npm run build -w @downstroke/gates && npm run build -w @downstroke/presets && npm run build -w downstroke",
+    "pretypecheck": "npm run build",
+    "typecheck": "npm run typecheck -w @downstroke/cms-contracts && npm run typecheck -w @downstroke/core && npm run typecheck -w @downstroke/spec && npm run typecheck -w @downstroke/agents && npm run typecheck -w @downstroke/gates && npm run typecheck -w @downstroke/presets && npm run typecheck -w downstroke"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "latest"
+  }
+}

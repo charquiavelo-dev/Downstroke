@@ -1,0 +1,27 @@
+{
+  "name": "downstroke",
+  "version": "0.1.0",
+  "description": "Native repository discipline for safe AI-assisted software delivery.",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "bin": { "downstroke": "dist/index.js" },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "keywords": ["ai", "cli", "developer-tools", "workflow"],
+  "license": "Apache-2.0",
+  "author": "Downstroke maintainers",
+  "repository": { "type": "git", "url": "git+https://github.com/charquiavelo-dev/Downstroke.git" },
+  "bugs": { "url": "https://github.com/charquiavelo-dev/Downstroke/issues" },
+  "homepage": "https://github.com/charquiavelo-dev/Downstroke#readme",
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
+  "dependencies": {
+    "@downstroke/agents": "0.1.0",
+    "@downstroke/cms-contracts": "0.1.0",
+    "@downstroke/core": "0.1.0",
+    "@downstroke/gates": "0.1.0",
+    "@downstroke/presets": "0.1.0",
+    "@downstroke/spec": "0.1.0"
+  },
+  "bundleDependencies": ["@downstroke/agents", "@downstroke/cms-contracts", "@downstroke/core", "@downstroke/gates", "@downstroke/presets", "@downstroke/spec"],
+  "scripts": { "build": "tsc -p tsconfig.json && node ../../scripts/stage-cli-package.mjs", "typecheck": "tsc -p tsconfig.json --noEmit" }
+}

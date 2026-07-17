@@ -1,0 +1,4 @@
+[mcp_servers.downstroke]
+command = "downstroke"
+args = ["mcp"]
+required = true

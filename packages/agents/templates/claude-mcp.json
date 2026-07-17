@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "downstroke": {
+      "type": "stdio",
+      "command": "downstroke",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

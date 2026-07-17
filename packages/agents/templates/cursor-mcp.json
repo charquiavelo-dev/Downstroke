@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "downstroke": {
+      "command": "downstroke",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}
